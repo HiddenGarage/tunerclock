@@ -371,6 +371,7 @@ function syncCurrentUserFromSession(sessionUser) {
   const existing = employees.find((employee) => employee.discordId === sessionUser.discordId);
 
   if (existing) {
+    existing.name = sessionUser.username;
     state.currentUser = existing;
   } else {
     state.currentUser = {

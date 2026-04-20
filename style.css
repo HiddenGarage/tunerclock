@@ -168,7 +168,7 @@ input, button, a { font: inherit; }
 .topbar-button { min-width: 170px; }
 
 .app-page { display: none; }
-.app-page.active-page { display: block; }
+.app-page.active-page { display: grid; }
 
 .dashboard-grid,
 .chart-grid,

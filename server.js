@@ -102,6 +102,39 @@ app.get("/auth/me", (req, res) => {
   res.json({ user: getSession(req) || null });
 });
 
+app.get("/api/me-state", async (req, res) => {
+  try {
+    const session = getSession(req);
+    if (!session) {
+      return res.json({ user: null });
+    }
+
+    const supabase = getSupabase();
+    const { data: employee } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("discord_id", session.discordId)
+      .maybeSingle();
+
+    let activeShift = null;
+    if (employee?.id) {
+      const { data } = await supabase
+        .from("shifts")
+        .select("*")
+        .eq("employee_id", employee.id)
+        .eq("status", "active")
+        .order("punched_in_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      activeShift = data;
+    }
+
+    res.json({ employee, activeShift });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.get("/auth/logout", (req, res) => {
   res.setHeader("Set-Cookie", "tunerclock_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
   res.redirect("/");
@@ -278,6 +311,56 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
     }
 
     res.json({ ok: true, amountPaid });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
+  try {
+    const { discordId, payslip } = req.body || {};
+    if (!discordId || !payslip || !process.env.DISCORD_BOT_TOKEN) {
+      return res.json({ ok: false });
+    }
+
+    const createDmResponse = await fetch("https://discord.com/api/v10/users/@me/channels", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
+      },
+      body: JSON.stringify({ recipient_id: discordId })
+    });
+
+    if (!createDmResponse.ok) {
+      const errorText = await createDmResponse.text();
+      return res.status(500).send(errorText);
+    }
+
+    const dmChannel = await createDmResponse.json();
+    const message = [
+      `Slip de paye - ${payslip.employeeName}`,
+      `Heures payees: ${Number(payslip.hoursPaid || 0).toFixed(2)}h`,
+      `Taux horaire: ${Number(payslip.hourlyRate || 0).toFixed(2)}$`,
+      `Montant verse: ${Number(payslip.amountPaid || 0).toFixed(2)}$`,
+      `Date: ${payslip.paidAtLabel || ""}`
+    ].join("\n");
+
+    const sendResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
+      },
+      body: JSON.stringify({ content: message })
+    });
+
+    if (!sendResponse.ok) {
+      const errorText = await sendResponse.text();
+      return res.status(500).send(errorText);
+    }
+
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
   }

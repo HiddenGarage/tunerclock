@@ -1,11 +1,15 @@
+require("dotenv").config();
+
 const express = require("express");
 const path = require("path");
+const PDFDocument = require("pdfkit");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const { encodeSession, decodeSession, parseCookies, buildCookie } = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DEFAULT_HOURLY_RATE = 25;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -16,6 +20,15 @@ function getSession(req) {
   return decodeSession(cookies.tunerclock_session, required("SESSION_SECRET"));
 }
 
+function requireAuth(req, res, next) {
+  const session = getSession(req);
+  if (!session) {
+    return res.status(401).send("Non autorise.");
+  }
+  req.session = session;
+  next();
+}
+
 function requireAdmin(req, res, next) {
   const session = getSession(req);
   if (!session || !getAdminIds().includes(session.discordId)) {
@@ -23,6 +36,117 @@ function requireAdmin(req, res, next) {
   }
   req.session = session;
   next();
+}
+
+function getShiftPeriod(dateLike) {
+  const hour = new Date(dateLike).getHours();
+  if (hour >= 6 && hour < 18) return "Jour";
+  if (hour >= 18 && hour < 23) return "Soir";
+  return "Nuit";
+}
+
+function groupBy(items, getKey) {
+  return items.reduce((map, item) => {
+    const key = getKey(item);
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push(item);
+    return map;
+  }, new Map());
+}
+
+async function getSettingsMap(supabase) {
+  const { data, error } = await supabase.from("app_settings").select("*");
+  if (error) {
+    throw error;
+  }
+  return Object.fromEntries((data || []).map((entry) => [entry.key, entry.value]));
+}
+
+async function upsertSetting(supabase, key, value) {
+  const { error } = await supabase.from("app_settings").upsert({
+    key,
+    value,
+    updated_at: new Date().toISOString()
+  });
+  if (error) {
+    throw error;
+  }
+}
+
+async function buildEmployeeSnapshots(supabase) {
+  const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }] = await Promise.all([
+    supabase.from("employees").select("*").order("created_at", { ascending: true }),
+    supabase.from("shifts").select("*").order("punched_in_at", { ascending: true })
+  ]);
+
+  if (employeesError) throw employeesError;
+  if (shiftsError) throw shiftsError;
+
+  const shiftsByEmployee = groupBy(shifts || [], (shift) => shift.employee_id);
+
+  return (employees || []).map((employee) => {
+    const employeeShifts = shiftsByEmployee.get(employee.id) || [];
+    const closedShifts = employeeShifts.filter((shift) => shift.status === "closed");
+    const activeShift = [...employeeShifts].reverse().find((shift) => shift.status === "active") || null;
+    const shiftBuckets = { Jour: 0, Soir: 0, Nuit: 0 };
+
+    closedShifts.forEach((shift) => {
+      const period = shift.shift_period || getShiftPeriod(shift.punched_in_at);
+      shiftBuckets[period] = (shiftBuckets[period] || 0) + Number(shift.duration_hours || 0);
+    });
+
+    const preferredShift = Object.entries(shiftBuckets).sort((a, b) => b[1] - a[1])[0]?.[0] || "Jour";
+    const activeDays = new Set(closedShifts.map((shift) => String(shift.punched_in_at).slice(0, 10))).size;
+    const todayHours = activeShift
+      ? Number(((Date.now() - new Date(activeShift.punched_in_at).getTime()) / 3600000).toFixed(2))
+      : 0;
+
+    return {
+      ...employee,
+      active_days: Number(employee.active_days || activeDays || 0),
+      today_hours: todayHours,
+      preferred_shift: preferredShift,
+      total_hours: Number(employee.total_hours || 0),
+      is_active: Boolean(activeShift || employee.is_active)
+    };
+  });
+}
+
+function buildPayslipPdf(res, payload) {
+  const doc = new PDFDocument({ size: "A4", margin: 48 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="slip-${payload.employeeName.replace(/\s+/g, "-").toLowerCase()}.pdf"`);
+  doc.pipe(res);
+
+  doc.rect(0, 0, 595, 110).fill("#233648");
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("TunerClock", 48, 34);
+  doc.font("Helvetica").fontSize(12).text("Slip de paie officiel", 48, 68);
+
+  doc.moveDown(5);
+  doc.fillColor("#17212d").font("Helvetica-Bold").fontSize(18).text(payload.employeeName);
+  doc.font("Helvetica").fontSize(11).fillColor("#6b7785").text(`Discord ID: ${payload.discordId || "-"}`);
+  doc.text(`Date de paiement: ${payload.paidAtLabel}`);
+
+  const rows = [
+    ["Heures payees", `${Number(payload.hoursPaid || 0).toFixed(2)} h`],
+    ["Taux horaire", `$${Number(payload.hourlyRate || 0).toFixed(2)}`],
+    ["Montant verse", `$${Number(payload.amountPaid || 0).toFixed(2)}`],
+    ["Verse par", payload.paidBy || "Gestion"]
+  ];
+
+  let y = 210;
+  rows.forEach(([label, value]) => {
+    doc.roundedRect(48, y, 499, 48, 0).fillAndStroke("#f6f9fc", "#e3eaf2");
+    doc.fillColor("#445467").font("Helvetica-Bold").fontSize(11).text(label, 68, y + 16);
+    doc.fillColor("#17212d").font("Helvetica-Bold").fontSize(15).text(value, 320, y + 14, { width: 180, align: "right" });
+    y += 64;
+  });
+
+  doc.fillColor("#6b7785").font("Helvetica").fontSize(10);
+  doc.text("Document genere automatiquement par TunerClock.", 48, 520);
+  doc.end();
 }
 
 app.get("/auth/discord/login", (req, res) => {
@@ -55,8 +179,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     });
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      return res.status(500).send(`Echec echange token Discord: ${errorText}`);
+      return res.status(500).send(`Echec echange token Discord: ${await tokenResponse.text()}`);
     }
 
     const tokenData = await tokenResponse.json();
@@ -65,8 +188,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     });
 
     if (!profileResponse.ok) {
-      const errorText = await profileResponse.text();
-      return res.status(500).send(`Echec recuperation profil Discord: ${errorText}`);
+      return res.status(500).send(`Echec recuperation profil Discord: ${await profileResponse.text()}`);
     }
 
     const profile = await profileResponse.json();
@@ -102,19 +224,16 @@ app.get("/auth/me", (req, res) => {
   res.json({ user: getSession(req) || null });
 });
 
-app.get("/api/me-state", async (req, res) => {
-  try {
-    const session = getSession(req);
-    if (!session) {
-      return res.json({ user: null });
-    }
+app.get("/auth/logout", (req, res) => {
+  res.setHeader("Set-Cookie", "tunerclock_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
+  res.redirect("/");
+});
 
+app.get("/api/me-state", requireAuth, async (req, res) => {
+  try {
     const supabase = getSupabase();
-    const { data: employee } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("discord_id", session.discordId)
-      .maybeSingle();
+    const snapshots = await buildEmployeeSnapshots(supabase);
+    const employee = snapshots.find((entry) => entry.discord_id === req.session.discordId) || null;
 
     let activeShift = null;
     if (employee?.id) {
@@ -135,25 +254,15 @@ app.get("/api/me-state", async (req, res) => {
   }
 });
 
-app.get("/auth/logout", (req, res) => {
-  res.setHeader("Set-Cookie", "tunerclock_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0");
-  res.redirect("/");
-});
-
-app.post("/api/punch-in", async (req, res) => {
+app.post("/api/punch-in", requireAuth, async (req, res) => {
   try {
-    const session = getSession(req);
-    if (!session) {
-      return res.status(401).send("Non autorise.");
-    }
-
     const supabase = getSupabase();
     const { data: employee, error: employeeError } = await supabase
       .from("employees")
       .upsert({
-        discord_id: session.discordId,
-        discord_name: session.username,
-        role: session.isAdmin ? "admin" : "employee",
+        discord_id: req.session.discordId,
+        discord_name: req.session.displayName || req.session.username,
+        role: req.session.isAdmin ? "admin" : "employee",
         is_active: true
       }, { onConflict: "discord_id" })
       .select()
@@ -163,14 +272,23 @@ app.post("/api/punch-in", async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
-    const { error: shiftError } = await supabase.from("shifts").insert({
-      employee_id: employee.id,
-      punched_in_at: new Date().toISOString(),
-      status: "active"
-    });
+    const { data: existingActive } = await supabase
+      .from("shifts")
+      .select("id")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
 
-    if (shiftError) {
-      return res.status(500).send(shiftError.message);
+    if (!existingActive) {
+      const { error: shiftError } = await supabase.from("shifts").insert({
+        employee_id: employee.id,
+        punched_in_at: new Date().toISOString(),
+        status: "active"
+      });
+      if (shiftError) {
+        return res.status(500).send(shiftError.message);
+      }
     }
 
     res.json({ ok: true });
@@ -179,18 +297,13 @@ app.post("/api/punch-in", async (req, res) => {
   }
 });
 
-app.post("/api/punch-out", async (req, res) => {
+app.post("/api/punch-out", requireAuth, async (req, res) => {
   try {
-    const session = getSession(req);
-    if (!session) {
-      return res.status(401).send("Non autorise.");
-    }
-
     const supabase = getSupabase();
     const { data: employee, error: employeeError } = await supabase
       .from("employees")
       .select("*")
-      .eq("discord_id", session.discordId)
+      .eq("discord_id", req.session.discordId)
       .single();
 
     if (employeeError) {
@@ -213,8 +326,7 @@ app.post("/api/punch-out", async (req, res) => {
     const punchedOutAt = new Date();
     const punchedInAt = new Date(shift.punched_in_at);
     const durationHours = Number(((punchedOutAt - punchedInAt) / 3600000).toFixed(2));
-    const punchedHour = punchedInAt.getHours();
-    const shiftPeriod = punchedHour >= 6 && punchedHour < 18 ? "Jour" : punchedHour < 23 && punchedHour >= 18 ? "Soir" : "Nuit";
+    const shiftPeriod = getShiftPeriod(punchedInAt);
 
     const { error: updateShiftError } = await supabase
       .from("shifts")
@@ -233,7 +345,9 @@ app.post("/api/punch-out", async (req, res) => {
     const { error: updateEmployeeError } = await supabase
       .from("employees")
       .update({
+        discord_name: req.session.displayName || req.session.username,
         is_active: false,
+        active_days: Number(employee.active_days || 0) + 1,
         total_hours: Number(employee.total_hours || 0) + durationHours
       })
       .eq("id", employee.id);
@@ -242,7 +356,7 @@ app.post("/api/punch-out", async (req, res) => {
       return res.status(500).send(updateEmployeeError.message);
     }
 
-    res.json({ ok: true, durationHours });
+    res.json({ ok: true, durationHours, shiftPeriod });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -251,66 +365,25 @@ app.post("/api/punch-out", async (req, res) => {
 app.get("/api/admin-dashboard", requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
-    const [{ data: employees }, { data: expenses }, { data: payouts }, { data: profits }] = await Promise.all([
-      supabase.from("employees").select("*").order("total_hours", { ascending: false }),
-      supabase.from("expense_logs").select("*"),
-      supabase.from("payouts").select("*"),
-      supabase.from("weekly_profit_entries").select("*")
+    const [employees, expensesResult, payoutsResult, profitsResult, settings] = await Promise.all([
+      buildEmployeeSnapshots(supabase),
+      supabase.from("expense_logs").select("*").order("created_at", { ascending: false }),
+      supabase.from("payouts").select("*").order("paid_at", { ascending: false }),
+      supabase.from("weekly_profit_entries").select("*").order("created_at", { ascending: false }),
+      getSettingsMap(supabase)
     ]);
 
-    res.json({ employees, expenses, payouts, profits });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
+    if (expensesResult.error) throw expensesResult.error;
+    if (payoutsResult.error) throw payoutsResult.error;
+    if (profitsResult.error) throw profitsResult.error;
 
-app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
-  try {
-    const employeeId = req.body.employeeId;
-    if (!employeeId) {
-      return res.status(400).send("employeeId manquant.");
-    }
-
-    const supabase = getSupabase();
-    const { data: employee, error: employeeError } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("id", employeeId)
-      .single();
-
-    if (employeeError) {
-      return res.status(500).send(employeeError.message);
-    }
-
-    const amountPaid = Number(employee.total_hours || 0) * Number(employee.hourly_rate || 25);
-
-    const { error: payoutError } = await supabase.from("payouts").insert({
-      employee_id: employee.id,
-      hours_paid: employee.total_hours || 0,
-      hourly_rate: employee.hourly_rate || 25,
-      amount_paid: amountPaid,
-      paid_by_discord_id: req.session.discordId
+    res.json({
+      employees,
+      expenses: expensesResult.data || [],
+      payouts: payoutsResult.data || [],
+      profits: profitsResult.data || [],
+      settings
     });
-
-    if (payoutError) {
-      return res.status(500).send(payoutError.message);
-    }
-
-    const { error: resetError } = await supabase
-      .from("employees")
-      .update({
-        total_hours: 0,
-        active_days: 0,
-        is_active: false,
-        last_paid_at: new Date().toISOString()
-      })
-      .eq("id", employee.id);
-
-    if (resetError) {
-      return res.status(500).send(resetError.message);
-    }
-
-    res.json({ ok: true, amountPaid });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -339,6 +412,156 @@ app.post("/api/admin-update-employee-rate", requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/api/admin-global-rate", requireAdmin, async (req, res) => {
+  try {
+    const amount = Number(req.body?.amount || 0);
+    const supabase = getSupabase();
+    await upsertSetting(supabase, "global_hourly_rate", { amount });
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-finance-settings", requireAdmin, async (req, res) => {
+  try {
+    const payload = {
+      serviceIncome: Number(req.body?.serviceIncome || 0),
+      weeklyProfit: Number(req.body?.weeklyProfit || 0),
+      manualPayouts: Number(req.body?.manualPayouts || 0),
+      miscExpenses: Number(req.body?.miscExpenses || 0),
+      calcNote: String(req.body?.calcNote || "")
+    };
+    const supabase = getSupabase();
+    await upsertSetting(supabase, "finance_inputs", payload);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-expense", requireAdmin, async (req, res) => {
+  try {
+    const payload = {
+      name: String(req.body?.name || "").trim(),
+      category: String(req.body?.category || "Pieces").trim() || "Pieces",
+      cost: Number(req.body?.cost || 105),
+      note: String(req.body?.note || "-").trim() || "-",
+      created_by_discord_id: req.session.discordId
+    };
+
+    if (!payload.name) {
+      return res.status(400).send("Nom de piece manquant.");
+    }
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase.from("expense_logs").insert(payload).select().single();
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+    res.json({ ok: true, expense: data });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
+  try {
+    const employeeId = req.body?.employeeId;
+    if (!employeeId) {
+      return res.status(400).send("employeeId manquant.");
+    }
+
+    const supabase = getSupabase();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", employeeId)
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    const hourlyRate = Number(employee.hourly_rate || DEFAULT_HOURLY_RATE);
+    const hoursPaid = Number(employee.total_hours || 0);
+    const amountPaid = Number((hoursPaid * hourlyRate).toFixed(2));
+
+    const { data: payout, error: payoutError } = await supabase.from("payouts").insert({
+      employee_id: employee.id,
+      hours_paid: hoursPaid,
+      hourly_rate: hourlyRate,
+      amount_paid: amountPaid,
+      paid_by_discord_id: req.session.discordId
+    }).select().single();
+
+    if (payoutError) {
+      return res.status(500).send(payoutError.message);
+    }
+
+    const { error: resetError } = await supabase
+      .from("employees")
+      .update({
+        total_hours: 0,
+        active_days: 0,
+        is_active: false,
+        last_paid_at: new Date().toISOString()
+      })
+      .eq("id", employee.id);
+
+    if (resetError) {
+      return res.status(500).send(resetError.message);
+    }
+
+    res.json({
+      ok: true,
+      payoutId: payout.id,
+      amountPaid,
+      hoursPaid,
+      hourlyRate
+    });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.get("/api/payouts/:payoutId/pdf", requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data: payout, error: payoutError } = await supabase
+      .from("payouts")
+      .select("*")
+      .eq("id", req.params.payoutId)
+      .single();
+
+    if (payoutError) {
+      return res.status(500).send(payoutError.message);
+    }
+
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", payout.employee_id)
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    buildPayslipPdf(res, {
+      employeeName: employee.discord_name,
+      discordId: employee.discord_id,
+      hoursPaid: payout.hours_paid,
+      hourlyRate: payout.hourly_rate,
+      amountPaid: payout.amount_paid,
+      paidAtLabel: new Date(payout.paid_at).toLocaleString("fr-CA"),
+      paidBy: req.session.displayName || req.session.username
+    });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
   try {
     const { discordId, payslip } = req.body || {};
@@ -356,16 +579,16 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
     });
 
     if (!createDmResponse.ok) {
-      const errorText = await createDmResponse.text();
-      return res.status(500).send(errorText);
+      return res.status(500).send(await createDmResponse.text());
     }
 
     const dmChannel = await createDmResponse.json();
     const message = [
-      `Slip de paye - ${payslip.employeeName}`,
-      `Heures payees: ${Number(payslip.hoursPaid || 0).toFixed(2)}h`,
-      `Taux horaire: ${Number(payslip.hourlyRate || 0).toFixed(2)}$`,
-      `Montant verse: ${Number(payslip.amountPaid || 0).toFixed(2)}$`,
+      `TunerClock | Slip de paie`,
+      `Employe: ${payslip.employeeName}`,
+      `Heures payees: ${Number(payslip.hoursPaid || 0).toFixed(2)} h`,
+      `Taux horaire: $${Number(payslip.hourlyRate || 0).toFixed(2)}`,
+      `Montant verse: $${Number(payslip.amountPaid || 0).toFixed(2)}`,
       `Date: ${payslip.paidAtLabel || ""}`
     ].join("\n");
 
@@ -379,9 +602,41 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
     });
 
     if (!sendResponse.ok) {
-      const errorText = await sendResponse.text();
-      return res.status(500).send(errorText);
+      return res.status(500).send(await sendResponse.text());
     }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+
+    const [{ error: shiftsError }, { error: expensesError }, { error: payoutsError }, { error: profitsError }, { error: employeesError }] = await Promise.all([
+      supabase.from("shifts").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+      supabase.from("expense_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+      supabase.from("payouts").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+      supabase.from("weekly_profit_entries").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
+      supabase.from("employees").update({ total_hours: 0, active_days: 0, is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000")
+    ]);
+
+    if (shiftsError) throw shiftsError;
+    if (expensesError) throw expensesError;
+    if (payoutsError) throw payoutsError;
+    if (profitsError) throw profitsError;
+    if (employeesError) throw employeesError;
+
+    await upsertSetting(supabase, "global_hourly_rate", { amount: DEFAULT_HOURLY_RATE });
+    await upsertSetting(supabase, "finance_inputs", {
+      serviceIncome: 0,
+      weeklyProfit: 0,
+      manualPayouts: 0,
+      miscExpenses: 0,
+      calcNote: ""
+    });
 
     res.json({ ok: true });
   } catch (error) {

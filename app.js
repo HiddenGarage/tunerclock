@@ -1,5 +1,7 @@
 let employees = [];
 let expenses = [];
+let activeShiftStartedAt = null;
+let liveTimerId = null;
 
 const adminIds = ["417605116070461442", "893278269170933810"];
 const pageTitles = {
@@ -7,8 +9,7 @@ const pageTitles = {
   pointage: "Pointage employe",
   gestion: "Gestion du garage",
   finance: "Finance du garage",
-  pieces: "Commandes de pieces",
-  plan: "Plan du projet"
+  pieces: "Commandes de pieces"
 };
 
 const state = {
@@ -23,7 +24,6 @@ const state = {
 const elements = {
   activeCount: document.getElementById("active-count"),
   weeklyHours: document.getElementById("weekly-hours"),
-  topWorker: document.getElementById("top-worker"),
   hourlyRate: document.getElementById("hourly-rate"),
   totalPayroll: document.getElementById("total-payroll"),
   totalExpenses: document.getElementById("total-expenses"),
@@ -32,6 +32,13 @@ const elements = {
   totalIncome: document.getElementById("total-income"),
   totalCosts: document.getElementById("total-costs"),
   grossMargin: document.getElementById("gross-margin"),
+  topWorker: document.getElementById("top-worker"),
+  dashboardHighlight: document.getElementById("dashboard-highlight"),
+  dashboardActiveWorkers: document.getElementById("dashboard-active-workers"),
+  dashboardPartsCount: document.getElementById("dashboard-parts-count"),
+  gestionActiveCount: document.getElementById("gestion-active-count"),
+  gestionWeeklyHours: document.getElementById("gestion-weekly-hours"),
+  gestionHourlyRate: document.getElementById("gestion-hourly-rate"),
   demoUserText: document.getElementById("demo-user-text"),
   shiftBadge: document.getElementById("shift-badge"),
   shiftMessage: document.getElementById("shift-message"),
@@ -42,6 +49,7 @@ const elements = {
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
   activeWorkersList: document.getElementById("active-workers-list"),
+  gestionActiveWorkersList: document.getElementById("gestion-active-workers-list"),
   shiftInsights: document.getElementById("shift-insights"),
   expenseBody: document.getElementById("expense-body"),
   rateInput: document.getElementById("rate-input"),
@@ -70,13 +78,35 @@ function formatMoney(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function formatHoursMinutes(hoursValue) {
+  const totalMinutes = Math.max(0, Math.round((Number(hoursValue || 0)) * 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
 function getNumericValue(element) {
   return Number(element?.value || 0) || 0;
 }
 
+function normaliseEmployeeRecord(record) {
+  return {
+    id: record.id || null,
+    name: record.discord_name || record.name || "Employe",
+    discordId: record.discord_id || record.discordId,
+    hours: Number(record.total_hours || record.hours || 0),
+    activeDays: Number(record.active_days || record.activeDays || 0),
+    preferredShift: record.preferred_shift || record.preferredShift || "Jour",
+    todayHours: Number(record.today_hours || record.todayHours || 0),
+    active: Boolean(record.is_active ?? record.active),
+    lastPaidAt: record.last_paid_at || record.lastPaidAt || null,
+    lastPayslip: null
+  };
+}
+
 function getRequestedRoute() {
-  const route = window.location.hash.replace("#", "") || "pointage";
-  return ["tableau", "pointage", "gestion", "finance", "pieces", "plan"].includes(route) ? route : "pointage";
+  const route = window.location.hash.replace("#", "") || (state.isAdmin ? "tableau" : "pointage");
+  return ["tableau", "pointage", "gestion", "finance", "pieces"].includes(route) ? route : "pointage";
 }
 
 function applyAccessControl() {
@@ -84,7 +114,6 @@ function applyAccessControl() {
     const adminOnly = item.dataset.adminOnly === "true";
     item.classList.toggle("hidden", adminOnly && !state.isAdmin);
   });
-
   elements.sidebarSummary.classList.toggle("hidden", !state.isAdmin);
 }
 
@@ -95,14 +124,8 @@ function routeToCurrentPage() {
     window.location.hash = "#pointage";
   }
 
-  elements.navItems.forEach((item) => {
-    item.classList.toggle("active", item.dataset.route === route);
-  });
-
-  elements.pages.forEach((page) => {
-    page.classList.toggle("active-page", page.id === `page-${route}`);
-  });
-
+  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.route === route));
+  elements.pages.forEach((page) => page.classList.toggle("active-page", page.id === `page-${route}`));
   elements.pageTitle.textContent = pageTitles[route];
 }
 
@@ -112,9 +135,7 @@ function setStatusDot(active) {
 }
 
 function getTopEmployee() {
-  if (!employees.length) {
-    return null;
-  }
+  if (!employees.length) return null;
   return [...employees].sort((a, b) => b.hours - a.hours)[0];
 }
 
@@ -130,24 +151,53 @@ function getTotalCosts() {
   return getExpenseTotal() + getNumericValue(elements.manualPayouts);
 }
 
+function updateLivePunchMetrics() {
+  if (!state.loggedIn || !state.currentUser || !state.punchedIn || !activeShiftStartedAt) {
+    if (!state.loggedIn || !state.currentUser) {
+      elements.todayHours.textContent = "0h 00m";
+      elements.todayPay.textContent = formatMoney(0);
+    }
+    return;
+  }
+
+  const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
+  state.currentUser.todayHours = elapsedHours;
+  elements.todayHours.textContent = formatHoursMinutes(elapsedHours);
+  elements.todayPay.textContent = formatMoney(elapsedHours * state.hourlyRate);
+}
+
+function startLiveTimer() {
+  if (liveTimerId) clearInterval(liveTimerId);
+  if (!state.punchedIn || !activeShiftStartedAt) return;
+  updateLivePunchMetrics();
+  liveTimerId = setInterval(updateLivePunchMetrics, 1000);
+}
+
+function stopLiveTimer() {
+  if (liveTimerId) clearInterval(liveTimerId);
+  liveTimerId = null;
+}
+
 function renderOverview() {
   const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
 
   elements.activeCount.textContent = activeEmployees.length;
-  elements.weeklyHours.textContent = `${totalHours.toFixed(1)}h`;
-  elements.topWorker.textContent = topEmployee ? topEmployee.name : "-";
+  elements.weeklyHours.textContent = formatHoursMinutes(totalHours);
   elements.hourlyRate.textContent = state.hourlyRate > 0 ? `$${state.hourlyRate}` : "-";
+  elements.topWorker.textContent = topEmployee ? topEmployee.name : "-";
+  elements.dashboardHighlight.textContent = formatHoursMinutes(activeEmployees.reduce((sum, employee) => sum + employee.todayHours, 0));
+  elements.dashboardActiveWorkers.textContent = activeEmployees.length;
+  elements.dashboardPartsCount.textContent = expenses.length;
+  elements.gestionActiveCount.textContent = activeEmployees.length;
+  elements.gestionWeeklyHours.textContent = formatHoursMinutes(totalHours);
+  elements.gestionHourlyRate.textContent = state.hourlyRate > 0 ? `$${state.hourlyRate}` : "-";
 }
 
 function renderLeaderboard() {
   if (!employees.length) {
-    elements.leaderboardBody.innerHTML = `
-      <tr>
-        <td colspan="6">Aucune donnee employe pour le moment.</td>
-      </tr>
-    `;
+    elements.leaderboardBody.innerHTML = `<tr><td colspan="6">Aucune donnee employe pour le moment.</td></tr>`;
     return;
   }
 
@@ -156,23 +206,22 @@ function renderLeaderboard() {
     const estimatedPay = employee.hours * state.hourlyRate;
     const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
     const buttonDisabled = employee.hours <= 0 ? "disabled" : "";
-    const buttonLabel = employee.hours <= 0 ? "Cycle vide" : "Marquer paye";
     const downloadButton = employee.lastPayslip ? `
       <button class="secondary-button secondary-table-button table-button download-payslip-button" data-employee-index="${employeeIndex}">
-        Telecharger slip
+        Envoyer slip
       </button>
     ` : "";
 
     return `
       <tr>
         <td>#${index + 1} ${employee.name}</td>
-        <td>${employee.hours.toFixed(1)}h</td>
+        <td>${formatHoursMinutes(employee.hours)}</td>
         <td>${employee.activeDays}</td>
         <td>${employee.preferredShift}</td>
         <td>${formatMoney(estimatedPay)}</td>
         <td>
           <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${buttonDisabled}>
-            ${buttonLabel}
+            PAYER
           </button>
           ${downloadButton}
         </td>
@@ -181,16 +230,14 @@ function renderLeaderboard() {
   }).join("");
 }
 
-function renderActiveWorkers() {
+function renderActiveLists() {
   const activeEmployees = employees.filter((employee) => employee.active);
-  if (!activeEmployees.length) {
-    elements.activeWorkersList.innerHTML = "<li>Aucun employe en service.</li>";
-    return;
-  }
+  const html = activeEmployees.length
+    ? activeEmployees.map((employee) => `<li>${employee.name} | ${formatHoursMinutes(employee.todayHours)} | ${employee.preferredShift}</li>`).join("")
+    : "<li>Aucun employe en service.</li>";
 
-  elements.activeWorkersList.innerHTML = activeEmployees
-    .map((employee) => `<li>${employee.name} | ${employee.todayHours.toFixed(1)}h aujourd'hui | ${employee.preferredShift}</li>`)
-    .join("");
+  elements.activeWorkersList.innerHTML = html;
+  elements.gestionActiveWorkersList.innerHTML = html;
 }
 
 function renderInsights() {
@@ -201,8 +248,8 @@ function renderInsights() {
     return `
       <div class="insight-box">
         <p class="section-kicker">${period}</p>
-        <h3>${matchingEmployees.length}</h3>
-        <p class="muted">${totalHours.toFixed(1)}h cumulees.</p>
+        <h3>${matchingEmployees.length} employe(s)</h3>
+        <p class="muted">${formatHoursMinutes(totalHours)} cumulees sur ce quart.</p>
       </div>
     `;
   }).join("");
@@ -210,11 +257,7 @@ function renderInsights() {
 
 function renderExpenseTable() {
   if (!expenses.length) {
-    elements.expenseBody.innerHTML = `
-      <tr>
-        <td colspan="4">Aucune depense enregistree.</td>
-      </tr>
-    `;
+    elements.expenseBody.innerHTML = `<tr><td colspan="4">Aucune depense enregistree.</td></tr>`;
     return;
   }
 
@@ -230,34 +273,36 @@ function renderExpenseTable() {
 
 function renderShiftState() {
   if (!state.loggedIn || !state.currentUser) {
-    elements.shiftBadge.textContent = "HORS QUART";
+    elements.shiftBadge.textContent = "Hors quart";
     elements.shiftBadge.className = "mini-pill danger";
     elements.shiftMessage.textContent = "Connecte-toi pour commencer ton quart.";
-    elements.todayHours.textContent = "0.0h";
+    elements.todayHours.textContent = "0h 00m";
     elements.todayPay.textContent = formatMoney(0);
     elements.sessionKind.textContent = "Non connecte";
     elements.punchIn.disabled = true;
     elements.punchOut.disabled = true;
     elements.discordLogin.textContent = state.authChecked ? "Se connecter avec Discord" : "Verification de la session...";
+    stopLiveTimer();
     return;
   }
 
-  const pay = state.currentUser.todayHours * state.hourlyRate;
-  elements.todayHours.textContent = `${state.currentUser.todayHours.toFixed(1)}h`;
-  elements.todayPay.textContent = formatMoney(pay);
   elements.sessionKind.textContent = state.isAdmin ? "Gestion autorisee" : "Employe standard";
   elements.punchIn.disabled = state.punchedIn;
   elements.punchOut.disabled = !state.punchedIn;
   elements.discordLogin.textContent = `Connecte: ${state.currentUser.name}`;
 
   if (state.punchedIn) {
-    elements.shiftBadge.textContent = "EN QUART";
+    elements.shiftBadge.textContent = "En service";
     elements.shiftBadge.className = "mini-pill success";
-    elements.shiftMessage.textContent = `Quart actif pour ${state.currentUser.name}.`;
+    elements.shiftMessage.textContent = `Tu es actuellement en service. Les heures et le salaire se mettent a jour en direct.`;
+    startLiveTimer();
   } else {
-    elements.shiftBadge.textContent = "PRET";
-    elements.shiftBadge.className = "mini-pill";
-    elements.shiftMessage.textContent = `Connecte en tant que ${state.currentUser.name}.`;
+    elements.shiftBadge.textContent = "Hors service";
+    elements.shiftBadge.className = "mini-pill danger";
+    elements.shiftMessage.textContent = `Tu n'es pas en service. Clique sur "Me mettre en service" pour demarrer ton quart.`;
+    stopLiveTimer();
+    elements.todayHours.textContent = formatHoursMinutes(state.currentUser.todayHours);
+    elements.todayPay.textContent = formatMoney(state.currentUser.todayHours * state.hourlyRate);
   }
 }
 
@@ -266,35 +311,49 @@ function drawHoursChart() {
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
-  const padding = 34;
+  const padding = 40;
   const maxHours = Math.max(...employees.map((employee) => employee.hours), 1);
-  const barWidth = 90;
-  const gap = 34;
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#0d1219";
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, "#f8fbff");
+  gradient.addColorStop(1, "#e8f1ff");
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
 
   if (!employees.length) {
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = "#6f8297";
     ctx.font = "600 16px Manrope";
-    ctx.fillText("Aucune donnee a afficher.", 34, 130);
+    ctx.fillText("Aucune donnee a afficher.", 40, 130);
     return;
   }
 
+  ctx.strokeStyle = "rgba(79,141,245,0.18)";
+  for (let i = 0; i < 5; i += 1) {
+    const y = padding + ((height - padding * 2) / 4) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding, y);
+    ctx.lineTo(width - padding, y);
+    ctx.stroke();
+  }
+
+  const barWidth = 74;
+  const gap = 28;
   employees.forEach((employee, index) => {
     const x = padding + index * (barWidth + gap);
     const barHeight = (employee.hours / maxHours) * (height - padding * 2);
     const y = height - padding - barHeight;
-
-    ctx.fillStyle = "#4f8df5";
+    const barGradient = ctx.createLinearGradient(0, y, 0, height - padding);
+    barGradient.addColorStop(0, "#4f8df5");
+    barGradient.addColorStop(1, "#31c6a7");
+    ctx.fillStyle = barGradient;
     ctx.fillRect(x, y, barWidth, barHeight);
-    ctx.fillStyle = "#f1f5f9";
-    ctx.font = "700 14px Manrope";
-    ctx.fillText(`${employee.hours.toFixed(1)}h`, x, y - 8);
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "600 13px Manrope";
-    ctx.fillText(employee.name.split(" ")[0], x, height - 10);
+    ctx.fillStyle = "#1c2b39";
+    ctx.font = "700 13px Manrope";
+    ctx.fillText(formatHoursMinutes(employee.hours), x - 4, y - 8);
+    ctx.fillStyle = "#597086";
+    ctx.font = "600 12px Manrope";
+    ctx.fillText(employee.name.split(" ")[0], x, height - 12);
   });
 }
 
@@ -310,22 +369,25 @@ function drawShiftChart() {
   const maxValue = Math.max(...values, 1);
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#0d1219";
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#fff7ef");
+  bg.addColorStop(1, "#eef8f5");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
 
   categories.forEach((category, index) => {
     const x = 56;
     const y = 50 + index * 62;
-    const trackWidth = width - 170;
+    const trackWidth = width - 190;
     const fillWidth = (values[index] / maxValue) * trackWidth;
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillStyle = "rgba(23,33,45,0.08)";
     ctx.fillRect(x, y, trackWidth, 24);
-    ctx.fillStyle = "#31c6a7";
+    ctx.fillStyle = ["#4f8df5", "#f59f44", "#31c6a7"][index];
     ctx.fillRect(x, y, fillWidth, 24);
-    ctx.fillStyle = "#f1f5f9";
+    ctx.fillStyle = "#1c2b39";
     ctx.font = "700 15px Manrope";
     ctx.fillText(category, x, y - 10);
-    ctx.fillText(`${values[index].toFixed(1)}h`, x + trackWidth + 14, y + 17);
+    ctx.fillText(formatHoursMinutes(values[index]), x + trackWidth + 16, y + 18);
   });
 }
 
@@ -346,7 +408,6 @@ function renderFinance() {
   elements.totalIncome.textContent = formatMoney(totalIncome);
   elements.totalCosts.textContent = formatMoney(totalCosts);
   elements.grossMargin.textContent = `${margin.toFixed(1)}%`;
-
   drawHoursChart();
   drawShiftChart();
 }
@@ -356,51 +417,28 @@ function updateAll() {
   routeToCurrentPage();
   renderOverview();
   renderLeaderboard();
-  renderActiveWorkers();
+  renderActiveLists();
   renderInsights();
   renderExpenseTable();
   renderShiftState();
   renderFinance();
 }
 
-function normaliseEmployeeRecord(record) {
-  return {
-    id: record.id || null,
-    name: record.discord_name || record.name || "Employe",
-    discordId: record.discord_id || record.discordId,
-    hours: Number(record.total_hours || record.hours || 0),
-    activeDays: Number(record.active_days || record.activeDays || 0),
-    preferredShift: record.preferred_shift || record.preferredShift || "Jour",
-    todayHours: Number(record.today_hours || record.todayHours || 0),
-    active: Boolean(record.is_active ?? record.active),
-    lastPaidAt: record.last_paid_at || record.lastPaidAt || null,
-    lastPayslip: null
-  };
-}
-
 async function loadAdminDashboard() {
-  if (!state.isAdmin) {
-    return;
-  }
-
+  if (!state.isAdmin) return;
   try {
     const response = await fetch("/api/admin-dashboard", { credentials: "include" });
-    if (!response.ok) {
-      return;
-    }
-
+    if (!response.ok) return;
     const data = await response.json();
     employees = (data.employees || []).map(normaliseEmployeeRecord);
     expenses = (data.expenses || []).map((entry) => ({
       name: entry.name,
       category: entry.category || "Divers",
-      cost: Number(entry.cost || 0),
+      cost: Number(entry.cost || 105),
       note: entry.note || "-"
     }));
-
     const payoutTotal = (data.payouts || []).reduce((sum, entry) => sum + Number(entry.amount_paid || 0), 0);
     const weeklyProfitTotal = (data.profits || []).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-
     elements.manualPayouts.value = payoutTotal ? String(payoutTotal) : "";
     elements.weeklyProfit.value = weeklyProfitTotal ? String(weeklyProfitTotal) : "";
   } catch (error) {
@@ -408,23 +446,37 @@ async function loadAdminDashboard() {
   }
 }
 
+async function loadMeState() {
+  try {
+    const response = await fetch("/api/me-state", { credentials: "include" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.employee || !state.currentUser) return;
+    const current = normaliseEmployeeRecord(data.employee);
+    current.name = state.currentUser.name;
+    state.currentUser = current;
+    employees = [current, ...employees.filter((employee) => employee.discordId !== current.discordId)];
+
+    if (data.activeShift?.punched_in_at) {
+      activeShiftStartedAt = new Date(data.activeShift.punched_in_at).getTime();
+      state.punchedIn = true;
+    } else {
+      activeShiftStartedAt = null;
+      state.punchedIn = false;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+}
+
 function syncCurrentUserFromSession(sessionUser) {
   const displayName = sessionUser.displayName || sessionUser.username;
-  const existing = employees.find((employee) => employee.discordId === sessionUser.discordId);
-
   state.isAdmin = Boolean(sessionUser.isAdmin || adminIds.includes(sessionUser.discordId));
-
-  if (existing) {
-    existing.name = displayName;
-    state.currentUser = existing;
-  } else {
-    state.currentUser = normaliseEmployeeRecord({
-      discord_id: sessionUser.discordId,
-      discord_name: displayName
-    });
-    employees.unshift(state.currentUser);
-  }
-
+  state.currentUser = normaliseEmployeeRecord({
+    discord_id: sessionUser.discordId,
+    discord_name: displayName
+  });
+  employees = [state.currentUser];
   state.loggedIn = true;
   elements.demoUserText.textContent = `${state.currentUser.name} connecte via Discord`;
   setStatusDot(true);
@@ -438,6 +490,7 @@ async function loadAuthSession() {
 
     if (data.user) {
       syncCurrentUserFromSession(data.user);
+      await loadMeState();
       await loadAdminDashboard();
     } else {
       state.loggedIn = false;
@@ -453,16 +506,11 @@ async function loadAuthSession() {
     elements.demoUserText.textContent = "Connexion Discord indisponible";
     setStatusDot(false);
   }
-
   updateAll();
 }
 
 function loginWithDiscord() {
-  if (state.loggedIn) {
-    window.location.href = "/auth/logout";
-    return;
-  }
-  window.location.href = "/auth/discord/login";
+  window.location.href = state.loggedIn ? "/auth/logout" : "/auth/discord/login";
 }
 
 function updateRate() {
@@ -470,64 +518,59 @@ function updateRate() {
   updateAll();
 }
 
-function punchIn() {
+async function punchIn() {
   if (!state.currentUser) return;
   state.punchedIn = true;
   state.currentUser.active = true;
-  fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => {});
+  activeShiftStartedAt = Date.now();
+  state.currentUser.todayHours = 0;
+  await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => {});
   updateAll();
 }
 
-function punchOut() {
+async function punchOut() {
   if (!state.currentUser) return;
-  state.punchedIn = false;
+  await fetch("/api/punch-out", { method: "POST", credentials: "include" }).catch(() => {});
+  state.currentUser.hours += state.currentUser.todayHours;
   state.currentUser.active = false;
-  fetch("/api/punch-out", { method: "POST", credentials: "include" }).catch(() => {});
+  state.punchedIn = false;
+  activeShiftStartedAt = null;
+  stopLiveTimer();
   updateAll();
 }
 
 function addExpense() {
   const name = elements.partName.value.trim();
-  const cost = Number(elements.partCost.value);
-  const category = elements.partCategory.value.trim() || "Divers";
+  const category = elements.partCategory.value.trim() || "Pieces";
   const note = elements.partNote.value.trim() || "-";
-  if (!name || !cost || cost < 0) return;
-
-  expenses.unshift({ name, category, cost, note });
+  if (!name) return;
+  expenses.unshift({ name, category, cost: 105, note });
   elements.partName.value = "";
-  elements.partCost.value = "";
   elements.partCategory.value = "";
   elements.partNote.value = "";
   updateAll();
 }
 
-function buildPayslipHtml(payslip) {
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"><title>Slip de paye - ${payslip.employeeName}</title></head>
-<body style="font-family:Arial,sans-serif;background:#f4f6f9;color:#17212d;padding:24px">
-<div style="max-width:760px;margin:0 auto;background:#fff;border:1px solid #d9e2ec;padding:28px">
-<p style="color:#627387">TunerClock</p><h1>Slip de paye</h1>
-<p style="color:#627387">Document genere depuis le panel de gestion.</p>
-<p>Employe: <strong>${payslip.employeeName}</strong></p>
-<p>ID Discord: <strong>${payslip.discordId}</strong></p>
-<p>Heures payees: <strong>${payslip.hoursPaid.toFixed(1)}h</strong></p>
-<p>Taux horaire: <strong>${formatMoney(payslip.hourlyRate)}</strong></p>
-<p>Montant verse: <strong>${formatMoney(payslip.amountPaid)}</strong></p>
-<p>Date de paiement: <strong>${payslip.paidAtLabel}</strong></p>
-</div></body></html>`;
+async function sendPayslipByDiscord(employee) {
+  if (!employee.lastPayslip) return;
+  await fetch("/api/send-payslip-dm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ discordId: employee.discordId, payslip: employee.lastPayslip })
+  }).catch(() => {});
 }
 
-function downloadPayslip(employeeIndex) {
+async function downloadPayslip(employeeIndex) {
   const employee = employees[employeeIndex];
   if (!employee || !employee.lastPayslip) return;
-  const html = buildPayslipHtml(employee.lastPayslip);
-  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  await sendPayslipByDiscord(employee);
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Slip de paye - ${employee.lastPayslip.employeeName}</title></head><body><h1>Slip de paye</h1><p>Employe: ${employee.lastPayslip.employeeName}</p><p>Montant: ${formatMoney(employee.lastPayslip.amountPaid)}</p><p>Heures: ${formatHoursMinutes(employee.lastPayslip.hoursPaid)}</p><p>Date: ${employee.lastPayslip.paidAtLabel}</p></body></html>`;
+  const blob = new Blob([html], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const safeName = employee.name.toLowerCase().replace(/\s+/g, "-");
   link.href = url;
-  link.download = `slip-paye-${safeName}.html`;
+  link.download = `slip-paye-${employee.name.toLowerCase().replace(/\s+/g, "-")}.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -537,7 +580,6 @@ function downloadPayslip(employeeIndex) {
 async function markEmployeePaid(employeeIndex) {
   const employee = employees[employeeIndex];
   if (!employee || employee.hours <= 0) return;
-
   const amountPaid = employee.hours * state.hourlyRate;
   const currentPayouts = getNumericValue(elements.manualPayouts);
   const paidDate = new Date();
@@ -566,37 +608,29 @@ async function markEmployeePaid(employeeIndex) {
   employee.todayHours = 0;
   employee.active = false;
   employee.lastPaidAt = paidDate.toISOString();
+  if (state.currentUser && state.currentUser.discordId === employee.discordId) {
+    state.punchedIn = false;
+    activeShiftStartedAt = null;
+  }
+  await sendPayslipByDiscord(employee);
   updateAll();
 }
 
 function rebootAllData() {
   if (!state.isAdmin) return;
-  if (!window.confirm("Confirmer le reboot complet ? Cette action remet les donnees affichees a zero.")) {
-    return;
-  }
-
-  employees = state.currentUser ? [normaliseEmployeeRecord({
-    discord_id: state.currentUser.discordId,
-    discord_name: state.currentUser.name
-  })] : [];
-
-  if (state.currentUser) {
-    state.currentUser = employees[0];
-  }
-
+  if (!window.confirm("Confirmer le reboot complet ?")) return;
+  const currentName = state.currentUser?.name;
+  const currentDiscordId = state.currentUser?.discordId;
+  employees = currentDiscordId ? [normaliseEmployeeRecord({ discord_id: currentDiscordId, discord_name: currentName })] : [];
+  if (employees.length) state.currentUser = employees[0];
   expenses = [];
+  activeShiftStartedAt = null;
   state.punchedIn = false;
   state.hourlyRate = 0;
-  elements.rateInput.value = "";
-  elements.serviceIncome.value = "";
-  elements.weeklyProfit.value = "";
-  elements.manualPayouts.value = "";
-  elements.miscExpenses.value = "";
-  elements.calcNote.value = "";
-  elements.partName.value = "";
-  elements.partCost.value = "";
-  elements.partCategory.value = "";
-  elements.partNote.value = "";
+  [elements.rateInput, elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.partName, elements.partCategory, elements.partNote].forEach((element) => {
+    element.value = "";
+  });
+  elements.partCost.value = "105";
   updateAll();
 }
 
@@ -607,22 +641,19 @@ elements.punchOut.addEventListener("click", punchOut);
 elements.addExpense.addEventListener("click", addExpense);
 elements.rebootAll?.addEventListener("click", rebootAllData);
 elements.leaderboardBody.addEventListener("click", (event) => {
-  const downloadButton = event.target.closest(".download-payslip-button");
-  if (downloadButton) {
-    downloadPayslip(Number(downloadButton.dataset.employeeIndex));
+  const sendButton = event.target.closest(".download-payslip-button");
+  if (sendButton) {
+    downloadPayslip(Number(sendButton.dataset.employeeIndex));
     return;
   }
-
   const payButton = event.target.closest(".pay-employee-button");
   if (payButton) {
     markEmployeePaid(Number(payButton.dataset.employeeIndex));
   }
 });
-
 [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses].forEach((element) => {
   element.addEventListener("input", renderFinance);
 });
-
 window.addEventListener("hashchange", routeToCurrentPage);
 
 updateAll();

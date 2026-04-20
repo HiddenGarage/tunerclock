@@ -222,6 +222,14 @@ a {
   align-items: stretch;
 }
 
+.dashboard-panel .hero-copy {
+  min-height: 100%;
+}
+
+.enterprise-kpis {
+  margin-top: 20px;
+}
+
 .app-page {
   display: none;
 }
@@ -371,6 +379,10 @@ a {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.enterprise-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .inline-stat,
 .kpi-box,
 .chart-panel,
@@ -396,6 +408,10 @@ a {
   align-items: stretch;
 }
 
+.tableau-layout {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .card-span-2 {
   grid-column: span 2;
 }
@@ -406,6 +422,11 @@ a {
 
 .chart-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.colorful-chart {
+  background:
+    linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
 }
 
 .chart-title {
@@ -430,6 +451,12 @@ canvas {
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
+}
+
+.wide-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
 }
 
 .id-list {
@@ -473,6 +500,37 @@ input {
 
 .parts-actions {
   grid-template-columns: max-content;
+}
+
+.punch-card-main,
+.punch-state-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.punch-state-card {
+  border-color: #c9e6df;
+}
+
+.punch-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.live-stat {
+  background: linear-gradient(180deg, #effaf6 0%, #f9fffd 100%);
+  border-color: #d6efe6;
+}
+
+.in-page-summary .sidebar-metric {
+  background: #f8fbff;
+  border: 1px solid var(--line);
+}
+
+.in-page-summary .sidebar-metric span {
+  color: var(--muted);
+}
+
+.in-page-summary .sidebar-metric strong {
+  color: var(--text);
 }
 
 .table-wrap {
@@ -581,7 +639,10 @@ code {
   .form-grid,
   .blueprint-strip,
   .kpi-grid,
-  .mini-metrics {
+  .mini-metrics,
+  .wide-insights,
+  .enterprise-kpis,
+  .punch-metrics {
     grid-template-columns: 1fr;
   }
 

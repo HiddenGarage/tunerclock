@@ -114,6 +114,10 @@ a {
   color: #ff9a9a;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .nav-item:hover,
 .nav-item.active {
   background: rgba(255, 255, 255, 0.08);
@@ -218,6 +222,14 @@ a {
   align-items: stretch;
 }
 
+.app-page {
+  display: none;
+}
+
+.app-page.active-page {
+  display: grid;
+}
+
 .hero-side {
   display: grid;
   gap: 18px;
@@ -289,6 +301,16 @@ a {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+}
+
+.danger-button {
+  min-height: 46px;
+  padding: 12px 16px;
+  border: 1px solid #f2c4c4;
+  background: #d94b4b;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
 }
 
 .table-button {
@@ -513,6 +535,12 @@ code {
 .gestion-banner {
   background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
   border-color: #f2d8d8;
+}
+
+.danger-zone {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 
 .employee-layout .card,

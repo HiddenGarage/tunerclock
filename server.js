@@ -316,6 +316,29 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/api/admin-update-employee-rate", requireAdmin, async (req, res) => {
+  try {
+    const { employeeId, hourlyRate } = req.body || {};
+    if (!employeeId || hourlyRate === undefined) {
+      return res.status(400).send("Parametres manquants.");
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("employees")
+      .update({ hourly_rate: Number(hourlyRate) || 0 })
+      .eq("id", employeeId);
+
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
   try {
     const { discordId, payslip } = req.body || {};

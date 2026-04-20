@@ -70,9 +70,23 @@ app.get("/auth/discord/callback", async (req, res) => {
     }
 
     const profile = await profileResponse.json();
+    let displayName = profile.global_name || profile.username;
+
+    if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
+      const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`, {
+        headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` }
+      });
+
+      if (memberResponse.ok) {
+        const member = await memberResponse.json();
+        displayName = member.nick || member.user?.global_name || member.user?.username || displayName;
+      }
+    }
+
     const session = {
       discordId: profile.id,
       username: profile.username,
+      displayName,
       avatar: profile.avatar,
       isAdmin: getAdminIds().includes(profile.id)
     };

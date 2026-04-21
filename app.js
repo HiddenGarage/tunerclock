@@ -569,6 +569,8 @@ function drawShiftDonutChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      resizeDelay: 120,
       cutout: "72%",
       plugins: {
         doughnutCenterText: {
@@ -663,6 +665,8 @@ function drawTrendChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      resizeDelay: 120,
       plugins: {
         legend: {
           position: "top",

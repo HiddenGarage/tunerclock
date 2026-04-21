@@ -13,8 +13,12 @@ const PORT = process.env.PORT || 3000;
 const DEFAULT_HOURLY_RATE = 25;
 const REMINDER_AFTER_HOURS = Number(process.env.REMINDER_AFTER_HOURS || 3);
 const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
+const KEEPALIVE_ENABLED = String(process.env.KEEPALIVE_ENABLED || "false").toLowerCase() === "true";
+const KEEPALIVE_INTERVAL_MINUTES = Math.max(5, Number(process.env.KEEPALIVE_INTERVAL_MINUTES || 5));
+const KEEPALIVE_URL = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "";
 let discordClient = null;
 let reminderMonitorId = null;
+let keepAliveMonitorId = null;
 const discordBotRuntime = {
   configured: Boolean(process.env.DISCORD_BOT_TOKEN),
   online: false,
@@ -43,6 +47,14 @@ app.get("/api/bot-status", (req, res) => {
     online: discordBotRuntime.online,
     tag: discordBotRuntime.tag,
     error: discordBotRuntime.error
+  });
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "TunerClock",
+    time: new Date().toISOString()
   });
 });
 
@@ -390,6 +402,26 @@ function startReminderMonitor() {
   if (reminderMonitorId) return;
   reminderMonitorId = setInterval(scanLongActiveShifts, Math.max(1, REMINDER_SCAN_MINUTES) * 60000);
   setTimeout(scanLongActiveShifts, 15000);
+}
+
+function startKeepAliveMonitor() {
+  if (!KEEPALIVE_ENABLED || !KEEPALIVE_URL || keepAliveMonitorId) {
+    if (!KEEPALIVE_ENABLED) console.log("Keep-alive desactive.");
+    return;
+  }
+
+  const healthUrl = `${KEEPALIVE_URL.replace(/\/$/, "")}/api/health`;
+  const ping = async () => {
+    try {
+      const response = await fetch(healthUrl);
+      console.log(`Keep-alive ping ${response.status}: ${healthUrl}`);
+    } catch (error) {
+      console.error("Keep-alive ping impossible:", error.message);
+    }
+  };
+
+  keepAliveMonitorId = setInterval(ping, KEEPALIVE_INTERVAL_MINUTES * 60000);
+  setTimeout(ping, 30000);
 }
 
 async function buildEmployeeSnapshots(supabase) {
@@ -1300,6 +1332,7 @@ app.get("*", (req, res) => {
 
 startDiscordBot();
 startReminderMonitor();
+startKeepAliveMonitor();
 
 app.listen(PORT, () => {
   console.log(`TunerClock running on port ${PORT}`);

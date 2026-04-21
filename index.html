@@ -150,11 +150,11 @@
 
           <div class="pointage-metrics">
             <div class="pointage-meter pointage-main-meter">
-              <span>Heures en direct</span>
+              <span>Heures en live</span>
               <strong id="today-hours">0h 00m</strong>
             </div>
             <div class="pointage-meter pointage-main-meter blue-meter">
-              <span>Argent gagne en direct</span>
+              <span>Argent gagne en live</span>
               <strong id="today-pay">$0.00</strong>
             </div>
           </div>
@@ -167,7 +167,7 @@
             <div class="card-head">
               <div>
                 <h3>Statistiques employes</h3>
-                <p class="muted">Vue confidentielle des heures, jours actifs, quarts forts et paie estimee.</p>
+                <p class="muted">Vue des heures, jours actifs, quarts forts et paie estimee.</p>
               </div>
               <span class="mini-pill success">Confidentiel</span>
             </div>
@@ -198,7 +198,7 @@
             <div class="card-head">
               <div>
                 <h3>Presence actuelle</h3>
-                <p class="muted">Liste des employes en service en ce moment.</p>
+                <p class="muted">Liste des employes en service live.</p>
               </div>
               <span class="mini-pill">Live</span>
             </div>
@@ -237,7 +237,7 @@
             <div class="card-head">
               <div>
                 <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale officielle du garage.</p>
+                <p class="muted">Chaque role a son propre taux.</p>
               </div>
               <span class="mini-pill">Roles</span>
             </div>
@@ -264,7 +264,7 @@
             <div class="card-head">
               <div>
                 <h3>Finance du garage</h3>
-                <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
+                <p class="muted">Toutes les ajouts manuel alimentent le tableau de bord entreprise.</p>
               </div>
               <span class="mini-pill">Finance</span>
             </div>
@@ -274,24 +274,24 @@
                 <input id="service-income" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="weekly-profit" class="input-label">Profit de la semaine ajoute manuellement</label>
+                <label for="weekly-profit" class="input-label">Profit de la semaine ajout manuel</label>
                 <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="manual-payouts" class="input-label">Paiements hors systeme</label>
+                <label for="manual-payouts" class="input-label">Paiements hors system</label>
                 <input id="manual-payouts" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="misc-expenses" class="input-label">Autres depenses garage</label>
+                <label for="misc-expenses" class="input-label">Autres depenses</label>
                 <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="calc-note" class="input-label">Note interne</label>
+                <label for="calc-note" class="input-label">Notes</label>
                 <input id="calc-note" type="text" placeholder="Note optionnelle">
               </div>
             </div>
             <div class="parts-actions">
-              <button id="save-finance" class="primary-button">Enregistrer la finance</button>
+              <button id="save-finance" class="primary-button">Enregistrer</button>
             </div>
           </article>
         </div>
@@ -313,7 +313,7 @@
                 <input id="part-name" type="text" placeholder="Ex: Kit turbo, huile moteur, suspension">
               </div>
               <div class="field">
-                <label for="part-cost" class="input-label">Cout fixe</label>
+                <label for="part-cost" class="input-label">Cout</label>
                 <div class="inline-field">
                   <input id="part-cost" type="number" value="105" readonly>
                   <button id="edit-part-cost" class="secondary-button inline-button" type="button">Edit</button>
@@ -324,7 +324,7 @@
                 <input id="part-category" type="text" placeholder="Pieces, livraison, outils">
               </div>
               <div class="field">
-                <label for="part-note" class="input-label">Note</label>
+                <label for="part-note" class="input-label">Notes</label>
                 <input id="part-note" type="text" placeholder="Urgent, client, stock">
               </div>
             </div>
@@ -364,7 +364,7 @@
                 <input id="sim-revenue" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="sim-expenses" class="input-label">Depenses prevues</label>
+                <label for="sim-expenses" class="input-label">Depenses prevu</label>
                 <input id="sim-expenses" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
@@ -372,14 +372,14 @@
                 <input id="sim-target-profit" type="number" min="0" max="100" step="1" placeholder="20">
               </div>
               <div class="field">
-                <label for="sim-role-mix" class="input-label">Equipe actuelle</label>
+                <label for="sim-role-mix" class="input-label">Equipe</label>
                 <input id="sim-role-mix" type="text" value="Chargement..." readonly>
               </div>
             </div>
           </article>
 
           <article class="card stat-card">
-            <p class="section-kicker">Budget salaires possible</p>
+            <p class="section-kicker">Budget salaires</p>
             <h3 id="sim-possible-payroll">$0.00</h3>
             <p class="muted">Montant recommandable selon tes contraintes.</p>
           </article>
@@ -389,12 +389,12 @@
             <p class="muted">Moyenne horaire viable avec les heures deja faites.</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Profit estime restant</p>
+            <p class="section-kicker">Profit estime</p>
             <h3 id="sim-remaining-profit">$0.00</h3>
             <p class="muted">Ce qui reste une fois depenses et paie couverts.</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Nombre d'employes</p>
+            <p class="section-kicker">nmb d'employes</p>
             <h3 id="sim-employee-count">0</h3>
             <p class="muted">Effectif actuellement enregistre.</p>
           </article>
@@ -403,7 +403,7 @@
             <div class="card-head">
               <div>
                 <h3>Lecture recommandee</h3>
-                <p class="muted">Ce bloc t'aide a voir rapidement si ta paie actuelle est soutenable ou si tu dois ajuster les taux.</p>
+                <p class="muted">Ce bloc t'aide a savoir si ta paie actuelle est logique ou si tu dois ajuster les taux.</p>
               </div>
             </div>
             <div class="summary-band simulation-summary">
@@ -434,7 +434,7 @@
             <div class="card-head">
               <div>
                 <h3 class="gestion-title">Reboot complet</h3>
-                <p class="muted">Zone isolee pour eviter les clics accidentels. Cette action remet les donnees operationnelles a zero.</p>
+                <p class="muted">Cette action remet les donnees operationnelles a zero.</p>
               </div>
               <span class="mini-pill danger">Danger</span>
             </div>

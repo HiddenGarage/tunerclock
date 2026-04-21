@@ -24,7 +24,7 @@
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Finance</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Pieces</a>
-        <a href="#simulation" class="nav-item" data-route="simulation" data-admin-only="true">Simulation</a>
+        <a href="#simulation" class="nav-item nav-item-highlight" data-route="simulation" data-admin-only="true">Simulation</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
     </aside>
@@ -182,6 +182,7 @@
                     <th>Quart fort</th>
                     <th>Taux horaire</th>
                     <th>Paie estimee</th>
+                    <th>Ajuster heures</th>
                   </tr>
                 </thead>
                 <tbody id="stats-body"></tbody>
@@ -313,7 +314,10 @@
               </div>
               <div class="field">
                 <label for="part-cost" class="input-label">Cout fixe</label>
-                <input id="part-cost" type="number" value="105" readonly>
+                <div class="inline-field">
+                  <input id="part-cost" type="number" value="105" readonly>
+                  <button id="edit-part-cost" class="secondary-button inline-button" type="button">Edit</button>
+                </div>
               </div>
               <div class="field">
                 <label for="part-category" class="input-label">Categorie</label>
@@ -368,8 +372,8 @@
                 <input id="sim-target-profit" type="number" min="0" max="100" step="1" placeholder="20">
               </div>
               <div class="field">
-                <label for="sim-salary-cap" class="input-label">Budget salaire max %</label>
-                <input id="sim-salary-cap" type="number" min="0" max="100" step="1" placeholder="35">
+                <label for="sim-role-mix" class="input-label">Equipe actuelle</label>
+                <input id="sim-role-mix" type="text" value="Chargement..." readonly>
               </div>
             </div>
           </article>
@@ -380,14 +384,19 @@
             <p class="muted">Montant recommandable selon tes contraintes.</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Salaires actuellement dus</p>
-            <h3 id="sim-current-payroll">$0.00</h3>
-            <p class="muted">Charge calculee avec les heures deja faites.</p>
+            <p class="section-kicker">Salaire horaire recommande</p>
+            <h3 id="sim-recommended-hourly">$0.00/h</h3>
+            <p class="muted">Moyenne horaire viable avec les heures deja faites.</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Profit estime restant</p>
             <h3 id="sim-remaining-profit">$0.00</h3>
             <p class="muted">Ce qui reste une fois depenses et paie couverts.</p>
+          </article>
+          <article class="card stat-card">
+            <p class="section-kicker">Nombre d'employes</p>
+            <h3 id="sim-employee-count">0</h3>
+            <p class="muted">Effectif actuellement enregistre.</p>
           </article>
 
           <article class="card card-span-3">
@@ -401,6 +410,10 @@
               <div class="summary-item">
                 <span>Profit cible</span>
                 <strong id="sim-profit-target">$0.00</strong>
+              </div>
+              <div class="summary-item">
+                <span>Salaires actuellement dus</span>
+                <strong id="sim-current-payroll">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Ecart paie</span>
@@ -431,6 +444,8 @@
       </section>
     </main>
   </div>
+
+  <div id="toast" class="toast hidden"></div>
 
   <script src="app.js"></script>
 </body>

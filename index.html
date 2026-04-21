@@ -26,6 +26,7 @@
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Finance</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Pieces</a>
         <a href="#analyse" class="nav-item nav-item-highlight" data-route="analyse" data-admin-only="true">Analyse</a>
+        <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
     </aside>
@@ -471,6 +472,34 @@
               <span class="mini-pill danger">Danger</span>
             </div>
             <button id="reboot-all" class="danger-button reboot-main-button">Reboot complet</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-logs" class="app-page logs-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Audit logs</h3>
+                <p class="muted">Historique des actions sensibles: paiements, corrections, rappels, sorties forcees et reboot.</p>
+              </div>
+              <span class="mini-pill">Trace</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Admin</th>
+                    <th>Cible</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-body"></tbody>
+              </table>
+            </div>
           </article>
         </div>
       </section>

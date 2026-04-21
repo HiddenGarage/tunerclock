@@ -21,8 +21,10 @@
         <a href="#pointage" class="nav-item" data-route="pointage">Pointage</a>
         <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Stats employe</a>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Gestion</a>
+        <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Finance</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Pieces</a>
+        <a href="#simulation" class="nav-item" data-route="simulation" data-admin-only="true">Simulation</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
     </aside>
@@ -101,33 +103,6 @@
                 <strong id="top-worker">-</strong>
               </div>
             </div>
-          </article>
-
-          <article class="card insight-card">
-            <div class="card-head">
-              <div>
-                <h3>Indice d'activite</h3>
-                <p class="muted">Lecture rapide de la charge atelier par rapport a la cible.</p>
-              </div>
-              <span class="mini-pill">Live</span>
-            </div>
-            <div class="gauge-wrap">
-              <canvas id="utilization-gauge" width="320" height="220"></canvas>
-            </div>
-            <div class="gauge-meta">
-              <strong id="dashboard-highlight">0h 00m</strong>
-              <p class="muted" id="dashboard-active-label">Aucun employe en service</p>
-            </div>
-          </article>
-
-          <article class="card chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Charge salariale par role</h3>
-                <p class="muted">Masse salariale potentielle par niveau de poste.</p>
-              </div>
-            </div>
-            <canvas id="hours-chart" width="720" height="320"></canvas>
           </article>
 
           <article class="card chart-card">
@@ -213,29 +188,6 @@
               </table>
             </div>
           </article>
-
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale du garage.</p>
-              </div>
-              <span class="mini-pill">Roles</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Taux actuel</th>
-                    <th>Nouveau taux</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="role-rates-body"></tbody>
-              </table>
-            </div>
-          </article>
         </div>
       </section>
 
@@ -278,6 +230,33 @@
         </div>
       </section>
 
+      <section id="page-salaire" class="app-page salaire-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Salaires par role</h3>
+                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale officielle du garage.</p>
+              </div>
+              <span class="mini-pill">Roles</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Taux actuel</th>
+                    <th>Nouveau taux</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="role-rates-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section id="page-finance" class="app-page finance-page">
         <div class="dashboard-grid">
           <article class="card card-span-3">
@@ -309,6 +288,9 @@
                 <label for="calc-note" class="input-label">Note interne</label>
                 <input id="calc-note" type="text" placeholder="Note optionnelle">
               </div>
+            </div>
+            <div class="parts-actions">
+              <button id="save-finance" class="primary-button">Enregistrer la finance</button>
             </div>
           </article>
         </div>
@@ -357,6 +339,77 @@
                 </thead>
                 <tbody id="expense-body"></tbody>
               </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-simulation" class="app-page simulation-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Simulation de paie</h3>
+                <p class="muted">Teste combien l'entreprise peut se permettre de payer selon les revenus, les depenses et le profit que tu veux garder.</p>
+              </div>
+              <span class="mini-pill success">Calcul</span>
+            </div>
+            <div class="form-grid simulation-form-grid">
+              <div class="field">
+                <label for="sim-revenue" class="input-label">Revenu semaine / periode</label>
+                <input id="sim-revenue" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="sim-expenses" class="input-label">Depenses prevues</label>
+                <input id="sim-expenses" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="sim-target-profit" class="input-label">Profit cible %</label>
+                <input id="sim-target-profit" type="number" min="0" max="100" step="1" placeholder="20">
+              </div>
+              <div class="field">
+                <label for="sim-salary-cap" class="input-label">Budget salaire max %</label>
+                <input id="sim-salary-cap" type="number" min="0" max="100" step="1" placeholder="35">
+              </div>
+            </div>
+          </article>
+
+          <article class="card stat-card">
+            <p class="section-kicker">Budget salaires possible</p>
+            <h3 id="sim-possible-payroll">$0.00</h3>
+            <p class="muted">Montant recommandable selon tes contraintes.</p>
+          </article>
+          <article class="card stat-card">
+            <p class="section-kicker">Salaires actuellement dus</p>
+            <h3 id="sim-current-payroll">$0.00</h3>
+            <p class="muted">Charge calculee avec les heures deja faites.</p>
+          </article>
+          <article class="card stat-card">
+            <p class="section-kicker">Profit estime restant</p>
+            <h3 id="sim-remaining-profit">$0.00</h3>
+            <p class="muted">Ce qui reste une fois depenses et paie couverts.</p>
+          </article>
+
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Lecture recommandee</h3>
+                <p class="muted">Ce bloc t'aide a voir rapidement si ta paie actuelle est soutenable ou si tu dois ajuster les taux.</p>
+              </div>
+            </div>
+            <div class="summary-band simulation-summary">
+              <div class="summary-item">
+                <span>Profit cible</span>
+                <strong id="sim-profit-target">$0.00</strong>
+              </div>
+              <div class="summary-item">
+                <span>Ecart paie</span>
+                <strong id="sim-payroll-gap">$0.00</strong>
+              </div>
+              <div class="summary-item">
+                <span>Recommendation</span>
+                <strong id="sim-recommendation">A analyser</strong>
+              </div>
             </div>
           </article>
         </div>

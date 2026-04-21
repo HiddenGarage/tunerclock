@@ -1,17 +1,17 @@
 :root {
-  --bg: #f3f6fb;
-  --panel: #ffffff;
-  --panel-soft: #f7fbff;
-  --line: #e6ecf4;
-  --text: #17212d;
-  --muted: #7f8b99;
-  --navy: #31485f;
-  --navy-deep: #263849;
+  --bg: #1e2128;
+  --panel: #2b2f38;
+  --panel-soft: #323842;
+  --line: #3b4350;
+  --text: #f2f5fb;
+  --muted: #a5b0c2;
+  --navy: #20242c;
+  --navy-deep: #171a20;
   --blue: #4f8df5;
   --teal: #31c6a7;
   --orange: #f59f44;
   --red: #d94b4b;
-  --shadow: 0 20px 55px rgba(23, 33, 45, 0.08);
+  --shadow: 0 20px 55px rgba(0, 0, 0, 0.22);
 }
 
 * { box-sizing: border-box; }
@@ -20,7 +20,7 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: "Manrope", sans-serif;
-  background: linear-gradient(180deg, #eef3f8 0%, #f7f9fc 100%);
+  background: linear-gradient(180deg, #1c1f26 0%, #232831 100%);
   color: var(--text);
 }
 
@@ -78,6 +78,7 @@ input, button, a { font: inherit; }
 }
 
 .nav-item-gestion { color: #ff9a9a; }
+.nav-item-highlight { color: #7cc8ff; }
 .nav-item-danger { color: #ffb1b1; }
 
 .main-panel { padding: 26px; }
@@ -117,7 +118,7 @@ input, button, a { font: inherit; }
   width: 240px;
   min-height: 44px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #232833;
   color: var(--muted);
   padding: 12px 14px;
 }
@@ -130,8 +131,8 @@ input, button, a { font: inherit; }
   min-height: 36px;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  background: #fff;
-  color: #6d7b88;
+  background: #232833;
+  color: #c1cada;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -163,7 +164,7 @@ input, button, a { font: inherit; }
 }
 
 .primary-button { background: var(--teal); color: #fff; }
-.secondary-button { background: #fff; color: var(--text); border-color: var(--line); }
+.secondary-button { background: #232833; color: var(--text); border-color: var(--line); }
 .danger-button { background: var(--red); color: #fff; border-color: #f0cbcb; }
 .topbar-button { min-width: 170px; }
 
@@ -196,7 +197,7 @@ input, button, a { font: inherit; }
 }
 
 .gradient-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f9fbfe 100%);
+  background: linear-gradient(180deg, #2c313b 0%, #2a2f39 100%);
 }
 
 .card-head {
@@ -256,9 +257,9 @@ input, button, a { font: inherit; }
 
 .chart-card {
   background:
-    radial-gradient(circle at top right, rgba(79, 141, 245, 0.12), transparent 32%),
-    radial-gradient(circle at bottom left, rgba(49, 198, 167, 0.1), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    radial-gradient(circle at top right, rgba(79, 141, 245, 0.16), transparent 32%),
+    radial-gradient(circle at bottom left, rgba(49, 198, 167, 0.12), transparent 28%),
+    linear-gradient(180deg, #2c313b 0%, #2a3038 100%);
 }
 
 .chart-card .card-head {
@@ -290,7 +291,7 @@ input, button, a { font: inherit; }
 }
 
 .pointage-shell {
-  background: linear-gradient(135deg, #ffffff 0%, #f5fbff 100%);
+  background: linear-gradient(135deg, #2c313b 0%, #2a3038 100%);
 }
 
 .pointage-head {
@@ -327,13 +328,13 @@ input, button, a { font: inherit; }
   min-height: 200px;
   display: grid;
   align-content: center;
-  background: linear-gradient(180deg, #effaf6 0%, #f8fffd 100%);
-  border-color: #d7efe7;
+  background: linear-gradient(180deg, #233a35 0%, #263833 100%);
+  border-color: #34534c;
 }
 
 .blue-meter {
-  background: linear-gradient(180deg, #eef5ff 0%, #f8fbff 100%);
-  border-color: #dbe8fb;
+  background: linear-gradient(180deg, #243242 0%, #293544 100%);
+  border-color: #394a60;
 }
 
 .pointage-main-meter strong {
@@ -389,9 +390,24 @@ input {
   width: 100%;
   min-height: 46px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: #232833;
   color: var(--text);
   padding: 12px 14px;
+}
+
+input[readonly] {
+  opacity: 0.92;
+}
+
+.inline-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-button {
+  min-width: 84px;
 }
 
 .parts-actions {
@@ -414,9 +430,23 @@ th { color: #7990a4; text-transform: uppercase; letter-spacing: 0.08em; font-siz
 }
 
 .secondary-table-button {
-  background: #eef5ff;
-  color: #2f5f98;
-  border-color: #d6e4f7;
+  background: #273447;
+  color: #9dc7ff;
+  border-color: #375073;
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 14px 16px;
+  background: #1d2430;
+  color: #f2f5fb;
+  border: 1px solid #3b4b63;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
 }
 
 .gestion-title {

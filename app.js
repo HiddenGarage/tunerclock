@@ -139,6 +139,7 @@ const elements = {
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
   partNote: document.getElementById("part-note"),
+  partPreview: document.getElementById("part-preview"),
   shiftChart: document.getElementById("shift-chart"),
   analysisChart: document.getElementById("analysis-chart"),
   simRevenue: document.getElementById("sim-revenue"),
@@ -196,6 +197,15 @@ function setHtml(element, value) {
 
 function setValue(element, value) {
   if (element) element.value = value;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function showToast(message, isError = false) {
@@ -259,13 +269,23 @@ function populatePartOptions() {
   if (!elements.partName || elements.partName.dataset.loaded === "true") return;
   elements.partName.innerHTML = [
     `<option value="">Selectionner une piece</option>`,
+    `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`,
     ...garageParts.map((part) => `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`)
   ].join("");
   elements.partName.dataset.loaded = "true";
+  syncSelectedPartCategory();
 }
 
 function getSelectedPart() {
   const selectedCode = elements.partName?.value || "";
+  if (selectedCode === "__all__") {
+    return {
+      code: "__all__",
+      name: "Tout le catalogue",
+      category: "Lot complet",
+      isAll: true
+    };
+  }
   return garageParts.find((part) => part.code === selectedCode) || null;
 }
 
@@ -274,6 +294,47 @@ function syncSelectedPartCategory() {
   if (part && elements.partCategory) {
     elements.partCategory.value = part.category;
   }
+  renderPartPreview();
+}
+
+function getPartIconMarkup(partCode, altText = "Piece") {
+  if (!partCode || partCode === "__all__") return `<span class="part-icon part-icon-all">ALL</span>`;
+  return `<img class="part-icon" src="parts-icons/${escapeHtml(partCode)}.png" alt="${escapeHtml(altText)}" loading="lazy">`;
+}
+
+function renderPartPreview() {
+  if (!elements.partPreview) return;
+  const part = getSelectedPart();
+  if (!part) {
+    setHtml(elements.partPreview, `
+      <div class="part-preview-empty">Selectionne une piece pour voir son icone et sa categorie.</div>
+    `);
+    return;
+  }
+
+  if (part.isAll) {
+    const sampleIcons = garageParts.slice(0, 8).map((entry) => getPartIconMarkup(entry.code, entry.name)).join("");
+    setHtml(elements.partPreview, `
+      <div class="part-preview-card">
+        <div class="part-icon-stack">${sampleIcons}</div>
+        <div>
+          <strong>Tout le catalogue</strong>
+          <span>Lot complet: ${garageParts.length} pieces differentes seront comptabilisees.</span>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  setHtml(elements.partPreview, `
+    <div class="part-preview-card">
+      ${getPartIconMarkup(part.code, part.name)}
+      <div>
+        <strong>${escapeHtml(part.name)}</strong>
+        <span>${escapeHtml(part.category)} | Code inventory: ${escapeHtml(part.code)}</span>
+      </div>
+    </div>
+  `);
 }
 
 function normaliseEmployeeRecord(record) {
@@ -459,24 +520,27 @@ function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
 
   if (!employees.length) {
-    setHtml(elements.statsBody, `<tr><td colspan="8">Aucune donnee employe.</td></tr>`);
+    setHtml(elements.statsBody, `<tr><td colspan="7">Aucune donnee employe.</td></tr>`);
   } else {
     const sorted = [...employees].sort((a, b) => b.hours - a.hours);
-    setHtml(elements.statsBody, sorted.map((employee) => `
+    setHtml(elements.statsBody, sorted.map((employee) => {
+      const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
+      return `
       <tr>
-        <td>${employee.name}</td>
-        <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${escapeHtml(employee.name)}</td>
+        <td>${escapeHtml(employee.roleName)}</td>
+        <td>
+          <button class="editable-hours-button" data-employee-index="${employeeIndex}" title="Cliquer pour modifier les heures de ${escapeHtml(employee.name)}">
+            ${formatHoursMinutes(employee.hours)}
+          </button>
+        </td>
         <td>${employee.activeDays}</td>
-        <td>${employee.preferredShift}</td>
+        <td>${escapeHtml(employee.preferredShift)}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
-        <td>
-          <input class="hour-adjust-input" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}" type="number" min="0" step="0.25" placeholder="${employee.hours.toFixed(2)}">
-          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}">Ajuster</button>
-        </td>
       </tr>
-    `).join(""));
+    `;
+    }).join(""));
   }
 
   setHtml(elements.roleRatesBody, roleOrder.map((roleName) => `
@@ -583,11 +647,16 @@ function renderExpenseTable() {
 
   setHtml(elements.expenseBody, expenses.map((expense) => `
     <tr>
-      <td>${expense.name}</td>
-      <td>${expense.category}</td>
+      <td>
+        <span class="part-table-cell">
+          ${getPartIconMarkup(expense.itemCode, expense.name)}
+          <span>${escapeHtml(expense.name)}</span>
+        </span>
+      </td>
+      <td>${escapeHtml(expense.category)}</td>
       <td>${Number(expense.quantity || 1)}</td>
       <td>${formatMoney(expense.cost)}</td>
-      <td>${expense.note || "-"}</td>
+      <td>${escapeHtml(expense.note || "-")}</td>
     </tr>
   `).join(""));
 }
@@ -1265,15 +1334,16 @@ async function addExpense() {
   const unitCost = Number(elements.partCost?.value || 105) || 105;
   const category = elements.partCategory?.value.trim() || selectedPart.category || "Pieces";
   const note = elements.partNote?.value.trim() || "-";
-  const totalCost = unitCost * quantity;
+  const totalUnits = selectedPart.isAll ? garageParts.length * quantity : quantity;
+  const totalCost = unitCost * totalUnits;
   let nextExpense = {
     name: selectedPart.name,
     itemCode: selectedPart.code,
     category,
-    quantity,
+    quantity: totalUnits,
     unitCost,
     cost: totalCost,
-    note
+    note: selectedPart.isAll ? `Lot complet: ${quantity} x ${garageParts.length} pieces | ${note}` : note
   };
   if (state.isAdmin) {
     const response = await fetch("/api/admin-expense", {
@@ -1291,7 +1361,7 @@ async function addExpense() {
           name: data.expense.name,
           itemCode: data.expense.item_code || data.expense.itemCode || selectedPart.code,
           category: data.expense.category,
-          quantity: Number(data.expense.quantity || quantity),
+          quantity: Number(data.expense.quantity || totalUnits),
           unitCost: Number(data.expense.unit_cost || data.expense.unitCost || unitCost),
           cost: Number(data.expense.cost || totalCost),
           note: data.expense.note || "-"
@@ -1305,7 +1375,8 @@ async function addExpense() {
   setValue(elements.partQuantity, "1");
   setValue(elements.partCategory, "");
   setValue(elements.partNote, "");
-  showToast(`Commande ajoutee: ${quantity} x ${selectedPart.name}.`);
+  syncSelectedPartCategory();
+  showToast(`Commande ajoutee: ${selectedPart.isAll ? `${totalUnits} pieces au total` : `${quantity} x ${selectedPart.name}`}.`);
   updateAll();
 }
 
@@ -1465,12 +1536,18 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
-  const saveButton = event.target.closest(".save-hour-adjust-button");
-  if (!saveButton) return;
-  const employeeIndex = Number(saveButton.dataset.employeeIndex);
-  const input = elements.statsBody.querySelector(`.hour-adjust-input[data-employee-index="${employeeIndex}"]`);
-  adjustEmployeeHours(employeeIndex, Number(input?.value));
-  if (input) input.value = "";
+  const hoursButton = event.target.closest(".editable-hours-button");
+  if (!hoursButton) return;
+  const employeeIndex = Number(hoursButton.dataset.employeeIndex);
+  const employee = employees[employeeIndex];
+  if (!employee) return;
+  const nextValue = window.prompt(
+    `Nouvelles heures totales pour ${employee.name}\nExemples: 2.5 = 2h30, 3 = 3h00`,
+    String(Number(employee.hours || 0).toFixed(2))
+  );
+  if (nextValue === null) return;
+  const normalizedValue = Number(String(nextValue).replace(",", "."));
+  adjustEmployeeHours(employeeIndex, normalizedValue);
 });
 
 elements.presenceBody?.addEventListener("click", (event) => {

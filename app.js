@@ -411,9 +411,15 @@ function drawRolePayrollChart() {
     return;
   }
 
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#fbfdff");
+  bg.addColorStop(1, "#f3f8ff");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
   const left = 56;
-  const bottom = height - 38;
-  const top = 30;
+  const bottom = height - 42;
+  const top = 34;
   const chartHeight = bottom - top;
   const maxValue = Math.max(...roles.map((entry) => entry.value), 1);
   const gap = 28;
@@ -432,15 +438,28 @@ function drawRolePayrollChart() {
     const x = left + index * (barWidth + gap);
     const barHeight = (entry.value / maxValue) * (chartHeight - 8);
     const y = bottom - barHeight;
+    const shadowHeight = Math.max(10, barHeight);
+
+    const glow = ctx.createLinearGradient(0, y, 0, bottom);
+    glow.addColorStop(0, "rgba(59, 130, 246, 0.14)");
+    glow.addColorStop(1, "rgba(124, 58, 237, 0.02)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(x, y - 8, barWidth, shadowHeight + 8);
+
     const gradient = ctx.createLinearGradient(0, y, 0, bottom);
-    gradient.addColorStop(0, "#3b82f6");
+    gradient.addColorStop(0, "#2458ff");
+    gradient.addColorStop(0.55, "#4f8df5");
     gradient.addColorStop(1, "#7c3aed");
     ctx.fillStyle = gradient;
     ctx.fillRect(x, y, barWidth, barHeight);
+
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(x + 10, y + 10, 12, Math.max(0, barHeight - 20));
+
     ctx.fillStyle = "#17212d";
     ctx.font = "700 12px Manrope";
     ctx.fillText(entry.roleName, x, bottom + 18);
-    ctx.fillText(formatMoney(entry.value), x, y - 8);
+    ctx.fillText(formatMoney(entry.value), x, y - 10);
   });
 }
 
@@ -465,12 +484,24 @@ function drawShiftDonutChart() {
     return;
   }
 
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#fbfdff");
+  bg.addColorStop(1, "#f7fbff");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
   const colors = ["#31c6a7", "#4f8df5", "#f59f44"];
   const centerX = 190;
   const centerY = 160;
   const radius = 88;
   const lineWidth = 28;
   let startAngle = -Math.PI / 2;
+
+  ctx.beginPath();
+  ctx.strokeStyle = "#e8eef6";
+  ctx.lineWidth = lineWidth;
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.stroke();
 
   buckets.forEach((bucket, index) => {
     const slice = (bucket.value / total) * Math.PI * 2;
@@ -483,8 +514,8 @@ function drawShiftDonutChart() {
   });
 
   ctx.fillStyle = "#17212d";
-  ctx.font = "800 34px Manrope";
-  ctx.fillText(formatHoursMinutes(total), centerX - 54, centerY + 4);
+  ctx.font = "800 32px Manrope";
+  ctx.fillText(formatHoursMinutes(total), centerX - 50, centerY + 2);
   ctx.fillStyle = "#7f8b99";
   ctx.font = "600 13px Manrope";
   ctx.fillText("volume total", centerX - 34, centerY + 24);
@@ -514,6 +545,12 @@ function drawUtilizationGauge() {
   const percent = Math.min(activeHours / maxHours, 1);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  bg.addColorStop(0, "#fbfdff");
+  bg.addColorStop(1, "#f3fbfa");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.lineWidth = 14;
   ctx.strokeStyle = "#e6ecf4";
   ctx.beginPath();
@@ -526,6 +563,17 @@ function drawUtilizationGauge() {
   ctx.strokeStyle = gradient;
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, Math.PI, Math.PI + Math.PI * percent);
+  ctx.stroke();
+
+  const markerAngle = Math.PI + Math.PI * percent;
+  const markerX = centerX + Math.cos(markerAngle) * radius;
+  const markerY = centerY + Math.sin(markerAngle) * radius;
+  ctx.beginPath();
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#31c6a7";
+  ctx.lineWidth = 4;
+  ctx.arc(markerX, markerY, 8, 0, Math.PI * 2);
+  ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#17212d";
@@ -561,7 +609,10 @@ function drawTrendChart() {
   const chartWidth = width - 96;
   const chartHeight = height - 82;
 
-  ctx.fillStyle = "#fbfdff";
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#fbfdff");
+  bg.addColorStop(1, "#f2fbfa");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
   for (let i = 0; i < 5; i += 1) {
     const y = bottom - (chartHeight / 4) * i;
@@ -581,7 +632,8 @@ function drawTrendChart() {
   }));
 
   const areaGradient = ctx.createLinearGradient(0, 0, 0, height);
-  areaGradient.addColorStop(0, "rgba(49, 198, 167, 0.28)");
+  areaGradient.addColorStop(0, "rgba(49, 198, 167, 0.30)");
+  areaGradient.addColorStop(0.6, "rgba(79, 141, 245, 0.12)");
   areaGradient.addColorStop(1, "rgba(49, 198, 167, 0.02)");
 
   ctx.beginPath();
@@ -597,7 +649,10 @@ function drawTrendChart() {
     if (index === 0) ctx.moveTo(point.x, point.y);
     else ctx.lineTo(point.x, point.y);
   });
-  ctx.strokeStyle = "#31c6a7";
+  const lineGradient = ctx.createLinearGradient(left, 0, left + chartWidth, 0);
+  lineGradient.addColorStop(0, "#31c6a7");
+  lineGradient.addColorStop(1, "#4f8df5");
+  ctx.strokeStyle = lineGradient;
   ctx.lineWidth = 4;
   ctx.stroke();
 

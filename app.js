@@ -3,6 +3,7 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
+const chartState = {};
 
 const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
@@ -122,6 +123,13 @@ function showToast(message, isError = false) {
   showToast._timer = setTimeout(() => {
     elements.toast.classList.add("hidden");
   }, 2800);
+}
+
+function destroyChart(key) {
+  if (chartState[key]) {
+    chartState[key].destroy();
+    chartState[key] = null;
+  }
 }
 
 function formatMoney(value) {
@@ -455,81 +463,58 @@ function renderShiftState() {
 
 function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
+  if (!canvas || typeof Chart === "undefined") return;
+  const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
+    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
+  );
 
-  const buckets = ["Jour", "Soir", "Nuit"].map((label) => ({
-    label,
-    value: employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
-  }));
-  const total = buckets.reduce((sum, bucket) => sum + bucket.value, 0);
-
-  if (!total) {
-    ctx.fillStyle = "#6f8297";
-    ctx.font = "600 16px Manrope";
-    ctx.fillText("Aucune repartition disponible.", 36, 150);
-    return;
-  }
-
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, "#fbfdff");
-  bg.addColorStop(1, "#f7fbff");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-
-  const colors = ["#31c6a7", "#4f8df5", "#f59f44"];
-  const centerX = 190;
-  const centerY = 160;
-  const radius = 88;
-  const lineWidth = 28;
-  let startAngle = -Math.PI / 2;
-
-  ctx.beginPath();
-  ctx.strokeStyle = "#e8eef6";
-  ctx.lineWidth = lineWidth;
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-  ctx.stroke();
-
-  buckets.forEach((bucket, index) => {
-    const slice = (bucket.value / total) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.strokeStyle = colors[index];
-    ctx.lineWidth = lineWidth;
-    ctx.arc(centerX, centerY, radius, startAngle, startAngle + slice);
-    ctx.stroke();
-    startAngle += slice;
-  });
-
-  ctx.fillStyle = "#17212d";
-  ctx.font = "800 32px Manrope";
-  ctx.fillText(formatHoursMinutes(total), centerX - 50, centerY + 2);
-  ctx.fillStyle = "#7f8b99";
-  ctx.font = "600 13px Manrope";
-  ctx.fillText("volume total", centerX - 34, centerY + 24);
-
-  buckets.forEach((bucket, index) => {
-    const y = 82 + index * 54;
-    ctx.fillStyle = colors[index];
-    ctx.fillRect(390, y, 18, 18);
-    ctx.fillStyle = "#17212d";
-    ctx.font = "700 14px Manrope";
-    ctx.fillText(bucket.label, 420, y + 14);
-    ctx.fillStyle = "#6f8297";
-    ctx.font = "600 13px Manrope";
-    ctx.fillText(`${formatHoursMinutes(bucket.value)} | ${Math.round((bucket.value / total) * 100)}%`, 420, y + 34);
+  destroyChart("shift");
+  chartState.shift = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels: ["Jour", "Soir", "Nuit"],
+      datasets: [{
+        data: buckets,
+        backgroundColor: ["#31c6a7", "#4f8df5", "#f59f44"],
+        borderColor: "#2b2f38",
+        borderWidth: 4,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "66%",
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            color: "#d9e1ee",
+            boxWidth: 14,
+            padding: 18,
+            font: { family: "Manrope", size: 12, weight: "700" }
+          }
+        },
+        tooltip: {
+          backgroundColor: "#1d2430",
+          titleColor: "#f2f5fb",
+          bodyColor: "#f2f5fb",
+          borderColor: "#3b4b63",
+          borderWidth: 1,
+          callbacks: {
+            label(context) {
+              return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
+            }
+          }
+        }
+      }
+    }
   });
 }
 
 function drawTrendChart() {
   const canvas = elements.analysisChart;
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
+  if (!canvas || typeof Chart === "undefined") return;
 
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
@@ -542,56 +527,63 @@ function drawTrendChart() {
     return { label, totalHours };
   });
 
-  const maxValue = Math.max(...days.map((day) => day.totalHours), 1);
-  const left = 52;
-  const bottom = height - 42;
-  const chartWidth = width - 96;
-  const chartHeight = height - 82;
-
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, "#fbfdff");
-  bg.addColorStop(1, "#f2fbfa");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-  for (let i = 0; i < 5; i += 1) {
-    const y = bottom - (chartHeight / 4) * i;
-    ctx.strokeStyle = "#e5ecf4";
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(left + chartWidth, y);
-    ctx.stroke();
-  }
-
-  const stepX = chartWidth / (days.length - 1);
-  const points = days.map((day, index) => ({
-    x: left + stepX * index,
-    y: bottom - (day.totalHours / maxValue) * chartHeight,
-    label: day.label,
-    value: day.totalHours
-  }));
-
-  ctx.beginPath();
-  points.forEach((point, index) => {
-    if (index === 0) ctx.moveTo(point.x, point.y);
-    else ctx.lineTo(point.x, point.y);
-  });
-  ctx.strokeStyle = "#253a52";
-  ctx.lineWidth = 3;
-  ctx.stroke();
-
-  points.forEach((point) => {
-    ctx.beginPath();
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#253a52";
-    ctx.lineWidth = 2;
-    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#17212d";
-    ctx.font = "700 11px Manrope";
-    ctx.fillText(formatHoursMinutes(point.value), point.x - 18, point.y - 12);
-    ctx.fillStyle = "#6f8297";
-    ctx.fillText(point.label, point.x - 10, bottom + 20);
+  destroyChart("trend");
+  chartState.trend = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: days.map((day) => day.label),
+      datasets: [{
+        label: "Heures fermees",
+        data: days.map((day) => Number(day.totalHours.toFixed(2))),
+        borderColor: "#7cb6ff",
+        backgroundColor: "rgba(124, 182, 255, 0.12)",
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: "#7cb6ff",
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: "#1d2430",
+          titleColor: "#f2f5fb",
+          bodyColor: "#f2f5fb",
+          borderColor: "#3b4b63",
+          borderWidth: 1,
+          callbacks: {
+            label(context) {
+              return `Heures: ${formatHoursMinutes(context.raw || 0)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#aeb8c9", font: { family: "Manrope", size: 11 } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: "rgba(255,255,255,0.06)" },
+          ticks: {
+            color: "#aeb8c9",
+            font: { family: "Manrope", size: 11 },
+            callback(value) {
+              return `${value}h`;
+            }
+          }
+        }
+      }
+    }
   });
 }
 
@@ -822,12 +814,18 @@ async function punchIn() {
   state.currentUser.active = true;
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = Date.now();
-  await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => {});
   updateAll();
+  await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => {
+    showToast("Erreur pendant l'entree en service.", true);
+  });
 }
 
 async function punchOut() {
   if (!state.currentUser) return;
+  state.punchedIn = false;
+  state.currentUser.active = false;
+  stopLiveTimer();
+  updateAll();
   const response = await fetch("/api/punch-out", { method: "POST", credentials: "include" }).catch(() => null);
   if (response?.ok) {
     const data = await response.json();
@@ -836,12 +834,10 @@ async function punchOut() {
     state.currentUser.preferredShift = data.shiftPeriod || state.currentUser.preferredShift;
   } else {
     state.currentUser.hours += state.currentUser.todayHours;
+    showToast("Sortie de service sauvegardee localement, verifie le serveur.", true);
   }
-  state.currentUser.active = false;
   state.currentUser.todayHours = 0;
-  state.punchedIn = false;
   activeShiftStartedAt = null;
-  stopLiveTimer();
   updateAll();
 }
 

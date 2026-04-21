@@ -446,6 +446,7 @@ a {
 
 .pointage-page,
 .presence-page,
+.logs-page,
 .stats-page,
 .gestion-page,
 .salaire-page,
@@ -541,9 +542,12 @@ a {
 }
 
 .finance-form-grid,
-.parts-form-grid,
 .simulation-form-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.parts-form-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .simulation-summary {
@@ -561,7 +565,8 @@ a {
   color: #526173;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 48px;
   border: 1px solid var(--line);
@@ -573,7 +578,13 @@ input {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-input:focus {
+select {
+  appearance: none;
+  cursor: pointer;
+}
+
+input:focus,
+select:focus {
   border-color: #b8cbef;
   box-shadow: 0 0 0 4px rgba(75, 124, 246, 0.12);
 }

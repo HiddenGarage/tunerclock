@@ -49,22 +49,22 @@
         <div class="dashboard-grid dashboard-kpis">
           <article class="card stat-card">
             <p class="section-kicker">Revenus</p>
-            <h3 id="total-income">0$</h3>
+            <h3 id="total-income">$0.00</h3>
             <p class="muted">Entrees totales de l'entreprise</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Depenses</p>
-            <h3 id="total-expenses">0$</h3>
+            <h3 id="total-expenses">$0.00</h3>
             <p class="muted">Pieces, frais atelier et divers</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Salaires dus</p>
-            <h3 id="total-payroll">0$</h3>
+            <h3 id="total-payroll">$0.00</h3>
             <p class="muted">Montant encore payable a l'equipe</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Profit brut</p>
-            <h3 id="gross-profit">0$</h3>
+            <h3 id="gross-profit">$0.00</h3>
             <p class="muted">Resultat brut actuel du garage</p>
           </article>
         </div>
@@ -85,11 +85,11 @@
               </div>
               <div class="summary-item">
                 <span>Cout total</span>
-                <strong id="total-costs">0$</strong>
+                <strong id="total-costs">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Paiements employes</span>
-                <strong id="employee-payments">0$</strong>
+                <strong id="employee-payments">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Employes actifs</span>
@@ -116,29 +116,6 @@
             <div class="chart-frame donut-frame"><canvas id="shift-chart"></canvas></div>
           </article>
 
-          <article class="card chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Employes actifs en direct</h3>
-                <p class="muted">Temps en service cumule aujourd'hui et estimation live.</p>
-              </div>
-              <span class="mini-pill info">Live</span>
-            </div>
-            <div class="table-wrap compact-table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employe</th>
-                    <th>Role</th>
-                    <th>Heures live</th>
-                    <th>Gagne live</th>
-                  </tr>
-                </thead>
-                <tbody id="active-workers-live-body"></tbody>
-              </table>
-            </div>
-          </article>
-
           <article class="card card-span-3 chart-card large-chart-card">
             <div class="card-head">
               <div>
@@ -146,7 +123,7 @@
                 <p class="muted">Evolution recente des heures fermees et de la cadence atelier.</p>
               </div>
             </div>
-            <canvas id="analysis-chart" width="1280" height="300"></canvas>
+            <div class="chart-frame line-frame"><canvas id="analysis-chart"></canvas></div>
           </article>
         </div>
       </section>
@@ -179,7 +156,7 @@
             </div>
             <div class="pointage-meter pointage-main-meter blue-meter">
               <span>Argent gagne en direct</span>
-              <strong id="today-pay">0$</strong>
+              <strong id="today-pay">$0.00</strong>
             </div>
           </div>
         </article>
@@ -363,7 +340,6 @@
                     <th>Categorie</th>
                     <th>Cout</th>
                     <th>Note</th>
-                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="expense-body"></tbody>
@@ -405,17 +381,17 @@
 
           <article class="card stat-card">
             <p class="section-kicker">Budget salaires possible</p>
-            <h3 id="sim-possible-payroll">0$</h3>
+            <h3 id="sim-possible-payroll">$0.00</h3>
             <p class="muted">Montant recommandable selon tes contraintes.</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Salaire horaire recommande</p>
-            <h3 id="sim-recommended-hourly">0$/h</h3>
+            <h3 id="sim-recommended-hourly">$0.00/h</h3>
             <p class="muted">Moyenne horaire viable avec les heures deja faites.</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Profit estime restant</p>
-            <h3 id="sim-remaining-profit">0$</h3>
+            <h3 id="sim-remaining-profit">$0.00</h3>
             <p class="muted">Ce qui reste une fois depenses et paie couverts.</p>
           </article>
           <article class="card stat-card">
@@ -434,15 +410,15 @@
             <div class="summary-band simulation-summary">
               <div class="summary-item">
                 <span>Profit cible</span>
-                <strong id="sim-profit-target">0$</strong>
+                <strong id="sim-profit-target">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Salaires actuellement dus</span>
-                <strong id="sim-current-payroll">0$</strong>
+                <strong id="sim-current-payroll">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Ecart paie</span>
-                <strong id="sim-payroll-gap">0$</strong>
+                <strong id="sim-payroll-gap">$0.00</strong>
               </div>
               <div class="summary-item">
                 <span>Recommendation</span>

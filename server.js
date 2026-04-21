@@ -10,6 +10,13 @@ const { getSupabase } = require("./netlify/functions/lib/supabase");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_HOURLY_RATE = 25;
+const ROLE_DEFINITIONS = [
+  { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
+  { name: "Copatron", id: "1487666934412611594", hourlyRate: 45, isAdmin: true },
+  { name: "Gerant", id: "1487852908077781168", hourlyRate: 35, isAdmin: true },
+  { name: "Mecano", id: "1487852832643354665", hourlyRate: 25, isAdmin: false },
+  { name: "Apprenti", id: "1487852702519136496", hourlyRate: 18, isAdmin: false }
+];
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -31,7 +38,7 @@ function requireAuth(req, res, next) {
 
 function requireAdmin(req, res, next) {
   const session = getSession(req);
-  if (!session || !getAdminIds().includes(session.discordId)) {
+  if (!session || !session.isAdmin) {
     return res.status(403).send("Acces refuse.");
   }
   req.session = session;
@@ -73,6 +80,19 @@ async function upsertSetting(supabase, key, value) {
   if (error) {
     throw error;
   }
+}
+
+function getDefaultRoleRates() {
+  return Object.fromEntries(ROLE_DEFINITIONS.map((role) => [role.name, role.hourlyRate]));
+}
+
+async function getRoleRates(supabase) {
+  const settings = await getSettingsMap(supabase);
+  return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
+}
+
+function resolveMemberRole(memberRoles) {
+  return ROLE_DEFINITIONS.find((role) => memberRoles.includes(role.id)) || ROLE_DEFINITIONS[3];
 }
 
 async function buildEmployeeSnapshots(supabase) {
@@ -193,6 +213,9 @@ app.get("/auth/discord/callback", async (req, res) => {
 
     const profile = await profileResponse.json();
     let displayName = profile.global_name || profile.username;
+    let roleName = "Mecano";
+    let roleId = null;
+    let isAdmin = getAdminIds().includes(profile.id);
 
     if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
       const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`, {
@@ -202,6 +225,10 @@ app.get("/auth/discord/callback", async (req, res) => {
       if (memberResponse.ok) {
         const member = await memberResponse.json();
         displayName = member.nick || member.user?.global_name || member.user?.username || displayName;
+        const resolvedRole = resolveMemberRole(member.roles || []);
+        roleName = resolvedRole.name;
+        roleId = resolvedRole.id;
+        isAdmin = isAdmin || resolvedRole.isAdmin;
       }
     }
 
@@ -209,8 +236,10 @@ app.get("/auth/discord/callback", async (req, res) => {
       discordId: profile.id,
       username: profile.username,
       displayName,
+      roleName,
+      roleId,
       avatar: profile.avatar,
-      isAdmin: getAdminIds().includes(profile.id)
+      isAdmin
     };
 
     res.setHeader("Set-Cookie", buildCookie("tunerclock_session", encodeSession(session, required("SESSION_SECRET"))));
@@ -257,12 +286,16 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
 app.post("/api/punch-in", requireAuth, async (req, res) => {
   try {
     const supabase = getSupabase();
+    const roleRates = await getRoleRates(supabase);
+    const roleName = req.session.roleName || "Mecano";
+    const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
     const { data: employee, error: employeeError } = await supabase
       .from("employees")
       .upsert({
         discord_id: req.session.discordId,
         discord_name: req.session.displayName || req.session.username,
-        role: req.session.isAdmin ? "admin" : "employee",
+        role: roleName,
+        hourly_rate: roleRate,
         is_active: true
       }, { onConflict: "discord_id" })
       .select()
@@ -346,6 +379,7 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
       .from("employees")
       .update({
         discord_name: req.session.displayName || req.session.username,
+        role: req.session.roleName || employee.role,
         is_active: false,
         active_days: Number(employee.active_days || 0) + 1,
         total_hours: Number(employee.total_hours || 0) + durationHours
@@ -365,23 +399,26 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
 app.get("/api/admin-dashboard", requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
-    const [employees, expensesResult, payoutsResult, profitsResult, settings] = await Promise.all([
+    const [employees, expensesResult, payoutsResult, profitsResult, shiftsResult, settings] = await Promise.all([
       buildEmployeeSnapshots(supabase),
       supabase.from("expense_logs").select("*").order("created_at", { ascending: false }),
       supabase.from("payouts").select("*").order("paid_at", { ascending: false }),
       supabase.from("weekly_profit_entries").select("*").order("created_at", { ascending: false }),
+      supabase.from("shifts").select("*").order("punched_in_at", { ascending: false }),
       getSettingsMap(supabase)
     ]);
 
     if (expensesResult.error) throw expensesResult.error;
     if (payoutsResult.error) throw payoutsResult.error;
     if (profitsResult.error) throw profitsResult.error;
+    if (shiftsResult.error) throw shiftsResult.error;
 
     res.json({
       employees,
       expenses: expensesResult.data || [],
       payouts: payoutsResult.data || [],
       profits: profitsResult.data || [],
+      shifts: shiftsResult.data || [],
       settings
     });
   } catch (error) {
@@ -418,6 +455,35 @@ app.post("/api/admin-global-rate", requireAdmin, async (req, res) => {
     const supabase = getSupabase();
     await upsertSetting(supabase, "global_hourly_rate", { amount });
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
+  try {
+    const incoming = req.body?.roleRates || {};
+    const merged = { ...getDefaultRoleRates() };
+    ROLE_DEFINITIONS.forEach((role) => {
+      const nextValue = Number(incoming[role.name]);
+      merged[role.name] = Number.isFinite(nextValue) ? nextValue : merged[role.name];
+    });
+
+    const supabase = getSupabase();
+    await upsertSetting(supabase, "role_rates", merged);
+
+    for (const role of ROLE_DEFINITIONS) {
+      const { error } = await supabase
+        .from("employees")
+        .update({ hourly_rate: merged[role.name] })
+        .eq("role", role.name);
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    res.json({ ok: true, roleRates: merged });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -630,6 +696,7 @@ app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
     if (employeesError) throw employeesError;
 
     await upsertSetting(supabase, "global_hourly_rate", { amount: DEFAULT_HOURLY_RATE });
+    await upsertSetting(supabase, "role_rates", getDefaultRoleRates());
     await upsertSetting(supabase, "finance_inputs", {
       serviceIncome: 0,
       weeklyProfit: 0,

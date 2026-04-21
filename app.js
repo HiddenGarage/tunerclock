@@ -3,9 +3,18 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
-let adminRefreshId = null;
+const chartState = {};
+const chartPalette = {
+  text: "#1b2533",
+  muted: "#7d8898",
+  grid: "rgba(163, 178, 201, 0.18)",
+  blue: "#4b7cf6",
+  blueSoft: "rgba(75, 124, 246, 0.15)",
+  teal: "#30c4a3",
+  orange: "#f4a249"
+};
 
-const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
+const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -22,7 +31,7 @@ const pageTitles = {
   salaire: "Salaires par role",
   finance: "Finance du garage",
   pieces: "Commandes de pieces",
-  simulation: "Simulation de paie",
+  analyse: "Analyse rentabilite",
   reboot: "Reboot du systeme"
 };
 
@@ -60,8 +69,6 @@ const elements = {
   shiftMessage: document.getElementById("shift-message"),
   todayHours: document.getElementById("today-hours"),
   todayPay: document.getElementById("today-pay"),
-  accumulatedHours: document.getElementById("accumulated-hours"),
-  accumulatedPay: document.getElementById("accumulated-pay"),
   punchIn: document.getElementById("punch-in"),
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
@@ -84,10 +91,14 @@ const elements = {
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
   partNote: document.getElementById("part-note"),
+  shiftChart: document.getElementById("shift-chart"),
+  analysisChart: document.getElementById("analysis-chart"),
   simRevenue: document.getElementById("sim-revenue"),
   simExpenses: document.getElementById("sim-expenses"),
   simTargetProfit: document.getElementById("sim-target-profit"),
   simRoleMix: document.getElementById("sim-role-mix"),
+  simResalePrice: document.getElementById("sim-resale-price"),
+  simWeeklyParts: document.getElementById("sim-weekly-parts"),
   simPossiblePayroll: document.getElementById("sim-possible-payroll"),
   simCurrentPayroll: document.getElementById("sim-current-payroll"),
   simRemainingProfit: document.getElementById("sim-remaining-profit"),
@@ -96,10 +107,35 @@ const elements = {
   simProfitTarget: document.getElementById("sim-profit-target"),
   simPayrollGap: document.getElementById("sim-payroll-gap"),
   simRecommendation: document.getElementById("sim-recommendation"),
+  saveAnalysis: document.getElementById("save-analysis"),
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page"))
+};
+
+const doughnutCenterTextPlugin = {
+  id: "doughnutCenterText",
+  afterDraw(chart, args, pluginOptions) {
+    if (chart.config.type !== "doughnut") return;
+    const meta = chart.getDatasetMeta(0);
+    if (!meta?.data?.length) return;
+
+    const { ctx } = chart;
+    const centerPoint = meta.data[0];
+    const value = pluginOptions?.value || "0h";
+    const label = pluginOptions?.label || "Heures";
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.fillStyle = chartPalette.text;
+    ctx.font = '800 30px "Manrope"';
+    ctx.fillText(value, centerPoint.x, centerPoint.y - 2);
+    ctx.fillStyle = chartPalette.muted;
+    ctx.font = '600 12px "Manrope"';
+    ctx.fillText(label, centerPoint.x, centerPoint.y + 22);
+    ctx.restore();
+  }
 };
 
 function setText(element, value) {
@@ -132,9 +168,15 @@ function setPillState(element, text, tone = "default") {
   element.className = `status-pill${tone === "default" ? "" : ` ${tone}`}`;
 }
 
+function destroyChart(key) {
+  if (chartState[key]) {
+    chartState[key].destroy();
+    chartState[key] = null;
+  }
+}
+
 function formatMoney(value) {
-  const amount = Math.max(0, Math.round(Number(value || 0)));
-  return `${amount.toLocaleString("fr-CA").replace(/\u00a0/g, " ")}$`;
+  return `${Math.round(Number(value || 0))}$`;
 }
 
 function getNumericValue(element) {
@@ -148,23 +190,17 @@ function formatHoursMinutes(hoursValue) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 
+function formatCompactHours(hoursValue) {
+  return `${Number(hoursValue || 0).toFixed(1)}h`;
+}
+
 function normaliseRole(roleValue) {
   if (!roleValue) return "Mecano";
-  const cleaned = String(roleValue)
+  return String(roleValue)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z]/g, "")
-    .toLowerCase();
-
-  const map = {
-    patron: "Patron",
-    copatron: "Copatron",
-    gerant: "Gerant",
-    mecano: "Mecano",
-    apprenti: "Apprenti"
-  };
-
-  return map[cleaned] || "Mecano";
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function getRoleRate(roleName) {
@@ -173,7 +209,6 @@ function getRoleRate(roleName) {
 
 function normaliseEmployeeRecord(record) {
   const roleName = normaliseRole(record.role_name || record.role || "Mecano");
-  const hourlyRate = Number(record.hourly_rate ?? record.hourlyRate);
   return {
     id: record.id || null,
     name: record.discord_name || record.name || "Employe",
@@ -185,7 +220,7 @@ function normaliseEmployeeRecord(record) {
     preferredShift: record.preferred_shift || record.preferredShift || "Jour",
     todayHours: Number(record.today_hours || record.todayHours || 0),
     active: Boolean(record.is_active ?? record.active),
-    hourlyRate: Number.isFinite(hourlyRate) && hourlyRate > 0 ? hourlyRate : getRoleRate(roleName),
+    hourlyRate: Number(record.hourly_rate || record.hourlyRate || getRoleRate(roleName)),
     lastPayslip: record.lastPayslip || null
   };
 }
@@ -223,20 +258,12 @@ function setStatusDot(active) {
   if (dot) dot.style.background = active ? "#22c55e" : "#d94b4b";
 }
 
-function getEmployeeEffectiveHours(employee) {
-  return Number(employee.hours || 0) + Number(employee.active ? employee.todayHours || 0 : 0);
-}
-
-function getEmployeeEffectivePay(employee) {
-  return getEmployeeEffectiveHours(employee) * Number(employee.hourlyRate || getRoleRate(employee.roleName));
-}
-
 function getTopEmployee() {
-  return employees.length ? [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a))[0] : null;
+  return employees.length ? [...employees].sort((a, b) => b.hours - a.hours)[0] : null;
 }
 
 function getPayrollTotal() {
-  return employees.reduce((sum, employee) => sum + getEmployeeEffectivePay(employee), 0);
+  return employees.reduce((sum, employee) => sum + employee.hours * employee.hourlyRate, 0);
 }
 
 function getExpenseTotal() {
@@ -265,38 +292,17 @@ function getFinancePayload() {
   };
 }
 
-function syncLiveHoursFromActiveShift() {
-  if (!state.currentUser || !state.punchedIn || !activeShiftStartedAt) return;
-  const elapsedHours = Math.max(0, (Date.now() - activeShiftStartedAt) / 3600000);
-  state.currentUser.todayHours = elapsedHours;
-
-  const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
-  if (matching) {
-    matching.todayHours = elapsedHours;
-    matching.active = true;
-  }
-}
-
 function updateLivePunchMetrics() {
-  syncLiveHoursFromActiveShift();
-
-  if (!state.loggedIn || !state.currentUser) {
-    setText(elements.todayHours, "0h 00m");
-    setText(elements.todayPay, "0$");
-    setText(elements.accumulatedHours, "0h 00m");
-    setText(elements.accumulatedPay, "0$");
+  if (!state.loggedIn || !state.currentUser || !state.punchedIn || !activeShiftStartedAt) {
+    setText(elements.todayHours, state.currentUser ? formatHoursMinutes(state.currentUser.todayHours) : "0h 00m");
+    setText(elements.todayPay, state.currentUser ? formatMoney(state.currentUser.todayHours * state.currentUser.hourlyRate) : "0$");
     return;
   }
 
-  const currentLiveHours = Number(state.currentUser.todayHours || 0);
-  const currentBaseHours = Number(state.currentUser.hours || 0);
-  const currentRate = Number(state.currentUser.hourlyRate || getRoleRate(state.currentUser.roleName));
-  const accumulatedHours = currentBaseHours + currentLiveHours;
-
-  setText(elements.todayHours, formatHoursMinutes(currentLiveHours));
-  setText(elements.todayPay, formatMoney(currentLiveHours * currentRate));
-  setText(elements.accumulatedHours, formatHoursMinutes(accumulatedHours));
-  setText(elements.accumulatedPay, formatMoney(accumulatedHours * currentRate));
+  const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
+  state.currentUser.todayHours = elapsedHours;
+  setText(elements.todayHours, formatHoursMinutes(elapsedHours));
+  setText(elements.todayPay, formatMoney(elapsedHours * state.currentUser.hourlyRate));
 }
 
 async function refreshBotStatus() {
@@ -319,15 +325,9 @@ async function refreshBotStatus() {
 
 function startLiveTimer() {
   if (liveTimerId) clearInterval(liveTimerId);
+  if (!state.punchedIn || !activeShiftStartedAt) return;
   updateLivePunchMetrics();
-  liveTimerId = setInterval(() => {
-    updateLivePunchMetrics();
-    renderOverview();
-    renderStatsTables();
-    renderGestionLists();
-    renderLeaderboard();
-    renderSimulation();
-  }, 1000);
+  liveTimerId = setInterval(updateLivePunchMetrics, 1000);
 }
 
 function stopLiveTimer() {
@@ -335,22 +335,8 @@ function stopLiveTimer() {
   liveTimerId = null;
 }
 
-function startAdminRefresh() {
-  if (adminRefreshId) clearInterval(adminRefreshId);
-  if (!state.loggedIn || !state.isAdmin) return;
-  adminRefreshId = setInterval(async () => {
-    await loadAdminDashboard(true);
-    updateAll();
-  }, 5000);
-}
-
-function stopAdminRefresh() {
-  if (adminRefreshId) clearInterval(adminRefreshId);
-  adminRefreshId = null;
-}
-
 function renderOverview() {
-  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeEffectiveHours(employee), 0);
+  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
@@ -359,6 +345,7 @@ function renderOverview() {
   const totalCosts = getTotalCosts();
   const grossProfit = totalIncome - totalCosts + weeklyProfit;
   const margin = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
+  const activeHours = activeEmployees.reduce((sum, employee) => sum + employee.todayHours, 0);
 
   setText(elements.activeCount, String(activeEmployees.length));
   setText(elements.weeklyHours, formatHoursMinutes(totalHours));
@@ -368,7 +355,7 @@ function renderOverview() {
   setText(elements.grossProfit, formatMoney(grossProfit));
   setText(elements.totalIncome, formatMoney(totalIncome));
   setText(elements.totalCosts, formatMoney(totalCosts));
-  setText(elements.grossMargin, `${margin.toFixed(0)}%`);
+  setText(elements.grossMargin, `${margin.toFixed(1)}%`);
   setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
 }
 
@@ -378,25 +365,22 @@ function renderStatsTables() {
   if (!employees.length) {
     setHtml(elements.statsBody, `<tr><td colspan="8">Aucune donnee employe.</td></tr>`);
   } else {
-    const sorted = [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a));
-    setHtml(elements.statsBody, sorted.map((employee) => {
-      const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-      const displayRate = getRoleRate(employee.roleName) || employee.hourlyRate;
-      return `
+    const sorted = [...employees].sort((a, b) => b.hours - a.hours);
+    setHtml(elements.statsBody, sorted.map((employee) => `
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(getEmployeeEffectiveHours(employee))}</td>
+        <td>${formatHoursMinutes(employee.hours)}</td>
         <td>${employee.activeDays}</td>
         <td>${employee.preferredShift}</td>
-        <td>${formatMoney(displayRate)}</td>
-        <td>${formatMoney(getEmployeeEffectiveHours(employee) * displayRate)}</td>
+        <td>${formatMoney(employee.hourlyRate)}</td>
+        <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
         <td>
-          <input class="hour-adjust-input" data-employee-index="${employeeIndex}" type="number" min="0" step="0.25" placeholder="${Number(employee.hours || 0).toFixed(2)}">
-          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employeeIndex}">Ajuster</button>
+          <input class="hour-adjust-input" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}" type="number" min="0" step="0.25" placeholder="${employee.hours.toFixed(2)}">
+          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}">Ajuster</button>
         </td>
-      </tr>`;
-    }).join(""));
+      </tr>
+    `).join(""));
   }
 
   setHtml(elements.roleRatesBody, roleOrder.map((roleName) => `
@@ -410,17 +394,26 @@ function renderStatsTables() {
 }
 
 function renderSimulation() {
-  const revenue = getNumericValue(elements.simRevenue);
+  const revenue = getNumericValue(elements.simRevenue) || getNumericValue(elements.serviceIncome);
   const extraExpenses = getNumericValue(elements.simExpenses);
   const profitTargetPercent = getNumericValue(elements.simTargetProfit);
   const currentPayroll = getPayrollTotal();
+  const partBuyPrice = Number(elements.partCost?.value || 105) || 105;
+  const actualPartAverage = expenses.length
+    ? expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) / expenses.length
+    : partBuyPrice;
+  const healthyMarkup = 1.45;
+  const suggestedResalePrice = Math.ceil(actualPartAverage * healthyMarkup);
+  const resalePrice = getNumericValue(elements.simResalePrice) || suggestedResalePrice;
+  const weeklyParts = getNumericValue(elements.simWeeklyParts);
+  const profitPerPart = Math.max(0, resalePrice - actualPartAverage);
+  const projectedPartsProfit = profitPerPart * weeklyParts;
   const targetProfit = revenue * (profitTargetPercent / 100);
-  const possiblePayroll = Math.max(0, revenue - extraExpenses - targetProfit);
-  const remainingProfit = revenue - extraExpenses - currentPayroll;
-  const gap = possiblePayroll - currentPayroll;
-  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeEffectiveHours(employee), 0);
-  const projectedHours = totalHours > 0 ? totalHours : employees.length * 35;
-  const recommendedHourly = projectedHours > 0 ? possiblePayroll / projectedHours : 0;
+  const totalExpenses = getExpenseTotal() + extraExpenses;
+  const remainingProfit = revenue + projectedPartsProfit - totalExpenses - currentPayroll;
+  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
+  const laborRevenuePerHour = totalHours > 0 ? revenue / totalHours : 0;
   const roleCounts = roleOrder
     .map((roleName) => {
       const count = employees.filter((employee) => employee.roleName === roleName).length;
@@ -429,20 +422,25 @@ function renderSimulation() {
     .filter(Boolean)
     .join(" | ") || "Aucun employe";
 
-  setText(elements.simPossiblePayroll, formatMoney(possiblePayroll));
+  setText(elements.simPossiblePayroll, formatMoney(profitPerPart));
   setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
   setText(elements.simRemainingProfit, formatMoney(remainingProfit));
-  setText(elements.simRecommendedHourly, `${formatMoney(recommendedHourly)}/h`);
+  setText(elements.simRecommendedHourly, formatMoney(suggestedResalePrice));
   setText(elements.simEmployeeCount, String(employees.length));
   setValue(elements.simRoleMix, roleCounts);
   setText(elements.simProfitTarget, formatMoney(targetProfit));
-  setText(elements.simPayrollGap, formatMoney(gap));
+  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
 
-  let recommendation = "A analyser";
-  if (revenue <= 0) recommendation = "Entre un revenu pour simuler";
-  else if (!employees.length) recommendation = "Ajoute au moins un employe pour lancer une simulation fiable";
-  else if (totalHours <= 0) recommendation = `Projection automatique basee sur 35h par employe (${employees.length} employe${employees.length > 1 ? "s" : ""})`;
-  else recommendation = `Taux moyen recommande: ${formatMoney(recommendedHourly)}/h pour tenir ton profit cible`;
+  let recommendation = "Ajoute tes revenus pour obtenir un conseil.";
+  if (revenue > 0 && payrollRatio > 55) {
+    recommendation = `Attention: les salaires utilisent ${payrollRatio.toFixed(0)}% des revenus. Garde plus de revenus avant paiement complet.`;
+  } else if (revenue > 0 && remainingProfit < targetProfit) {
+    recommendation = `Profit trop faible: vise au moins ${formatMoney(targetProfit)} restant avant gros paiement.`;
+  } else if (revenue > 0 && profitPerPart < 40) {
+    recommendation = `Marge piece faible. Prix revente conseille autour de ${formatMoney(suggestedResalePrice)} pour couvrir JG Mechanic et garder du profit.`;
+  } else if (revenue > 0) {
+    recommendation = `Rentabilite saine. Marge piece: ${formatMoney(profitPerPart)}. Profit pieces projete: ${formatMoney(projectedPartsProfit)}. Revenu moyen: ${formatMoney(laborRevenuePerHour)}/h.`;
+  }
 
   setText(elements.simRecommendation, recommendation);
 }
@@ -451,7 +449,7 @@ function renderGestionLists() {
   if (!elements.gestionActiveWorkersList) return;
   const activeEmployees = employees.filter((employee) => employee.active);
   const html = activeEmployees.length
-    ? activeEmployees.map((employee) => `<li><span>${employee.name} | ${employee.roleName}</span><strong>${formatHoursMinutes(employee.todayHours)}</strong></li>`).join("")
+    ? activeEmployees.map((employee) => `<li>${employee.name} | ${employee.roleName} | ${formatHoursMinutes(employee.todayHours)}</li>`).join("")
     : "<li>Aucun employe en service.</li>";
   setHtml(elements.gestionActiveWorkersList, html);
 }
@@ -459,7 +457,7 @@ function renderGestionLists() {
 function renderExpenseTable() {
   if (!elements.expenseBody) return;
   if (!expenses.length) {
-    setHtml(elements.expenseBody, `<tr><td colspan="5">Aucune depense enregistree.</td></tr>`);
+    setHtml(elements.expenseBody, `<tr><td colspan="4">Aucune depense enregistree.</td></tr>`);
     return;
   }
 
@@ -469,7 +467,6 @@ function renderExpenseTable() {
       <td>${expense.category}</td>
       <td>${formatMoney(expense.cost)}</td>
       <td>${expense.note || "-"}</td>
-      <td><button class="secondary-button table-button delete-expense-button" data-expense-id="${expense.id || ""}">Supprimer</button></td>
     </tr>
   `).join(""));
 }
@@ -481,10 +478,10 @@ function renderLeaderboard() {
     return;
   }
 
-  const sortedEmployees = [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a));
+  const sortedEmployees = [...employees].sort((a, b) => b.hours - a.hours);
   setHtml(elements.leaderboardBody, sortedEmployees.map((employee) => {
     const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-    const estimatedPay = getEmployeeEffectivePay(employee);
+    const estimatedPay = employee.hours * employee.hourlyRate;
     const pdfButton = employee.lastPayslip?.payoutId ? `
       <a class="secondary-button secondary-table-button table-button" href="/api/payouts/${employee.lastPayslip.payoutId}/pdf" target="_blank" rel="noreferrer">PDF</a>
     ` : "";
@@ -496,10 +493,10 @@ function renderLeaderboard() {
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(getEmployeeEffectiveHours(employee))}</td>
+        <td>${formatHoursMinutes(employee.hours)}</td>
         <td>${formatMoney(estimatedPay)}</td>
         <td>
-          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${getEmployeeEffectiveHours(employee) <= 0 ? "disabled" : ""}>PAYER</button>
+          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${employee.hours <= 0 ? "disabled" : ""}>PAYER</button>
           ${pdfButton}
           ${dmButton}
         </td>
@@ -518,8 +515,6 @@ function renderShiftState() {
     setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
     setText(elements.todayHours, "0h 00m");
     setText(elements.todayPay, "0$");
-    setText(elements.accumulatedHours, "0h 00m");
-    setText(elements.accumulatedPay, "0$");
     if (elements.punchIn) elements.punchIn.disabled = true;
     if (elements.punchOut) elements.punchOut.disabled = true;
     setText(elements.discordLogin, "Se connecter avec Discord");
@@ -547,6 +542,176 @@ function renderShiftState() {
   }
 }
 
+function drawShiftDonutChart() {
+  const canvas = elements.shiftChart;
+  if (!canvas || typeof Chart === "undefined") return;
+  const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
+    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
+  );
+  const totalHours = buckets.reduce((sum, value) => sum + value, 0);
+
+  destroyChart("shift");
+  chartState.shift = new Chart(canvas, {
+    type: "doughnut",
+    plugins: [doughnutCenterTextPlugin],
+    data: {
+      labels: ["Jour", "Soir", "Nuit"],
+      datasets: [{
+        data: buckets,
+        backgroundColor: [chartPalette.teal, chartPalette.blue, chartPalette.orange],
+        borderColor: "#ffffff",
+        borderWidth: 6,
+        borderRadius: 10,
+        spacing: 4,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "72%",
+      plugins: {
+        doughnutCenterText: {
+          value: totalHours ? formatCompactHours(totalHours) : "0h",
+          label: "Heures cumulees"
+        },
+        legend: {
+          position: "bottom",
+          labels: {
+            color: chartPalette.text,
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 10,
+            padding: 18,
+            font: { family: "Manrope", size: 12, weight: "700" }
+          }
+        },
+        tooltip: {
+          backgroundColor: "#182232",
+          titleColor: "#f8fbff",
+          bodyColor: "#f8fbff",
+          borderColor: "#24364f",
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 12,
+          callbacks: {
+            label(context) {
+              return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function drawTrendChart() {
+  const canvas = elements.analysisChart;
+  if (!canvas || typeof Chart === "undefined") return;
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    const key = date.toISOString().slice(0, 10);
+    const label = date.toLocaleDateString("fr-CA", { weekday: "short" });
+    const totalHours = shifts
+      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === key)
+      .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
+    const previousDate = new Date(date);
+    previousDate.setDate(previousDate.getDate() - 7);
+    const previousKey = previousDate.toISOString().slice(0, 10);
+    const previousHours = shifts
+      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === previousKey)
+      .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
+    return { label, totalHours, previousHours };
+  });
+
+  destroyChart("trend");
+  chartState.trend = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: days.map((day) => day.label),
+      datasets: [
+        {
+          label: "Semaine actuelle",
+          data: days.map((day) => Number(day.totalHours.toFixed(2))),
+          borderColor: chartPalette.blue,
+          backgroundColor: "rgba(75, 124, 246, 0.12)",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: chartPalette.blue,
+          pointBorderWidth: 3,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.34,
+          fill: true
+        },
+        {
+          label: "Semaine precedente",
+          data: days.map((day) => Number(day.previousHours.toFixed(2))),
+          borderColor: chartPalette.orange,
+          backgroundColor: "rgba(244, 162, 73, 0.08)",
+          pointBackgroundColor: "#ffffff",
+          pointBorderColor: chartPalette.orange,
+          pointBorderWidth: 3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          tension: 0.34,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: "top",
+          align: "end",
+          labels: {
+            color: chartPalette.text,
+            usePointStyle: true,
+            pointStyle: "circle",
+            boxWidth: 10,
+            padding: 18,
+            font: { family: "Manrope", size: 12, weight: "700" }
+          }
+        },
+        tooltip: {
+          backgroundColor: "#182232",
+          titleColor: "#f8fbff",
+          bodyColor: "#f8fbff",
+          borderColor: "#24364f",
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 12,
+          callbacks: {
+            label(context) {
+              return `Heures: ${formatHoursMinutes(context.raw || 0)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: chartPalette.grid, drawBorder: false },
+          ticks: { color: chartPalette.muted, font: { family: "Manrope", size: 11, weight: "700" } }
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: chartPalette.grid, drawBorder: false },
+          ticks: {
+            color: chartPalette.muted,
+            font: { family: "Manrope", size: 11, weight: "700" },
+            callback(value) {
+              return `${value}h`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
 function updateAll() {
   applyAccessControl();
   routeToCurrentPage();
@@ -556,10 +721,12 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderShiftState();
+  drawShiftDonutChart();
+  drawTrendChart();
   renderSimulation();
 }
 
-async function loadAdminDashboard(silent = false) {
+async function loadAdminDashboard() {
   if (!state.isAdmin) return;
   try {
     const response = await fetch("/api/admin-dashboard", { credentials: "include" });
@@ -568,10 +735,7 @@ async function loadAdminDashboard(silent = false) {
 
     state.roleRates = { ...state.roleRates, ...(data.settings?.role_rates || {}) };
     shifts = data.shifts || [];
-    employees = (data.employees || []).map(normaliseEmployeeRecord).map((employee) => ({
-      ...employee,
-      hourlyRate: getRoleRate(employee.roleName) || employee.hourlyRate
-    }));
+    employees = (data.employees || []).map(normaliseEmployeeRecord);
 
     const latestPayoutByEmployee = new Map();
     (data.payouts || []).forEach((entry) => {
@@ -613,18 +777,19 @@ async function loadAdminDashboard(silent = false) {
     setValue(elements.miscExpenses, financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "");
     setValue(elements.calcNote, financeInputs.calcNote || "");
     setValue(elements.partCost, String(Number(data.settings?.part_settings?.fixedCost || 105)));
+    const analysisSettings = data.settings?.analysis_settings || {};
+    setValue(elements.simRevenue, analysisSettings.revenue ? String(analysisSettings.revenue) : "");
+    setValue(elements.simExpenses, analysisSettings.expenses ? String(analysisSettings.expenses) : "");
+    setValue(elements.simTargetProfit, analysisSettings.targetProfitPercent ? String(analysisSettings.targetProfitPercent) : "");
+    setValue(elements.simResalePrice, analysisSettings.resalePrice ? String(analysisSettings.resalePrice) : "");
+    setValue(elements.simWeeklyParts, analysisSettings.weeklyParts ? String(analysisSettings.weeklyParts) : "");
 
     if (state.currentUser) {
       const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
-      if (matching) {
-        const currentLive = Number(state.currentUser.todayHours || 0);
-        state.currentUser = state.punchedIn ? { ...matching, todayHours: Math.max(Number(matching.todayHours || 0), currentLive), active: true } : matching;
-        const index = employees.findIndex((employee) => employee.discordId === state.currentUser.discordId);
-        if (index >= 0) employees[index] = { ...state.currentUser };
-      }
+      if (matching) state.currentUser = matching;
     }
   } catch (error) {
-    if (!silent) console.error(error);
+    console.error(error);
   } finally {
     state.financeInputsLoaded = true;
   }
@@ -639,7 +804,6 @@ async function loadMeState() {
 
     const current = normaliseEmployeeRecord(data.employee);
     current.name = state.currentUser.name;
-    current.hourlyRate = getRoleRate(current.roleName) || current.hourlyRate;
     state.currentUser = current;
 
     if (!state.isAdmin) {
@@ -684,7 +848,6 @@ async function loadAuthSession() {
       syncCurrentUserFromSession(data.user);
       await loadMeState();
       await loadAdminDashboard();
-      startAdminRefresh();
     } else {
       state.loggedIn = false;
       state.isAdmin = false;
@@ -695,7 +858,6 @@ async function loadAuthSession() {
       shifts = [];
       state.recordedPayouts = 0;
       setStatusDot(false);
-      stopAdminRefresh();
     }
   } catch (error) {
     setText(elements.demoUserText, "Connexion Discord indisponible");
@@ -720,9 +882,7 @@ async function saveFinanceSettings() {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(getFinancePayload())
-  }).then(async () => {
-    await loadAdminDashboard(true);
-    updateAll();
+  }).then(() => {
     showToast("Finance enregistree.");
   }).catch(() => {
     showToast("Echec de l'enregistrement finance.", true);
@@ -733,11 +893,33 @@ function queueFinanceSave() {
   updateAll();
 }
 
-async function updateRoleRate(roleName, nextRate) {
-  if (!Number.isFinite(nextRate) || nextRate < 0) {
-    showToast("Entre un taux valide.", true);
+async function saveAnalysisSettings() {
+  if (!state.isAdmin) return;
+  const payload = {
+    revenue: getNumericValue(elements.simRevenue),
+    expenses: getNumericValue(elements.simExpenses),
+    targetProfitPercent: getNumericValue(elements.simTargetProfit),
+    resalePrice: getNumericValue(elements.simResalePrice),
+    weeklyParts: getNumericValue(elements.simWeeklyParts)
+  };
+
+  const response = await fetch("/api/admin-analysis-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload)
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible d'enregistrer l'analyse.", true);
     return;
   }
+
+  showToast("Analyse enregistree.");
+}
+
+async function updateRoleRate(roleName, nextRate) {
+  if (!Number.isFinite(nextRate) || nextRate < 0) return;
   state.roleRates[roleName] = nextRate;
   employees = employees.map((employee) => employee.roleName === roleName ? { ...employee, hourlyRate: nextRate } : employee);
   if (state.currentUser?.roleName === roleName) {
@@ -751,9 +933,7 @@ async function updateRoleRate(roleName, nextRate) {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ roleRates: state.roleRates })
-  }).then(async () => {
-    await loadAdminDashboard(true);
-    updateAll();
+  }).then(() => {
     showToast(`Salaire ${roleName} mis a jour.`);
   }).catch(() => {
     showToast("Impossible de sauvegarder le salaire du role.", true);
@@ -804,7 +984,6 @@ async function punchIn() {
     showToast("Erreur pendant l'entree en service.", true);
   } else {
     await loadMeState();
-    await loadAdminDashboard(true);
   }
   if (elements.punchIn) {
     elements.punchIn.textContent = "Entrer en service";
@@ -828,8 +1007,6 @@ async function punchOut() {
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
     state.currentUser.preferredShift = data.shiftPeriod || state.currentUser.preferredShift;
-    await loadMeState();
-    await loadAdminDashboard(true);
   } else {
     state.currentUser.hours += state.currentUser.todayHours;
     showToast("Sortie de service sauvegardee localement, verifie le serveur.", true);
@@ -880,23 +1057,6 @@ async function addExpense() {
   updateAll();
 }
 
-async function deleteExpense(expenseId) {
-  if (!state.isAdmin || !expenseId) return;
-  const response = await fetch(`/api/admin-expense/${expenseId}`, {
-    method: "DELETE",
-    credentials: "include"
-  }).catch(() => null);
-
-  if (!response?.ok) {
-    showToast("Impossible de supprimer la depense.", true);
-    return;
-  }
-
-  expenses = expenses.filter((expense) => expense.id !== expenseId);
-  showToast("Depense supprimee.");
-  updateAll();
-}
-
 async function togglePartCostEdit() {
   if (!elements.partCost || !elements.editPartCost) return;
   const currentlyReadonly = elements.partCost.hasAttribute("readonly");
@@ -936,16 +1096,14 @@ async function sendPayslipByDiscord(employee) {
 
 async function markEmployeePaid(employeeIndex) {
   const employee = employees[employeeIndex];
-  if (!employee || getEmployeeEffectiveHours(employee) <= 0) return;
+  if (!employee || employee.hours <= 0) return;
 
   const paidDate = new Date();
-  const payableHours = getEmployeeEffectiveHours(employee);
-  const payableRate = Number(employee.hourlyRate || getRoleRate(employee.roleName));
-  const fallbackAmount = Math.round(payableHours * payableRate);
+  const fallbackAmount = Number((employee.hours * employee.hourlyRate).toFixed(2));
   let payoutId = null;
   let amountPaid = fallbackAmount;
-  let hoursPaid = payableHours;
-  let hourlyRate = payableRate;
+  let hoursPaid = employee.hours;
+  let hourlyRate = employee.hourlyRate;
 
   if (state.isAdmin && employee.id) {
     const response = await fetch("/api/admin-pay-employee", {
@@ -959,8 +1117,8 @@ async function markEmployeePaid(employeeIndex) {
       const data = await response.json();
       payoutId = data.payoutId || null;
       amountPaid = Number(data.amountPaid || fallbackAmount);
-      hoursPaid = Number(data.hoursPaid || payableHours);
-      hourlyRate = Number(data.hourlyRate || payableRate);
+      hoursPaid = Number(data.hoursPaid || employee.hours);
+      hourlyRate = Number(data.hourlyRate || employee.hourlyRate);
     }
   }
 
@@ -1024,6 +1182,7 @@ elements.logoutButton?.addEventListener("click", logout);
 elements.punchIn?.addEventListener("click", punchIn);
 elements.punchOut?.addEventListener("click", punchOut);
 elements.saveFinance?.addEventListener("click", saveFinanceSettings);
+elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.rebootAll?.addEventListener("click", rebootAllData);
@@ -1045,12 +1204,7 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (!saveButton) return;
   const roleName = saveButton.dataset.roleName;
   const input = elements.roleRatesBody.querySelector(`.role-rate-input[data-role-name="${roleName}"]`);
-  const nextValue = Number(input?.value);
-  if (!input?.value.trim()) {
-    showToast("Entre un salaire avant de sauvegarder.", true);
-    return;
-  }
-  updateRoleRate(roleName, nextValue);
+  updateRoleRate(roleName, Number(input?.value));
   if (input) input.value = "";
 });
 
@@ -1063,21 +1217,11 @@ elements.statsBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
-elements.expenseBody?.addEventListener("click", (event) => {
-  const deleteButton = event.target.closest(".delete-expense-button");
-  if (!deleteButton) return;
-  deleteExpense(deleteButton.dataset.expenseId);
-});
-
-[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit].forEach((element) => {
+[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit, elements.simResalePrice, elements.simWeeklyParts].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 
 window.addEventListener("hashchange", routeToCurrentPage);
-window.addEventListener("beforeunload", () => {
-  stopLiveTimer();
-  stopAdminRefresh();
-});
 
 updateAll();
 loadAuthSession();

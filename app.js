@@ -3,6 +3,7 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
+let adminLiveTimerId = null;
 const chartState = {};
 const chartPalette = {
   text: "#1b2533",
@@ -14,7 +15,7 @@ const chartPalette = {
   orange: "#f4a249"
 };
 
-const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "reboot"];
+const routes = ["tableau", "pointage", "presence", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -26,6 +27,7 @@ const roleIdMap = {
 const pageTitles = {
   tableau: "Tableau de bord professionnel du garage",
   pointage: "Pointage personnel",
+  presence: "Presence live",
   stats: "Statistiques employes",
   gestion: "Gestion du garage",
   salaire: "Salaires par role",
@@ -72,9 +74,9 @@ const elements = {
   punchIn: document.getElementById("punch-in"),
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
+  presenceBody: document.getElementById("presence-body"),
   statsBody: document.getElementById("stats-body"),
   roleRatesBody: document.getElementById("role-rates-body"),
-  gestionActiveWorkersList: document.getElementById("gestion-active-workers-list"),
   expenseBody: document.getElementById("expense-body"),
   rebootAll: document.getElementById("reboot-all"),
   discordLogin: document.getElementById("discord-login"),
@@ -220,6 +222,8 @@ function normaliseEmployeeRecord(record) {
     preferredShift: record.preferred_shift || record.preferredShift || "Jour",
     todayHours: Number(record.today_hours || record.todayHours || 0),
     active: Boolean(record.is_active ?? record.active),
+    activeShiftId: record.active_shift_id || record.activeShiftId || null,
+    activeShiftStartedAt: record.active_shift_started_at || record.activeShiftStartedAt || null,
     hourlyRate: Number(record.hourly_rate || record.hourlyRate || getRoleRate(roleName)),
     lastPayslip: record.lastPayslip || null
   };
@@ -335,6 +339,31 @@ function stopLiveTimer() {
   liveTimerId = null;
 }
 
+function getLiveEmployeeHours(employee) {
+  if (!employee?.active) return Number(employee?.todayHours || 0);
+  const startedAt = employee.activeShiftStartedAt ? new Date(employee.activeShiftStartedAt).getTime() : null;
+  if (!startedAt || Number.isNaN(startedAt)) return Number(employee.todayHours || 0);
+  return Math.max(0, (Date.now() - startedAt) / 3600000);
+}
+
+function getPresenceStatus(hours) {
+  if (hours >= 5) return { label: "Critique", className: "mini-pill danger" };
+  if (hours >= 3) return { label: "Rappel requis", className: "mini-pill warning" };
+  return { label: "Normal", className: "mini-pill success" };
+}
+
+function startAdminLiveTimer() {
+  if (adminLiveTimerId) clearInterval(adminLiveTimerId);
+  if (!state.isAdmin || !employees.some((employee) => employee.active)) {
+    adminLiveTimerId = null;
+    return;
+  }
+  adminLiveTimerId = setInterval(() => {
+    renderPresenceList();
+    renderOverview();
+  }, 1000);
+}
+
 function renderOverview() {
   const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
   const activeEmployees = employees.filter((employee) => employee.active);
@@ -445,13 +474,37 @@ function renderSimulation() {
   setText(elements.simRecommendation, recommendation);
 }
 
-function renderGestionLists() {
-  if (!elements.gestionActiveWorkersList) return;
+function renderPresenceList() {
+  if (!elements.presenceBody) return;
   const activeEmployees = employees.filter((employee) => employee.active);
-  const html = activeEmployees.length
-    ? activeEmployees.map((employee) => `<li>${employee.name} | ${employee.roleName} | ${formatHoursMinutes(employee.todayHours)}</li>`).join("")
-    : "<li>Aucun employe en service.</li>";
-  setHtml(elements.gestionActiveWorkersList, html);
+  if (!activeEmployees.length) {
+    setHtml(elements.presenceBody, `<tr><td colspan="7">Aucun employe en service.</td></tr>`);
+    return;
+  }
+
+  setHtml(elements.presenceBody, activeEmployees.map((employee) => {
+    const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
+    const liveHours = getLiveEmployeeHours(employee);
+    const status = getPresenceStatus(liveHours);
+    const entryLabel = employee.activeShiftStartedAt
+      ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
+      : "-";
+
+    return `
+      <tr>
+        <td>${employee.name}</td>
+        <td>${employee.roleName}</td>
+        <td>${entryLabel}</td>
+        <td>${formatHoursMinutes(liveHours)}</td>
+        <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
+        <td><span class="${status.className}">${status.label}</span></td>
+        <td>
+          <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
+          <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
+        </td>
+      </tr>
+    `;
+  }).join(""));
 }
 
 function renderExpenseTable() {
@@ -721,13 +774,14 @@ function updateAll() {
   routeToCurrentPage();
   renderOverview();
   renderStatsTables();
-  renderGestionLists();
+  renderPresenceList();
   renderExpenseTable();
   renderLeaderboard();
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
   renderSimulation();
+  startAdminLiveTimer();
 }
 
 async function loadAdminDashboard() {
@@ -966,6 +1020,62 @@ async function adjustEmployeeHours(employeeIndex, hoursValue) {
     state.currentUser.hours = hoursValue;
   }
   showToast(`Heures de ${employee.name} ajustees.`);
+  updateAll();
+}
+
+async function sendReminder(employeeIndex) {
+  const employee = employees[employeeIndex];
+  if (!state.isAdmin || !employee?.id) return;
+
+  const response = await fetch("/api/admin-send-reminder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ employeeId: employee.id })
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible d'envoyer le rappel Discord.", true);
+    return;
+  }
+
+  showToast(`Rappel envoye a ${employee.name}.`);
+}
+
+async function forcePunchOut(employeeIndex) {
+  const employee = employees[employeeIndex];
+  if (!state.isAdmin || !employee?.id) return;
+  if (!window.confirm(`Forcer la sortie de ${employee.name} ?`)) return;
+
+  const response = await fetch("/api/admin-force-punch-out", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ employeeId: employee.id })
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible de forcer la sortie.", true);
+    return;
+  }
+
+  const data = await response.json().catch(() => ({}));
+  employee.hours += Number(data.durationHours || getLiveEmployeeHours(employee));
+  employee.activeDays += 1;
+  employee.preferredShift = data.shiftPeriod || employee.preferredShift;
+  employee.todayHours = 0;
+  employee.active = false;
+  employee.activeShiftStartedAt = null;
+  employee.activeShiftId = null;
+
+  if (state.currentUser?.discordId === employee.discordId) {
+    state.currentUser = { ...employee };
+    state.punchedIn = false;
+    activeShiftStartedAt = null;
+  }
+
+  showToast(`Sortie forcee pour ${employee.name}.`);
+  await loadAdminDashboard();
   updateAll();
 }
 
@@ -1219,6 +1329,19 @@ elements.statsBody?.addEventListener("click", (event) => {
   const input = elements.statsBody.querySelector(`.hour-adjust-input[data-employee-index="${employeeIndex}"]`);
   adjustEmployeeHours(employeeIndex, Number(input?.value));
   if (input) input.value = "";
+});
+
+elements.presenceBody?.addEventListener("click", (event) => {
+  const reminderButton = event.target.closest(".reminder-button");
+  if (reminderButton) {
+    sendReminder(Number(reminderButton.dataset.employeeIndex));
+    return;
+  }
+
+  const forceButton = event.target.closest(".force-out-button");
+  if (forceButton) {
+    forcePunchOut(Number(forceButton.dataset.employeeIndex));
+  }
 });
 
 [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit, elements.simResalePrice, elements.simWeeklyParts].forEach((element) => {

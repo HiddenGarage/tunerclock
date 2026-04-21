@@ -145,7 +145,9 @@ function startDiscordBot() {
         activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
         status: "online"
       });
-    } catch (_) {}
+    } catch (error) {
+      console.error("Presence Discord impossible:", error.message);
+    }
   });
 
   discordClient.on("error", (error) => {
@@ -201,31 +203,21 @@ async function sendActivityWebhook(type, payload) {
   }).catch(() => {});
 }
 
-function getStartOfTodayIso() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now.toISOString();
-}
-
 async function buildEmployeeSnapshots(supabase) {
-  const todayIso = getStartOfTodayIso();
-  const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }, { data: activeShiftsToday, error: activeShiftsError }] = await Promise.all([
+  const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }] = await Promise.all([
     supabase.from("employees").select("*").order("created_at", { ascending: true }),
-    supabase.from("shifts").select("*").order("punched_in_at", { ascending: true }),
-    supabase.from("shifts").select("*").eq("status", "active").gte("punched_in_at", todayIso)
+    supabase.from("shifts").select("*").order("punched_in_at", { ascending: true })
   ]);
 
   if (employeesError) throw employeesError;
   if (shiftsError) throw shiftsError;
-  if (activeShiftsError) throw activeShiftsError;
 
   const shiftsByEmployee = groupBy(shifts || [], (shift) => shift.employee_id);
-  const activeTodayByEmployee = groupBy(activeShiftsToday || [], (shift) => shift.employee_id);
 
   return (employees || []).map((employee) => {
     const employeeShifts = shiftsByEmployee.get(employee.id) || [];
     const closedShifts = employeeShifts.filter((shift) => shift.status === "closed");
-    const activeShift = [...(activeTodayByEmployee.get(employee.id) || employeeShifts.filter((shift) => shift.status === "active"))].reverse()[0] || null;
+    const activeShift = [...employeeShifts].reverse().find((shift) => shift.status === "active") || null;
     const shiftBuckets = { Jour: 0, Soir: 0, Nuit: 0 };
 
     closedShifts.forEach((shift) => {
@@ -683,22 +675,6 @@ app.post("/api/admin-finance-settings", requireAdmin, async (req, res) => {
     };
     const supabase = getSupabase();
     await upsertSetting(supabase, "finance_inputs", payload);
-
-    const { error: deleteError } = await supabase
-      .from("weekly_profit_entries")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000");
-    if (deleteError) throw deleteError;
-
-    if (payload.weeklyProfit > 0) {
-      const { error: insertError } = await supabase.from("weekly_profit_entries").insert({
-        label: payload.calcNote || "Profit manuel",
-        amount: payload.weeklyProfit,
-        created_by_discord_id: req.session.discordId
-      });
-      if (insertError) throw insertError;
-    }
-
     res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
@@ -730,9 +706,10 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
   }
 });
 
+
 app.delete("/api/admin-expense/:expenseId", requireAdmin, async (req, res) => {
   try {
-    const expenseId = req.params.expenseId;
+    const expenseId = String(req.params.expenseId || "").trim();
     if (!expenseId) {
       return res.status(400).send("expenseId manquant.");
     }

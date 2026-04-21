@@ -3,7 +3,6 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
-let financeSaveTimer = null;
 
 const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
@@ -76,6 +75,7 @@ const elements = {
   calcNote: document.getElementById("calc-note"),
   saveFinance: document.getElementById("save-finance"),
   addExpense: document.getElementById("add-expense"),
+  editPartCost: document.getElementById("edit-part-cost"),
   partName: document.getElementById("part-name"),
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
@@ -85,13 +85,16 @@ const elements = {
   simRevenue: document.getElementById("sim-revenue"),
   simExpenses: document.getElementById("sim-expenses"),
   simTargetProfit: document.getElementById("sim-target-profit"),
-  simSalaryCap: document.getElementById("sim-salary-cap"),
+  simRoleMix: document.getElementById("sim-role-mix"),
   simPossiblePayroll: document.getElementById("sim-possible-payroll"),
   simCurrentPayroll: document.getElementById("sim-current-payroll"),
   simRemainingProfit: document.getElementById("sim-remaining-profit"),
+  simRecommendedHourly: document.getElementById("sim-recommended-hourly"),
+  simEmployeeCount: document.getElementById("sim-employee-count"),
   simProfitTarget: document.getElementById("sim-profit-target"),
   simPayrollGap: document.getElementById("sim-payroll-gap"),
   simRecommendation: document.getElementById("sim-recommendation"),
+  toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page"))
@@ -107,6 +110,18 @@ function setHtml(element, value) {
 
 function setValue(element, value) {
   if (element) element.value = value;
+}
+
+function showToast(message, isError = false) {
+  if (!elements.toast) return;
+  elements.toast.textContent = message;
+  elements.toast.classList.remove("hidden");
+  elements.toast.style.borderColor = isError ? "#8d4343" : "#3b4b63";
+  elements.toast.style.background = isError ? "#342224" : "#1d2430";
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => {
+    elements.toast.classList.add("hidden");
+  }, 2800);
 }
 
 function formatMoney(value) {
@@ -275,7 +290,7 @@ function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
 
   if (!employees.length) {
-    setHtml(elements.statsBody, `<tr><td colspan="7">Aucune donnee employe.</td></tr>`);
+    setHtml(elements.statsBody, `<tr><td colspan="8">Aucune donnee employe.</td></tr>`);
   } else {
     const sorted = [...employees].sort((a, b) => b.hours - a.hours);
     setHtml(elements.statsBody, sorted.map((employee) => `
@@ -287,6 +302,10 @@ function renderStatsTables() {
         <td>${employee.preferredShift}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
+        <td>
+          <input class="hour-adjust-input" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}" type="number" min="0" step="0.25" placeholder="${employee.hours.toFixed(2)}">
+          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}">Ajuster</button>
+        </td>
       </tr>
     `).join(""));
   }
@@ -305,24 +324,34 @@ function renderSimulation() {
   const revenue = getNumericValue(elements.simRevenue);
   const extraExpenses = getNumericValue(elements.simExpenses);
   const profitTargetPercent = getNumericValue(elements.simTargetProfit);
-  const salaryCapPercent = getNumericValue(elements.simSalaryCap);
   const currentPayroll = getPayrollTotal();
   const targetProfit = revenue * (profitTargetPercent / 100);
-  const salaryCapBudget = revenue * (salaryCapPercent / 100);
-  const possiblePayroll = Math.max(0, Math.min(salaryCapBudget, revenue - extraExpenses - targetProfit));
+  const possiblePayroll = Math.max(0, revenue - extraExpenses - targetProfit);
   const remainingProfit = revenue - extraExpenses - currentPayroll;
   const gap = possiblePayroll - currentPayroll;
+  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const recommendedHourly = totalHours > 0 ? possiblePayroll / totalHours : 0;
+  const roleCounts = roleOrder
+    .map((roleName) => {
+      const count = employees.filter((employee) => employee.roleName === roleName).length;
+      return count ? `${count} ${roleName}` : null;
+    })
+    .filter(Boolean)
+    .join(" | ") || "Aucun employe";
 
   setText(elements.simPossiblePayroll, formatMoney(possiblePayroll));
   setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
   setText(elements.simRemainingProfit, formatMoney(remainingProfit));
+  setText(elements.simRecommendedHourly, `${formatMoney(recommendedHourly)}/h`);
+  setText(elements.simEmployeeCount, String(employees.length));
+  setValue(elements.simRoleMix, roleCounts);
   setText(elements.simProfitTarget, formatMoney(targetProfit));
   setText(elements.simPayrollGap, formatMoney(gap));
 
   let recommendation = "A analyser";
   if (revenue <= 0) recommendation = "Entre un revenu pour simuler";
-  else if (gap >= 0) recommendation = "Ta paie actuelle semble soutenable";
-  else recommendation = "Reduire les taux ou augmenter le revenu";
+  else if (totalHours <= 0) recommendation = "Aucune heure enregistree pour calculer un taux";
+  else recommendation = `Recommendation moyenne: ${formatMoney(recommendedHourly)}/h`;
 
   setText(elements.simRecommendation, recommendation);
 }
@@ -630,6 +659,7 @@ async function loadAdminDashboard() {
     setValue(elements.manualPayouts, financeInputs.manualPayouts ? String(financeInputs.manualPayouts) : "");
     setValue(elements.miscExpenses, financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "");
     setValue(elements.calcNote, financeInputs.calcNote || "");
+    setValue(elements.partCost, String(Number(data.settings?.part_settings?.fixedCost || 105)));
 
     if (state.currentUser) {
       const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
@@ -728,7 +758,11 @@ async function saveFinanceSettings() {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(getFinancePayload())
-  }).catch(() => {});
+  }).then(() => {
+    showToast("Finance enregistree.");
+  }).catch(() => {
+    showToast("Echec de l'enregistrement finance.", true);
+  });
 }
 
 function queueFinanceSave() {
@@ -750,7 +784,36 @@ async function updateRoleRate(roleName, nextRate) {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ roleRates: state.roleRates })
-  }).catch(() => {});
+  }).then(() => {
+    showToast(`Salaire ${roleName} mis a jour.`);
+  }).catch(() => {
+    showToast("Impossible de sauvegarder le salaire du role.", true);
+  });
+}
+
+async function adjustEmployeeHours(employeeIndex, hoursValue) {
+  if (!state.isAdmin || !Number.isFinite(hoursValue) || hoursValue < 0) return;
+  const employee = employees[employeeIndex];
+  if (!employee?.id) return;
+
+  const response = await fetch("/api/admin-adjust-employee-hours", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ employeeId: employee.id, totalHours: hoursValue })
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible d'ajuster les heures.", true);
+    return;
+  }
+
+  employee.hours = hoursValue;
+  if (state.currentUser?.discordId === employee.discordId) {
+    state.currentUser.hours = hoursValue;
+  }
+  showToast(`Heures de ${employee.name} ajustees.`);
+  updateAll();
 }
 
 async function punchIn() {
@@ -788,7 +851,8 @@ async function addExpense() {
   const note = elements.partNote?.value.trim() || "-";
   if (!name) return;
 
-  let nextExpense = { name, category, cost: 105, note };
+  const fixedCost = Number(elements.partCost?.value || 105) || 105;
+  let nextExpense = { name, category, cost: fixedCost, note };
   if (state.isAdmin) {
     const response = await fetch("/api/admin-expense", {
       method: "POST",
@@ -815,7 +879,35 @@ async function addExpense() {
   setValue(elements.partName, "");
   setValue(elements.partCategory, "");
   setValue(elements.partNote, "");
+  showToast("Depense piece ajoutee.");
   updateAll();
+}
+
+async function togglePartCostEdit() {
+  if (!elements.partCost || !elements.editPartCost) return;
+  const currentlyReadonly = elements.partCost.hasAttribute("readonly");
+  if (currentlyReadonly) {
+    elements.partCost.removeAttribute("readonly");
+    elements.editPartCost.textContent = "Save";
+    elements.partCost.focus();
+    showToast("Mode edition du cout fixe active.");
+    return;
+  }
+
+  const nextCost = Number(elements.partCost.value || 105) || 105;
+  elements.partCost.setAttribute("readonly", "readonly");
+  elements.editPartCost.textContent = "Edit";
+
+  await fetch("/api/admin-part-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ fixedCost: nextCost })
+  }).then(() => {
+    showToast("Cout fixe des pieces enregistre.");
+  }).catch(() => {
+    showToast("Impossible d'enregistrer le cout fixe.", true);
+  });
 }
 
 async function sendPayslipByDiscord(employee) {
@@ -879,6 +971,7 @@ async function markEmployeePaid(employeeIndex) {
   }
 
   await sendPayslipByDiscord(employee);
+  showToast(`Paiement enregistre pour ${employee.name}.`);
   updateAll();
 }
 
@@ -906,6 +999,7 @@ async function rebootAllData() {
   activeShiftStartedAt = null;
   [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.partName, elements.partCategory, elements.partNote].forEach((element) => setValue(element, ""));
   setValue(elements.partCost, "105");
+  showToast("Reboot complet effectue.");
   updateAll();
 }
 
@@ -915,6 +1009,7 @@ elements.punchIn?.addEventListener("click", punchIn);
 elements.punchOut?.addEventListener("click", punchOut);
 elements.saveFinance?.addEventListener("click", saveFinanceSettings);
 elements.addExpense?.addEventListener("click", addExpense);
+elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.rebootAll?.addEventListener("click", rebootAllData);
 
 elements.leaderboardBody?.addEventListener("click", (event) => {
@@ -938,7 +1033,16 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
-[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit, elements.simSalaryCap].forEach((element) => {
+elements.statsBody?.addEventListener("click", (event) => {
+  const saveButton = event.target.closest(".save-hour-adjust-button");
+  if (!saveButton) return;
+  const employeeIndex = Number(saveButton.dataset.employeeIndex);
+  const input = elements.statsBody.querySelector(`.hour-adjust-input[data-employee-index="${employeeIndex}"]`);
+  adjustEmployeeHours(employeeIndex, Number(input?.value));
+  if (input) input.value = "";
+});
+
+[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 

@@ -3,16 +3,7 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
-const chartState = {};
-const chartPalette = {
-  text: "#1b2533",
-  muted: "#7d8898",
-  grid: "rgba(163, 178, 201, 0.18)",
-  blue: "#4b7cf6",
-  blueSoft: "rgba(75, 124, 246, 0.15)",
-  teal: "#30c4a3",
-  orange: "#f4a249"
-};
+let adminRefreshId = null;
 
 const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
@@ -69,6 +60,8 @@ const elements = {
   shiftMessage: document.getElementById("shift-message"),
   todayHours: document.getElementById("today-hours"),
   todayPay: document.getElementById("today-pay"),
+  accumulatedHours: document.getElementById("accumulated-hours"),
+  accumulatedPay: document.getElementById("accumulated-pay"),
   punchIn: document.getElementById("punch-in"),
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
@@ -91,8 +84,6 @@ const elements = {
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
   partNote: document.getElementById("part-note"),
-  shiftChart: document.getElementById("shift-chart"),
-  analysisChart: document.getElementById("analysis-chart"),
   simRevenue: document.getElementById("sim-revenue"),
   simExpenses: document.getElementById("sim-expenses"),
   simTargetProfit: document.getElementById("sim-target-profit"),
@@ -109,30 +100,6 @@ const elements = {
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page"))
-};
-
-const doughnutCenterTextPlugin = {
-  id: "doughnutCenterText",
-  afterDraw(chart, args, pluginOptions) {
-    if (chart.config.type !== "doughnut") return;
-    const meta = chart.getDatasetMeta(0);
-    if (!meta?.data?.length) return;
-
-    const { ctx } = chart;
-    const centerPoint = meta.data[0];
-    const value = pluginOptions?.value || "0h";
-    const label = pluginOptions?.label || "Heures";
-
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.fillStyle = chartPalette.text;
-    ctx.font = '800 30px "Manrope"';
-    ctx.fillText(value, centerPoint.x, centerPoint.y - 2);
-    ctx.fillStyle = chartPalette.muted;
-    ctx.font = '600 12px "Manrope"';
-    ctx.fillText(label, centerPoint.x, centerPoint.y + 22);
-    ctx.restore();
-  }
 };
 
 function setText(element, value) {
@@ -165,19 +132,9 @@ function setPillState(element, text, tone = "default") {
   element.className = `status-pill${tone === "default" ? "" : ` ${tone}`}`;
 }
 
-function destroyChart(key) {
-  if (chartState[key]) {
-    chartState[key].destroy();
-    chartState[key] = null;
-  }
-}
-
 function formatMoney(value) {
-  const numericValue = Number(value || 0);
-  const roundedValue = Math.round(Number.isFinite(numericValue) ? numericValue : 0);
-  const absoluteValue = Math.abs(roundedValue);
-  const formattedValue = absoluteValue.toLocaleString("fr-CA");
-  return `${roundedValue < 0 ? "-" : ""}${formattedValue}$`;
+  const amount = Math.max(0, Math.round(Number(value || 0)));
+  return `${amount.toLocaleString("fr-CA").replace(/\u00a0/g, " ")}$`;
 }
 
 function getNumericValue(element) {
@@ -191,17 +148,23 @@ function formatHoursMinutes(hoursValue) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 
-function formatCompactHours(hoursValue) {
-  return `${Number(hoursValue || 0).toFixed(1)}h`;
-}
-
 function normaliseRole(roleValue) {
   if (!roleValue) return "Mecano";
-  return String(roleValue)
+  const cleaned = String(roleValue)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z]/g, "")
-    .replace(/^./, (char) => char.toUpperCase());
+    .toLowerCase();
+
+  const map = {
+    patron: "Patron",
+    copatron: "Copatron",
+    gerant: "Gerant",
+    mecano: "Mecano",
+    apprenti: "Apprenti"
+  };
+
+  return map[cleaned] || "Mecano";
 }
 
 function getRoleRate(roleName) {
@@ -210,6 +173,7 @@ function getRoleRate(roleName) {
 
 function normaliseEmployeeRecord(record) {
   const roleName = normaliseRole(record.role_name || record.role || "Mecano");
+  const hourlyRate = Number(record.hourly_rate ?? record.hourlyRate);
   return {
     id: record.id || null,
     name: record.discord_name || record.name || "Employe",
@@ -221,7 +185,7 @@ function normaliseEmployeeRecord(record) {
     preferredShift: record.preferred_shift || record.preferredShift || "Jour",
     todayHours: Number(record.today_hours || record.todayHours || 0),
     active: Boolean(record.is_active ?? record.active),
-    hourlyRate: Number(record.hourly_rate || record.hourlyRate || getRoleRate(roleName)),
+    hourlyRate: Number.isFinite(hourlyRate) && hourlyRate > 0 ? hourlyRate : getRoleRate(roleName),
     lastPayslip: record.lastPayslip || null
   };
 }
@@ -259,12 +223,20 @@ function setStatusDot(active) {
   if (dot) dot.style.background = active ? "#22c55e" : "#d94b4b";
 }
 
+function getEmployeeEffectiveHours(employee) {
+  return Number(employee.hours || 0) + Number(employee.active ? employee.todayHours || 0 : 0);
+}
+
+function getEmployeeEffectivePay(employee) {
+  return getEmployeeEffectiveHours(employee) * Number(employee.hourlyRate || getRoleRate(employee.roleName));
+}
+
 function getTopEmployee() {
-  return employees.length ? [...employees].sort((a, b) => b.hours - a.hours)[0] : null;
+  return employees.length ? [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a))[0] : null;
 }
 
 function getPayrollTotal() {
-  return employees.reduce((sum, employee) => sum + employee.hours * employee.hourlyRate, 0);
+  return employees.reduce((sum, employee) => sum + getEmployeeEffectivePay(employee), 0);
 }
 
 function getExpenseTotal() {
@@ -293,17 +265,38 @@ function getFinancePayload() {
   };
 }
 
+function syncLiveHoursFromActiveShift() {
+  if (!state.currentUser || !state.punchedIn || !activeShiftStartedAt) return;
+  const elapsedHours = Math.max(0, (Date.now() - activeShiftStartedAt) / 3600000);
+  state.currentUser.todayHours = elapsedHours;
+
+  const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
+  if (matching) {
+    matching.todayHours = elapsedHours;
+    matching.active = true;
+  }
+}
+
 function updateLivePunchMetrics() {
-  if (!state.loggedIn || !state.currentUser || !state.punchedIn || !activeShiftStartedAt) {
-    setText(elements.todayHours, state.currentUser ? formatHoursMinutes(state.currentUser.todayHours) : "0h 00m");
-    setText(elements.todayPay, state.currentUser ? formatMoney(state.currentUser.todayHours * state.currentUser.hourlyRate) : "$0.00");
+  syncLiveHoursFromActiveShift();
+
+  if (!state.loggedIn || !state.currentUser) {
+    setText(elements.todayHours, "0h 00m");
+    setText(elements.todayPay, "0$");
+    setText(elements.accumulatedHours, "0h 00m");
+    setText(elements.accumulatedPay, "0$");
     return;
   }
 
-  const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
-  state.currentUser.todayHours = elapsedHours;
-  setText(elements.todayHours, formatHoursMinutes(elapsedHours));
-  setText(elements.todayPay, formatMoney(elapsedHours * state.currentUser.hourlyRate));
+  const currentLiveHours = Number(state.currentUser.todayHours || 0);
+  const currentBaseHours = Number(state.currentUser.hours || 0);
+  const currentRate = Number(state.currentUser.hourlyRate || getRoleRate(state.currentUser.roleName));
+  const accumulatedHours = currentBaseHours + currentLiveHours;
+
+  setText(elements.todayHours, formatHoursMinutes(currentLiveHours));
+  setText(elements.todayPay, formatMoney(currentLiveHours * currentRate));
+  setText(elements.accumulatedHours, formatHoursMinutes(accumulatedHours));
+  setText(elements.accumulatedPay, formatMoney(accumulatedHours * currentRate));
 }
 
 async function refreshBotStatus() {
@@ -326,9 +319,15 @@ async function refreshBotStatus() {
 
 function startLiveTimer() {
   if (liveTimerId) clearInterval(liveTimerId);
-  if (!state.punchedIn || !activeShiftStartedAt) return;
   updateLivePunchMetrics();
-  liveTimerId = setInterval(updateLivePunchMetrics, 1000);
+  liveTimerId = setInterval(() => {
+    updateLivePunchMetrics();
+    renderOverview();
+    renderStatsTables();
+    renderGestionLists();
+    renderLeaderboard();
+    renderSimulation();
+  }, 1000);
 }
 
 function stopLiveTimer() {
@@ -336,8 +335,22 @@ function stopLiveTimer() {
   liveTimerId = null;
 }
 
+function startAdminRefresh() {
+  if (adminRefreshId) clearInterval(adminRefreshId);
+  if (!state.loggedIn || !state.isAdmin) return;
+  adminRefreshId = setInterval(async () => {
+    await loadAdminDashboard(true);
+    updateAll();
+  }, 5000);
+}
+
+function stopAdminRefresh() {
+  if (adminRefreshId) clearInterval(adminRefreshId);
+  adminRefreshId = null;
+}
+
 function renderOverview() {
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeEffectiveHours(employee), 0);
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
@@ -346,7 +359,6 @@ function renderOverview() {
   const totalCosts = getTotalCosts();
   const grossProfit = totalIncome - totalCosts + weeklyProfit;
   const margin = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
-  const activeHours = activeEmployees.reduce((sum, employee) => sum + employee.todayHours, 0);
 
   setText(elements.activeCount, String(activeEmployees.length));
   setText(elements.weeklyHours, formatHoursMinutes(totalHours));
@@ -356,7 +368,7 @@ function renderOverview() {
   setText(elements.grossProfit, formatMoney(grossProfit));
   setText(elements.totalIncome, formatMoney(totalIncome));
   setText(elements.totalCosts, formatMoney(totalCosts));
-  setText(elements.grossMargin, `${margin.toFixed(1)}%`);
+  setText(elements.grossMargin, `${margin.toFixed(0)}%`);
   setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
 }
 
@@ -366,22 +378,25 @@ function renderStatsTables() {
   if (!employees.length) {
     setHtml(elements.statsBody, `<tr><td colspan="8">Aucune donnee employe.</td></tr>`);
   } else {
-    const sorted = [...employees].sort((a, b) => b.hours - a.hours);
-    setHtml(elements.statsBody, sorted.map((employee) => `
+    const sorted = [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a));
+    setHtml(elements.statsBody, sorted.map((employee) => {
+      const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
+      const displayRate = getRoleRate(employee.roleName) || employee.hourlyRate;
+      return `
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${formatHoursMinutes(getEmployeeEffectiveHours(employee))}</td>
         <td>${employee.activeDays}</td>
         <td>${employee.preferredShift}</td>
-        <td>${formatMoney(employee.hourlyRate)}</td>
-        <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
+        <td>${formatMoney(displayRate)}</td>
+        <td>${formatMoney(getEmployeeEffectiveHours(employee) * displayRate)}</td>
         <td>
-          <input class="hour-adjust-input" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}" type="number" min="0" step="0.25" placeholder="${employee.hours.toFixed(2)}">
-          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}">Ajuster</button>
+          <input class="hour-adjust-input" data-employee-index="${employeeIndex}" type="number" min="0" step="0.25" placeholder="${Number(employee.hours || 0).toFixed(2)}">
+          <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employeeIndex}">Ajuster</button>
         </td>
-      </tr>
-    `).join(""));
+      </tr>`;
+    }).join(""));
   }
 
   setHtml(elements.roleRatesBody, roleOrder.map((roleName) => `
@@ -403,7 +418,7 @@ function renderSimulation() {
   const possiblePayroll = Math.max(0, revenue - extraExpenses - targetProfit);
   const remainingProfit = revenue - extraExpenses - currentPayroll;
   const gap = possiblePayroll - currentPayroll;
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeEffectiveHours(employee), 0);
   const projectedHours = totalHours > 0 ? totalHours : employees.length * 35;
   const recommendedHourly = projectedHours > 0 ? possiblePayroll / projectedHours : 0;
   const roleCounts = roleOrder
@@ -436,7 +451,7 @@ function renderGestionLists() {
   if (!elements.gestionActiveWorkersList) return;
   const activeEmployees = employees.filter((employee) => employee.active);
   const html = activeEmployees.length
-    ? activeEmployees.map((employee) => `<li>${employee.name} | ${employee.roleName} | ${formatHoursMinutes(employee.todayHours)}</li>`).join("")
+    ? activeEmployees.map((employee) => `<li><span>${employee.name} | ${employee.roleName}</span><strong>${formatHoursMinutes(employee.todayHours)}</strong></li>`).join("")
     : "<li>Aucun employe en service.</li>";
   setHtml(elements.gestionActiveWorkersList, html);
 }
@@ -444,7 +459,7 @@ function renderGestionLists() {
 function renderExpenseTable() {
   if (!elements.expenseBody) return;
   if (!expenses.length) {
-    setHtml(elements.expenseBody, `<tr><td colspan="4">Aucune depense enregistree.</td></tr>`);
+    setHtml(elements.expenseBody, `<tr><td colspan="5">Aucune depense enregistree.</td></tr>`);
     return;
   }
 
@@ -454,6 +469,7 @@ function renderExpenseTable() {
       <td>${expense.category}</td>
       <td>${formatMoney(expense.cost)}</td>
       <td>${expense.note || "-"}</td>
+      <td><button class="secondary-button table-button delete-expense-button" data-expense-id="${expense.id || ""}">Supprimer</button></td>
     </tr>
   `).join(""));
 }
@@ -465,10 +481,10 @@ function renderLeaderboard() {
     return;
   }
 
-  const sortedEmployees = [...employees].sort((a, b) => b.hours - a.hours);
+  const sortedEmployees = [...employees].sort((a, b) => getEmployeeEffectiveHours(b) - getEmployeeEffectiveHours(a));
   setHtml(elements.leaderboardBody, sortedEmployees.map((employee) => {
     const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-    const estimatedPay = employee.hours * employee.hourlyRate;
+    const estimatedPay = getEmployeeEffectivePay(employee);
     const pdfButton = employee.lastPayslip?.payoutId ? `
       <a class="secondary-button secondary-table-button table-button" href="/api/payouts/${employee.lastPayslip.payoutId}/pdf" target="_blank" rel="noreferrer">PDF</a>
     ` : "";
@@ -480,10 +496,10 @@ function renderLeaderboard() {
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${formatHoursMinutes(getEmployeeEffectiveHours(employee))}</td>
         <td>${formatMoney(estimatedPay)}</td>
         <td>
-          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${employee.hours <= 0 ? "disabled" : ""}>PAYER</button>
+          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${getEmployeeEffectiveHours(employee) <= 0 ? "disabled" : ""}>PAYER</button>
           ${pdfButton}
           ${dmButton}
         </td>
@@ -501,7 +517,9 @@ function renderShiftState() {
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
     setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
     setText(elements.todayHours, "0h 00m");
-    setText(elements.todayPay, "$0.00");
+    setText(elements.todayPay, "0$");
+    setText(elements.accumulatedHours, "0h 00m");
+    setText(elements.accumulatedPay, "0$");
     if (elements.punchIn) elements.punchIn.disabled = true;
     if (elements.punchOut) elements.punchOut.disabled = true;
     setText(elements.discordLogin, "Se connecter avec Discord");
@@ -529,176 +547,6 @@ function renderShiftState() {
   }
 }
 
-function drawShiftDonutChart() {
-  const canvas = elements.shiftChart;
-  if (!canvas || typeof Chart === "undefined") return;
-  const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
-    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
-  );
-  const totalHours = buckets.reduce((sum, value) => sum + value, 0);
-
-  destroyChart("shift");
-  chartState.shift = new Chart(canvas, {
-    type: "doughnut",
-    plugins: [doughnutCenterTextPlugin],
-    data: {
-      labels: ["Jour", "Soir", "Nuit"],
-      datasets: [{
-        data: buckets,
-        backgroundColor: [chartPalette.teal, chartPalette.blue, chartPalette.orange],
-        borderColor: "#ffffff",
-        borderWidth: 6,
-        borderRadius: 10,
-        spacing: 4,
-        hoverOffset: 4
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "72%",
-      plugins: {
-        doughnutCenterText: {
-          value: totalHours ? formatCompactHours(totalHours) : "0h",
-          label: "Heures cumulees"
-        },
-        legend: {
-          position: "bottom",
-          labels: {
-            color: chartPalette.text,
-            usePointStyle: true,
-            pointStyle: "circle",
-            boxWidth: 10,
-            padding: 18,
-            font: { family: "Manrope", size: 12, weight: "700" }
-          }
-        },
-        tooltip: {
-          backgroundColor: "#182232",
-          titleColor: "#f8fbff",
-          bodyColor: "#f8fbff",
-          borderColor: "#24364f",
-          borderWidth: 1,
-          padding: 12,
-          cornerRadius: 12,
-          callbacks: {
-            label(context) {
-              return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
-function drawTrendChart() {
-  const canvas = elements.analysisChart;
-  if (!canvas || typeof Chart === "undefined") return;
-
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
-    const key = date.toISOString().slice(0, 10);
-    const label = date.toLocaleDateString("fr-CA", { weekday: "short" });
-    const totalHours = shifts
-      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === key)
-      .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
-    const previousDate = new Date(date);
-    previousDate.setDate(previousDate.getDate() - 7);
-    const previousKey = previousDate.toISOString().slice(0, 10);
-    const previousHours = shifts
-      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === previousKey)
-      .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
-    return { label, totalHours, previousHours };
-  });
-
-  destroyChart("trend");
-  chartState.trend = new Chart(canvas, {
-    type: "line",
-    data: {
-      labels: days.map((day) => day.label),
-      datasets: [
-        {
-          label: "Semaine actuelle",
-          data: days.map((day) => Number(day.totalHours.toFixed(2))),
-          borderColor: chartPalette.blue,
-          backgroundColor: "rgba(75, 124, 246, 0.12)",
-          pointBackgroundColor: "#ffffff",
-          pointBorderColor: chartPalette.blue,
-          pointBorderWidth: 3,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          tension: 0.34,
-          fill: true
-        },
-        {
-          label: "Semaine precedente",
-          data: days.map((day) => Number(day.previousHours.toFixed(2))),
-          borderColor: chartPalette.orange,
-          backgroundColor: "rgba(244, 162, 73, 0.08)",
-          pointBackgroundColor: "#ffffff",
-          pointBorderColor: chartPalette.orange,
-          pointBorderWidth: 3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          tension: 0.34,
-          fill: false
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "top",
-          align: "end",
-          labels: {
-            color: chartPalette.text,
-            usePointStyle: true,
-            pointStyle: "circle",
-            boxWidth: 10,
-            padding: 18,
-            font: { family: "Manrope", size: 12, weight: "700" }
-          }
-        },
-        tooltip: {
-          backgroundColor: "#182232",
-          titleColor: "#f8fbff",
-          bodyColor: "#f8fbff",
-          borderColor: "#24364f",
-          borderWidth: 1,
-          padding: 12,
-          cornerRadius: 12,
-          callbacks: {
-            label(context) {
-              return `Heures: ${formatHoursMinutes(context.raw || 0)}`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: chartPalette.grid, drawBorder: false },
-          ticks: { color: chartPalette.muted, font: { family: "Manrope", size: 11, weight: "700" } }
-        },
-        y: {
-          beginAtZero: true,
-          grid: { color: chartPalette.grid, drawBorder: false },
-          ticks: {
-            color: chartPalette.muted,
-            font: { family: "Manrope", size: 11, weight: "700" },
-            callback(value) {
-              return `${value}h`;
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
 function updateAll() {
   applyAccessControl();
   routeToCurrentPage();
@@ -708,12 +556,10 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderShiftState();
-  drawShiftDonutChart();
-  drawTrendChart();
   renderSimulation();
 }
 
-async function loadAdminDashboard() {
+async function loadAdminDashboard(silent = false) {
   if (!state.isAdmin) return;
   try {
     const response = await fetch("/api/admin-dashboard", { credentials: "include" });
@@ -722,7 +568,10 @@ async function loadAdminDashboard() {
 
     state.roleRates = { ...state.roleRates, ...(data.settings?.role_rates || {}) };
     shifts = data.shifts || [];
-    employees = (data.employees || []).map(normaliseEmployeeRecord);
+    employees = (data.employees || []).map(normaliseEmployeeRecord).map((employee) => ({
+      ...employee,
+      hourlyRate: getRoleRate(employee.roleName) || employee.hourlyRate
+    }));
 
     const latestPayoutByEmployee = new Map();
     (data.payouts || []).forEach((entry) => {
@@ -767,10 +616,15 @@ async function loadAdminDashboard() {
 
     if (state.currentUser) {
       const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
-      if (matching) state.currentUser = matching;
+      if (matching) {
+        const currentLive = Number(state.currentUser.todayHours || 0);
+        state.currentUser = state.punchedIn ? { ...matching, todayHours: Math.max(Number(matching.todayHours || 0), currentLive), active: true } : matching;
+        const index = employees.findIndex((employee) => employee.discordId === state.currentUser.discordId);
+        if (index >= 0) employees[index] = { ...state.currentUser };
+      }
     }
   } catch (error) {
-    console.error(error);
+    if (!silent) console.error(error);
   } finally {
     state.financeInputsLoaded = true;
   }
@@ -785,6 +639,7 @@ async function loadMeState() {
 
     const current = normaliseEmployeeRecord(data.employee);
     current.name = state.currentUser.name;
+    current.hourlyRate = getRoleRate(current.roleName) || current.hourlyRate;
     state.currentUser = current;
 
     if (!state.isAdmin) {
@@ -829,6 +684,7 @@ async function loadAuthSession() {
       syncCurrentUserFromSession(data.user);
       await loadMeState();
       await loadAdminDashboard();
+      startAdminRefresh();
     } else {
       state.loggedIn = false;
       state.isAdmin = false;
@@ -839,6 +695,7 @@ async function loadAuthSession() {
       shifts = [];
       state.recordedPayouts = 0;
       setStatusDot(false);
+      stopAdminRefresh();
     }
   } catch (error) {
     setText(elements.demoUserText, "Connexion Discord indisponible");
@@ -863,7 +720,9 @@ async function saveFinanceSettings() {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(getFinancePayload())
-  }).then(() => {
+  }).then(async () => {
+    await loadAdminDashboard(true);
+    updateAll();
     showToast("Finance enregistree.");
   }).catch(() => {
     showToast("Echec de l'enregistrement finance.", true);
@@ -875,7 +734,10 @@ function queueFinanceSave() {
 }
 
 async function updateRoleRate(roleName, nextRate) {
-  if (!Number.isFinite(nextRate) || nextRate < 0) return;
+  if (!Number.isFinite(nextRate) || nextRate < 0) {
+    showToast("Entre un taux valide.", true);
+    return;
+  }
   state.roleRates[roleName] = nextRate;
   employees = employees.map((employee) => employee.roleName === roleName ? { ...employee, hourlyRate: nextRate } : employee);
   if (state.currentUser?.roleName === roleName) {
@@ -889,7 +751,9 @@ async function updateRoleRate(roleName, nextRate) {
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify({ roleRates: state.roleRates })
-  }).then(() => {
+  }).then(async () => {
+    await loadAdminDashboard(true);
+    updateAll();
     showToast(`Salaire ${roleName} mis a jour.`);
   }).catch(() => {
     showToast("Impossible de sauvegarder le salaire du role.", true);
@@ -940,6 +804,7 @@ async function punchIn() {
     showToast("Erreur pendant l'entree en service.", true);
   } else {
     await loadMeState();
+    await loadAdminDashboard(true);
   }
   if (elements.punchIn) {
     elements.punchIn.textContent = "Entrer en service";
@@ -963,6 +828,8 @@ async function punchOut() {
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
     state.currentUser.preferredShift = data.shiftPeriod || state.currentUser.preferredShift;
+    await loadMeState();
+    await loadAdminDashboard(true);
   } else {
     state.currentUser.hours += state.currentUser.todayHours;
     showToast("Sortie de service sauvegardee localement, verifie le serveur.", true);
@@ -1013,6 +880,23 @@ async function addExpense() {
   updateAll();
 }
 
+async function deleteExpense(expenseId) {
+  if (!state.isAdmin || !expenseId) return;
+  const response = await fetch(`/api/admin-expense/${expenseId}`, {
+    method: "DELETE",
+    credentials: "include"
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible de supprimer la depense.", true);
+    return;
+  }
+
+  expenses = expenses.filter((expense) => expense.id !== expenseId);
+  showToast("Depense supprimee.");
+  updateAll();
+}
+
 async function togglePartCostEdit() {
   if (!elements.partCost || !elements.editPartCost) return;
   const currentlyReadonly = elements.partCost.hasAttribute("readonly");
@@ -1052,14 +936,16 @@ async function sendPayslipByDiscord(employee) {
 
 async function markEmployeePaid(employeeIndex) {
   const employee = employees[employeeIndex];
-  if (!employee || employee.hours <= 0) return;
+  if (!employee || getEmployeeEffectiveHours(employee) <= 0) return;
 
   const paidDate = new Date();
-  const fallbackAmount = Number((employee.hours * employee.hourlyRate).toFixed(2));
+  const payableHours = getEmployeeEffectiveHours(employee);
+  const payableRate = Number(employee.hourlyRate || getRoleRate(employee.roleName));
+  const fallbackAmount = Math.round(payableHours * payableRate);
   let payoutId = null;
   let amountPaid = fallbackAmount;
-  let hoursPaid = employee.hours;
-  let hourlyRate = employee.hourlyRate;
+  let hoursPaid = payableHours;
+  let hourlyRate = payableRate;
 
   if (state.isAdmin && employee.id) {
     const response = await fetch("/api/admin-pay-employee", {
@@ -1073,8 +959,8 @@ async function markEmployeePaid(employeeIndex) {
       const data = await response.json();
       payoutId = data.payoutId || null;
       amountPaid = Number(data.amountPaid || fallbackAmount);
-      hoursPaid = Number(data.hoursPaid || employee.hours);
-      hourlyRate = Number(data.hourlyRate || employee.hourlyRate);
+      hoursPaid = Number(data.hoursPaid || payableHours);
+      hourlyRate = Number(data.hourlyRate || payableRate);
     }
   }
 
@@ -1159,7 +1045,12 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (!saveButton) return;
   const roleName = saveButton.dataset.roleName;
   const input = elements.roleRatesBody.querySelector(`.role-rate-input[data-role-name="${roleName}"]`);
-  updateRoleRate(roleName, Number(input?.value));
+  const nextValue = Number(input?.value);
+  if (!input?.value.trim()) {
+    showToast("Entre un salaire avant de sauvegarder.", true);
+    return;
+  }
+  updateRoleRate(roleName, nextValue);
   if (input) input.value = "";
 });
 
@@ -1172,11 +1063,21 @@ elements.statsBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
+elements.expenseBody?.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest(".delete-expense-button");
+  if (!deleteButton) return;
+  deleteExpense(deleteButton.dataset.expenseId);
+});
+
 [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 
 window.addEventListener("hashchange", routeToCurrentPage);
+window.addEventListener("beforeunload", () => {
+  stopLiveTimer();
+  stopAdminRefresh();
+});
 
 updateAll();
 loadAuthSession();

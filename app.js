@@ -4,15 +4,6 @@ let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 const chartState = {};
-const chartPalette = {
-  text: "#1b2533",
-  muted: "#7d8898",
-  grid: "rgba(163, 178, 201, 0.18)",
-  blue: "#4b7cf6",
-  blueSoft: "rgba(75, 124, 246, 0.15)",
-  teal: "#30c4a3",
-  orange: "#f4a249"
-};
 
 const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
@@ -53,7 +44,6 @@ const state = {
 
 const elements = {
   topbarRolePill: document.getElementById("topbar-role-pill"),
-  botStatusPill: document.getElementById("bot-status-pill"),
   activeCount: document.getElementById("active-count"),
   weeklyHours: document.getElementById("weekly-hours"),
   totalPayroll: document.getElementById("total-payroll"),
@@ -111,30 +101,6 @@ const elements = {
   pages: Array.from(document.querySelectorAll(".app-page"))
 };
 
-const doughnutCenterTextPlugin = {
-  id: "doughnutCenterText",
-  afterDraw(chart, args, pluginOptions) {
-    if (chart.config.type !== "doughnut") return;
-    const meta = chart.getDatasetMeta(0);
-    if (!meta?.data?.length) return;
-
-    const { ctx } = chart;
-    const centerPoint = meta.data[0];
-    const value = pluginOptions?.value || "0h";
-    const label = pluginOptions?.label || "Heures";
-
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.fillStyle = chartPalette.text;
-    ctx.font = '800 30px "Manrope"';
-    ctx.fillText(value, centerPoint.x, centerPoint.y - 2);
-    ctx.fillStyle = chartPalette.muted;
-    ctx.font = '600 12px "Manrope"';
-    ctx.fillText(label, centerPoint.x, centerPoint.y + 22);
-    ctx.restore();
-  }
-};
-
 function setText(element, value) {
   if (element) element.textContent = value;
 }
@@ -159,12 +125,6 @@ function showToast(message, isError = false) {
   }, 2800);
 }
 
-function setPillState(element, text, tone = "default") {
-  if (!element) return;
-  element.textContent = text;
-  element.className = `status-pill${tone === "default" ? "" : ` ${tone}`}`;
-}
-
 function destroyChart(key) {
   if (chartState[key]) {
     chartState[key].destroy();
@@ -185,10 +145,6 @@ function formatHoursMinutes(hoursValue) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-}
-
-function formatCompactHours(hoursValue) {
-  return `${Number(hoursValue || 0).toFixed(1)}h`;
 }
 
 function normaliseRole(roleValue) {
@@ -302,24 +258,6 @@ function updateLivePunchMetrics() {
   setText(elements.todayPay, formatMoney(elapsedHours * state.currentUser.hourlyRate));
 }
 
-async function refreshBotStatus() {
-  if (!elements.botStatusPill) return;
-  const response = await fetch("/api/bot-status", { credentials: "include" }).catch(() => null);
-  if (!response?.ok) {
-    setPillState(elements.botStatusPill, "Bot indisponible", "danger");
-    return;
-  }
-
-  const data = await response.json().catch(() => null);
-  if (data?.online) {
-    setPillState(elements.botStatusPill, data.tag ? `Bot en ligne | ${data.tag}` : "Bot en ligne", "success");
-  } else if (data?.configured) {
-    setPillState(elements.botStatusPill, "Bot configure mais hors ligne", "danger");
-  } else {
-    setPillState(elements.botStatusPill, "Bot non configure", "info");
-  }
-}
-
 function startLiveTimer() {
   if (liveTimerId) clearInterval(liveTimerId);
   if (!state.punchedIn || !activeShiftStartedAt) return;
@@ -400,8 +338,7 @@ function renderSimulation() {
   const remainingProfit = revenue - extraExpenses - currentPayroll;
   const gap = possiblePayroll - currentPayroll;
   const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
-  const projectedHours = totalHours > 0 ? totalHours : employees.length * 35;
-  const recommendedHourly = projectedHours > 0 ? possiblePayroll / projectedHours : 0;
+  const recommendedHourly = totalHours > 0 ? possiblePayroll / totalHours : 0;
   const roleCounts = roleOrder
     .map((roleName) => {
       const count = employees.filter((employee) => employee.roleName === roleName).length;
@@ -421,9 +358,8 @@ function renderSimulation() {
 
   let recommendation = "A analyser";
   if (revenue <= 0) recommendation = "Entre un revenu pour simuler";
-  else if (!employees.length) recommendation = "Ajoute au moins un employe pour lancer une simulation fiable";
-  else if (totalHours <= 0) recommendation = `Projection automatique basee sur 35h par employe (${employees.length} employe${employees.length > 1 ? "s" : ""})`;
-  else recommendation = `Taux moyen recommande: ${formatMoney(recommendedHourly)}/h pour tenir ton profit cible`;
+  else if (totalHours <= 0) recommendation = "Aucune heure enregistree pour calculer un taux";
+  else recommendation = `Recommendation moyenne: ${formatMoney(recommendedHourly)}/h`;
 
   setText(elements.simRecommendation, recommendation);
 }
@@ -528,55 +464,53 @@ function renderShiftState() {
 function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
   if (!canvas || typeof Chart === "undefined") return;
+
+  const page = document.getElementById("page-tableau");
+  const parent = canvas.parentElement;
+  if (!page?.classList.contains("active-page") || !parent || parent.offsetWidth === 0) {
+    destroyChart("shift");
+    return;
+  }
+
   const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
     employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
   );
-  const totalHours = buckets.reduce((sum, value) => sum + value, 0);
 
   destroyChart("shift");
   chartState.shift = new Chart(canvas, {
     type: "doughnut",
-    plugins: [doughnutCenterTextPlugin],
     data: {
       labels: ["Jour", "Soir", "Nuit"],
       datasets: [{
         data: buckets,
-        backgroundColor: [chartPalette.teal, chartPalette.blue, chartPalette.orange],
-        borderColor: "#ffffff",
-        borderWidth: 6,
-        borderRadius: 10,
-        spacing: 4,
-        hoverOffset: 4
+        backgroundColor: ["#31c6a7", "#4f8df5", "#f59f44"],
+        borderColor: "#2b2f38",
+        borderWidth: 4,
+        hoverOffset: 8
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: "72%",
+      animation: false,
+      resizeDelay: 150,
+      cutout: "66%",
       plugins: {
-        doughnutCenterText: {
-          value: totalHours ? formatCompactHours(totalHours) : "0h",
-          label: "Heures cumulees"
-        },
         legend: {
-          position: "bottom",
+          position: "right",
           labels: {
-            color: chartPalette.text,
-            usePointStyle: true,
-            pointStyle: "circle",
-            boxWidth: 10,
+            color: "#d9e1ee",
+            boxWidth: 14,
             padding: 18,
             font: { family: "Manrope", size: 12, weight: "700" }
           }
         },
         tooltip: {
-          backgroundColor: "#182232",
-          titleColor: "#f8fbff",
-          bodyColor: "#f8fbff",
-          borderColor: "#24364f",
+          backgroundColor: "#1d2430",
+          titleColor: "#f2f5fb",
+          bodyColor: "#f2f5fb",
+          borderColor: "#3b4b63",
           borderWidth: 1,
-          padding: 12,
-          cornerRadius: 12,
           callbacks: {
             label(context) {
               return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
@@ -592,6 +526,13 @@ function drawTrendChart() {
   const canvas = elements.analysisChart;
   if (!canvas || typeof Chart === "undefined") return;
 
+  const page = document.getElementById("page-tableau");
+  const parent = canvas.parentElement;
+  if (!page?.classList.contains("active-page") || !parent || parent.offsetWidth === 0) {
+    destroyChart("trend");
+    return;
+  }
+
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - index));
@@ -600,13 +541,7 @@ function drawTrendChart() {
     const totalHours = shifts
       .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === key)
       .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
-    const previousDate = new Date(date);
-    previousDate.setDate(previousDate.getDate() - 7);
-    const previousKey = previousDate.toISOString().slice(0, 10);
-    const previousHours = shifts
-      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === previousKey)
-      .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
-    return { label, totalHours, previousHours };
+    return { label, totalHours };
   });
 
   destroyChart("trend");
@@ -614,59 +549,35 @@ function drawTrendChart() {
     type: "line",
     data: {
       labels: days.map((day) => day.label),
-      datasets: [
-        {
-          label: "Semaine actuelle",
-          data: days.map((day) => Number(day.totalHours.toFixed(2))),
-          borderColor: chartPalette.blue,
-          backgroundColor: "rgba(75, 124, 246, 0.12)",
-          pointBackgroundColor: "#ffffff",
-          pointBorderColor: chartPalette.blue,
-          pointBorderWidth: 3,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          tension: 0.34,
-          fill: true
-        },
-        {
-          label: "Semaine precedente",
-          data: days.map((day) => Number(day.previousHours.toFixed(2))),
-          borderColor: chartPalette.orange,
-          backgroundColor: "rgba(244, 162, 73, 0.08)",
-          pointBackgroundColor: "#ffffff",
-          pointBorderColor: chartPalette.orange,
-          pointBorderWidth: 3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          tension: 0.34,
-          fill: false
-        }
-      ]
+      datasets: [{
+        label: "Heures fermees",
+        data: days.map((day) => Number(day.totalHours.toFixed(2))),
+        borderColor: "#7cb6ff",
+        backgroundColor: "rgba(124, 182, 255, 0.12)",
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: "#7cb6ff",
+        pointBorderWidth: 2,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        tension: 0.35,
+        fill: true
+      }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
+      resizeDelay: 150,
       plugins: {
         legend: {
-          position: "top",
-          align: "end",
-          labels: {
-            color: chartPalette.text,
-            usePointStyle: true,
-            pointStyle: "circle",
-            boxWidth: 10,
-            padding: 18,
-            font: { family: "Manrope", size: 12, weight: "700" }
-          }
+          display: false
         },
         tooltip: {
-          backgroundColor: "#182232",
-          titleColor: "#f8fbff",
-          bodyColor: "#f8fbff",
-          borderColor: "#24364f",
+          backgroundColor: "#1d2430",
+          titleColor: "#f2f5fb",
+          bodyColor: "#f2f5fb",
+          borderColor: "#3b4b63",
           borderWidth: 1,
-          padding: 12,
-          cornerRadius: 12,
           callbacks: {
             label(context) {
               return `Heures: ${formatHoursMinutes(context.raw || 0)}`;
@@ -676,15 +587,15 @@ function drawTrendChart() {
       },
       scales: {
         x: {
-          grid: { color: chartPalette.grid, drawBorder: false },
-          ticks: { color: chartPalette.muted, font: { family: "Manrope", size: 11, weight: "700" } }
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#aeb8c9", font: { family: "Manrope", size: 11 } }
         },
         y: {
           beginAtZero: true,
-          grid: { color: chartPalette.grid, drawBorder: false },
+          grid: { color: "rgba(255,255,255,0.06)" },
           ticks: {
-            color: chartPalette.muted,
-            font: { family: "Manrope", size: 11, weight: "700" },
+            color: "#aeb8c9",
+            font: { family: "Manrope", size: 11 },
             callback(value) {
               return `${value}h`;
             }
@@ -840,7 +751,6 @@ async function loadAuthSession() {
     setText(elements.demoUserText, "Connexion Discord indisponible");
     setStatusDot(false);
   }
-  await refreshBotStatus();
   updateAll();
 }
 
@@ -919,36 +829,18 @@ async function adjustEmployeeHours(employeeIndex, hoursValue) {
 
 async function punchIn() {
   if (!state.currentUser) return;
-  if (elements.punchIn) {
-    elements.punchIn.disabled = true;
-    elements.punchIn.textContent = "Connexion...";
-  }
   state.punchedIn = true;
   state.currentUser.active = true;
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = Date.now();
   updateAll();
-  const response = await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => null);
-  if (!response?.ok) {
-    state.punchedIn = false;
-    state.currentUser.active = false;
-    activeShiftStartedAt = null;
+  await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => {
     showToast("Erreur pendant l'entree en service.", true);
-  } else {
-    await loadMeState();
-  }
-  if (elements.punchIn) {
-    elements.punchIn.textContent = "Entrer en service";
-  }
-  updateAll();
+  });
 }
 
 async function punchOut() {
   if (!state.currentUser) return;
-  if (elements.punchOut) {
-    elements.punchOut.disabled = true;
-    elements.punchOut.textContent = "Synchronisation...";
-  }
   state.punchedIn = false;
   state.currentUser.active = false;
   stopLiveTimer();
@@ -965,9 +857,6 @@ async function punchOut() {
   }
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = null;
-  if (elements.punchOut) {
-    elements.punchOut.textContent = "Sortir du service";
-  }
   updateAll();
 }
 

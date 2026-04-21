@@ -81,6 +81,11 @@ input, button, a { font: inherit; }
 .nav-item-highlight { color: #7cc8ff; }
 .nav-item-danger { color: #ffb1b1; }
 
+.nav-item-highlight.active {
+  background: rgba(79, 141, 245, 0.16);
+  border-color: rgba(79, 141, 245, 0.22);
+}
+
 .main-panel { padding: 26px; }
 
 .page-kicker,
@@ -420,6 +425,7 @@ input[readonly] {
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 14px 10px; border-bottom: 1px solid var(--line); }
 th { color: #7990a4; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.74rem; }
+td { color: var(--text); }
 
 .table-button {
   min-height: 36px;
@@ -454,8 +460,8 @@ th { color: #7990a4; text-transform: uppercase; letter-spacing: 0.08em; font-siz
 }
 
 .reboot-card {
-  background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
-  border-color: #f2d8d8;
+  background: linear-gradient(180deg, #3a272b 0%, #32262a 100%);
+  border-color: #5b3a42;
 }
 
 .reboot-main-button {

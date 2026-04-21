@@ -10,6 +10,10 @@ const { getSupabase } = require("./netlify/functions/lib/supabase");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_HOURLY_RATE = 25;
+const ADMIN_ROLE_FALLBACKS = {
+  "417605116070461442": "Patron",
+  "893278269170933810": "Copatron"
+};
 const ROLE_DEFINITIONS = [
   { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
   { name: "Copatron", id: "1487666934412611594", hourlyRate: 45, isAdmin: true },
@@ -93,6 +97,42 @@ async function getRoleRates(supabase) {
 
 function resolveMemberRole(memberRoles) {
   return ROLE_DEFINITIONS.find((role) => memberRoles.includes(role.id)) || ROLE_DEFINITIONS[3];
+}
+
+function getAdminFallbackRole(discordId) {
+  const roleName = ADMIN_ROLE_FALLBACKS[discordId];
+  return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
+}
+
+async function sendActivityWebhook(type, payload) {
+  const webhookUrl = process.env.DISCORD_ACTIVITY_WEBHOOK_URL || "https://discord.com/api/webhooks/1495960759883141130/E5UCgZJA07T7UlRcKmW3uCJp1OJ9GyOIa42E-9mKK1CekjNB9Qe1tKjdnSgyFQOy1Z8e";
+  if (!webhookUrl) return;
+
+  const isPunchIn = type === "punch_in";
+  const embed = {
+    title: isPunchIn ? "Employe entre en service" : "Employe sort de service",
+    color: isPunchIn ? 0x31c6a7 : 0xd94b4b,
+    fields: [
+      { name: "Employe", value: payload.displayName || payload.username || "Inconnu", inline: true },
+      { name: "Role", value: payload.roleName || "Inconnu", inline: true },
+      { name: "Discord ID", value: payload.discordId || "-", inline: false },
+      { name: isPunchIn ? "Entree en service" : "Sortie de service", value: payload.timestampLabel || "-", inline: true }
+    ],
+    timestamp: new Date().toISOString()
+  };
+
+  if (!isPunchIn) {
+    embed.fields.push(
+      { name: "Heure d'entree", value: payload.punchedInLabel || "-", inline: true },
+      { name: "Heures travaillees", value: `${Number(payload.durationHours || 0).toFixed(2)} h`, inline: true }
+    );
+  }
+
+  await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ embeds: [embed] })
+  }).catch(() => {});
 }
 
 async function buildEmployeeSnapshots(supabase) {
@@ -229,6 +269,20 @@ app.get("/auth/discord/callback", async (req, res) => {
         roleName = resolvedRole.name;
         roleId = resolvedRole.id;
         isAdmin = isAdmin || resolvedRole.isAdmin;
+      } else {
+        const fallbackRole = getAdminFallbackRole(profile.id);
+        if (fallbackRole) {
+          roleName = fallbackRole.name;
+          roleId = fallbackRole.id;
+          isAdmin = true;
+        }
+      }
+    } else {
+      const fallbackRole = getAdminFallbackRole(profile.id);
+      if (fallbackRole) {
+        roleName = fallbackRole.name;
+        roleId = fallbackRole.id;
+        isAdmin = true;
       }
     }
 
@@ -324,6 +378,14 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
       }
     }
 
+    await sendActivityWebhook("punch_in", {
+      displayName: req.session.displayName || req.session.username,
+      username: req.session.username,
+      roleName,
+      discordId: req.session.discordId,
+      timestampLabel: new Date().toLocaleString("fr-CA")
+    });
+
     res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
@@ -389,6 +451,16 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
     if (updateEmployeeError) {
       return res.status(500).send(updateEmployeeError.message);
     }
+
+    await sendActivityWebhook("punch_out", {
+      displayName: req.session.displayName || req.session.username,
+      username: req.session.username,
+      roleName: req.session.roleName || employee.role,
+      discordId: req.session.discordId,
+      timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
+      punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
+      durationHours
+    });
 
     res.json({ ok: true, durationHours, shiftPeriod });
   } catch (error) {
@@ -484,6 +556,41 @@ app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
     }
 
     res.json({ ok: true, roleRates: merged });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-adjust-employee-hours", requireAdmin, async (req, res) => {
+  try {
+    const employeeId = req.body?.employeeId;
+    const totalHours = Number(req.body?.totalHours);
+    if (!employeeId || !Number.isFinite(totalHours) || totalHours < 0) {
+      return res.status(400).send("Parametres invalides.");
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("employees")
+      .update({ total_hours: totalHours, is_active: false })
+      .eq("id", employeeId);
+
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-part-settings", requireAdmin, async (req, res) => {
+  try {
+    const fixedCost = Number(req.body?.fixedCost || 105) || 105;
+    const supabase = getSupabase();
+    await upsertSetting(supabase, "part_settings", { fixedCost });
+    res.json({ ok: true, fixedCost });
   } catch (error) {
     res.status(500).send(error.message);
   }

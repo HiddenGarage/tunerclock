@@ -18,6 +18,48 @@ const chartPalette = {
 
 const routes = ["tableau", "pointage", "presence", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "logs", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
+const garageParts = [
+  { code: "engine_oil", name: "Engine Oil", category: "Entretien" },
+  { code: "tyre_replacement", name: "Tyre Replacement", category: "Entretien" },
+  { code: "clutch_replacement", name: "Clutch Replacement", category: "Entretien" },
+  { code: "air_filter", name: "Air Filter", category: "Entretien" },
+  { code: "spark_plug", name: "Spark Plug", category: "Entretien" },
+  { code: "brakepad_replacement", name: "Brakepad Replacement", category: "Entretien" },
+  { code: "suspension_parts", name: "Suspension Parts", category: "Entretien" },
+  { code: "i4_engine", name: "I4 Engine", category: "Moteur" },
+  { code: "v6_engine", name: "V6 Engine", category: "Moteur" },
+  { code: "v8_engine", name: "V8 Engine", category: "Moteur" },
+  { code: "v12_engine", name: "V12 Engine", category: "Moteur" },
+  { code: "turbocharger", name: "Turbocharger", category: "Performance" },
+  { code: "ev_motor", name: "EV Motor", category: "Electrique" },
+  { code: "ev_battery", name: "EV Battery", category: "Electrique" },
+  { code: "ev_coolant", name: "EV Coolant", category: "Electrique" },
+  { code: "awd_drivetrain", name: "AWD Drivetrain", category: "Transmission" },
+  { code: "rwd_drivetrain", name: "RWD Drivetrain", category: "Transmission" },
+  { code: "fwd_drivetrain", name: "FWD Drivetrain", category: "Transmission" },
+  { code: "slick_tyres", name: "Slick Tyres", category: "Pneus" },
+  { code: "semi_slick_tyres", name: "Semi Slick Tyres", category: "Pneus" },
+  { code: "offroad_tyres", name: "Offroad Tyres", category: "Pneus" },
+  { code: "drift_tuning_kit", name: "Drift Tuning Kit", category: "Performance" },
+  { code: "ceramic_brakes", name: "Ceramic Brakes", category: "Performance" },
+  { code: "lighting_controller", name: "Lighting Controller", category: "Cosmetique" },
+  { code: "stancing_kit", name: "Stancer Kit", category: "Cosmetique" },
+  { code: "cosmetic_part", name: "Cosmetic Parts", category: "Cosmetique" },
+  { code: "respray_kit", name: "Respray Kit", category: "Cosmetique" },
+  { code: "vehicle_wheels", name: "Vehicle Wheels Set", category: "Cosmetique" },
+  { code: "tyre_smoke_kit", name: "Tyre Smoke Kit", category: "Cosmetique" },
+  { code: "bulletproof_tyres", name: "Bulletproof Tyres", category: "Pneus" },
+  { code: "extras_kit", name: "Extras Kit", category: "Cosmetique" },
+  { code: "nitrous_bottle", name: "Nitrous Bottle", category: "Nitro" },
+  { code: "empty_nitrous_bottle", name: "Empty Nitrous Bottle", category: "Nitro" },
+  { code: "nitrous_install_kit", name: "Nitrous Install Kit", category: "Nitro" },
+  { code: "cleaning_kit", name: "Cleaning Kit", category: "Atelier" },
+  { code: "repair_kit", name: "Repair Kit", category: "Atelier" },
+  { code: "duct_tape", name: "Duct Tape", category: "Atelier" },
+  { code: "performance_part", name: "Performance Parts", category: "Performance" },
+  { code: "mechanic_tablet", name: "Mechanic Tablet", category: "Outils" },
+  { code: "manual_gearbox", name: "Manual Gearbox", category: "Transmission" }
+];
 const roleIdMap = {
   Patron: "1487868408228741171",
   Copatron: "1487666934412611594",
@@ -27,13 +69,13 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord professionnel du garage",
-  pointage: "Pointage personnel",
+  pointage: "Punch personnel",
   presence: "Presence live",
-  stats: "Statistiques employes",
-  gestion: "Gestion du garage",
+  stats: "Statistiques",
+  gestion: "Gestion Paie",
   salaire: "Salaires par role",
-  finance: "Finance du garage",
-  pieces: "Commandes de pieces",
+  finance: "Ajouts du garage",
+  pieces: "Commandes",
   analyse: "Analyse rentabilite",
   logs: "Audit logs",
   reboot: "Reboot du systeme"
@@ -93,6 +135,7 @@ const elements = {
   addExpense: document.getElementById("add-expense"),
   editPartCost: document.getElementById("edit-part-cost"),
   partName: document.getElementById("part-name"),
+  partQuantity: document.getElementById("part-quantity"),
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
   partNote: document.getElementById("part-note"),
@@ -210,6 +253,27 @@ function normaliseRole(roleValue) {
 
 function getRoleRate(roleName) {
   return Number(state.roleRates[normaliseRole(roleName)] || 0);
+}
+
+function populatePartOptions() {
+  if (!elements.partName || elements.partName.dataset.loaded === "true") return;
+  elements.partName.innerHTML = [
+    `<option value="">Selectionner une piece</option>`,
+    ...garageParts.map((part) => `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`)
+  ].join("");
+  elements.partName.dataset.loaded = "true";
+}
+
+function getSelectedPart() {
+  const selectedCode = elements.partName?.value || "";
+  return garageParts.find((part) => part.code === selectedCode) || null;
+}
+
+function syncSelectedPartCategory() {
+  const part = getSelectedPart();
+  if (part && elements.partCategory) {
+    elements.partCategory.value = part.category;
+  }
 }
 
 function normaliseEmployeeRecord(record) {
@@ -513,7 +577,7 @@ function renderPresenceList() {
 function renderExpenseTable() {
   if (!elements.expenseBody) return;
   if (!expenses.length) {
-    setHtml(elements.expenseBody, `<tr><td colspan="4">Aucune depense enregistree.</td></tr>`);
+    setHtml(elements.expenseBody, `<tr><td colspan="5">Aucune commande enregistree.</td></tr>`);
     return;
   }
 
@@ -521,6 +585,7 @@ function renderExpenseTable() {
     <tr>
       <td>${expense.name}</td>
       <td>${expense.category}</td>
+      <td>${Number(expense.quantity || 1)}</td>
       <td>${formatMoney(expense.cost)}</td>
       <td>${expense.note || "-"}</td>
     </tr>
@@ -567,6 +632,7 @@ function formatAuditAction(action) {
     employee_hours_adjusted: "Heures ajustees",
     shift_force_closed: "Sortie forcee",
     reminder_sent: "Rappel envoye",
+    part_order_added: "Commande piece ajoutee",
     employee_paid: "Employe paye",
     system_reboot: "Reboot complet"
   };
@@ -864,7 +930,10 @@ async function loadAdminDashboard() {
     expenses = (data.expenses || []).map((entry) => ({
       id: entry.id,
       name: entry.name,
+      itemCode: entry.item_code || entry.itemCode || "",
       category: entry.category || "Pieces",
+      quantity: Number(entry.quantity || 1),
+      unitCost: Number(entry.unit_cost || entry.unitCost || entry.cost || 105),
       cost: Number(entry.cost || 105),
       note: entry.note || "-"
     }));
@@ -1186,13 +1255,26 @@ async function punchOut() {
 }
 
 async function addExpense() {
-  const name = elements.partName?.value.trim();
-  const category = elements.partCategory?.value.trim() || "Pieces";
-  const note = elements.partNote?.value.trim() || "-";
-  if (!name) return;
+  const selectedPart = getSelectedPart();
+  if (!selectedPart) {
+    showToast("Selectionne une piece avant d'ajouter la commande.", true);
+    return;
+  }
 
-  const fixedCost = Number(elements.partCost?.value || 105) || 105;
-  let nextExpense = { name, category, cost: fixedCost, note };
+  const quantity = Math.max(1, Math.round(Number(elements.partQuantity?.value || 1) || 1));
+  const unitCost = Number(elements.partCost?.value || 105) || 105;
+  const category = elements.partCategory?.value.trim() || selectedPart.category || "Pieces";
+  const note = elements.partNote?.value.trim() || "-";
+  const totalCost = unitCost * quantity;
+  let nextExpense = {
+    name: selectedPart.name,
+    itemCode: selectedPart.code,
+    category,
+    quantity,
+    unitCost,
+    cost: totalCost,
+    note
+  };
   if (state.isAdmin) {
     const response = await fetch("/api/admin-expense", {
       method: "POST",
@@ -1207,8 +1289,11 @@ async function addExpense() {
         nextExpense = {
           id: data.expense.id,
           name: data.expense.name,
+          itemCode: data.expense.item_code || data.expense.itemCode || selectedPart.code,
           category: data.expense.category,
-          cost: Number(data.expense.cost || 105),
+          quantity: Number(data.expense.quantity || quantity),
+          unitCost: Number(data.expense.unit_cost || data.expense.unitCost || unitCost),
+          cost: Number(data.expense.cost || totalCost),
           note: data.expense.note || "-"
         };
       }
@@ -1217,9 +1302,10 @@ async function addExpense() {
 
   expenses.unshift(nextExpense);
   setValue(elements.partName, "");
+  setValue(elements.partQuantity, "1");
   setValue(elements.partCategory, "");
   setValue(elements.partNote, "");
-  showToast("Depense piece ajoutee.");
+  showToast(`Commande ajoutee: ${quantity} x ${selectedPart.name}.`);
   updateAll();
 }
 
@@ -1339,6 +1425,7 @@ async function rebootAllData() {
   state.punchedIn = false;
   activeShiftStartedAt = null;
   [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.partName, elements.partCategory, elements.partNote].forEach((element) => setValue(element, ""));
+  setValue(elements.partQuantity, "1");
   setValue(elements.partCost, "105");
   showToast("Reboot complet effectue.");
   await loadAuditLogs();
@@ -1353,6 +1440,7 @@ elements.saveFinance?.addEventListener("click", saveFinanceSettings);
 elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
+elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.rebootAll?.addEventListener("click", rebootAllData);
 
 elements.leaderboardBody?.addEventListener("click", (event) => {
@@ -1404,5 +1492,6 @@ elements.presenceBody?.addEventListener("click", (event) => {
 
 window.addEventListener("hashchange", routeToCurrentPage);
 
+populatePartOptions();
 updateAll();
 loadAuthSession();

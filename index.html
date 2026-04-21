@@ -113,7 +113,7 @@
                 <p class="muted">Poids des heures Jour / Soir / Nuit dans l'entreprise.</p>
               </div>
             </div>
-            <div class="chart-frame donut-frame"><canvas id="shift-chart"></canvas></div>
+            <canvas id="shift-chart" width="720" height="320"></canvas>
           </article>
 
           <article class="card card-span-3 chart-card large-chart-card">
@@ -123,7 +123,7 @@
                 <p class="muted">Evolution recente des heures fermees et de la cadence atelier.</p>
               </div>
             </div>
-            <div class="chart-frame line-frame"><canvas id="analysis-chart"></canvas></div>
+            <canvas id="analysis-chart" width="1280" height="300"></canvas>
           </article>
         </div>
       </section>
@@ -157,6 +157,14 @@
             <div class="pointage-meter pointage-main-meter blue-meter">
               <span>Argent gagne en direct</span>
               <strong id="today-pay">$0.00</strong>
+            </div>
+            <div class="pointage-meter pointage-sub-meter">
+              <span>Heures accumulees</span>
+              <strong id="personal-total-hours">0h 00m</strong>
+            </div>
+            <div class="pointage-meter pointage-sub-meter blue-meter">
+              <span>Argent accumule estime</span>
+              <strong id="personal-total-pay">$0.00</strong>
             </div>
           </div>
         </article>

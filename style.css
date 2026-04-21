@@ -739,3 +739,9 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Charts removed intentionally to avoid layout bugs */
+.enterprise-hero {
+  grid-column: 1 / -1;
+}

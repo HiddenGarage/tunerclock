@@ -25,7 +25,7 @@
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Ajouts</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Commandes</a>
-        <a href="#analyse" class="nav-item nav-item-highlight" data-route="analyse" data-admin-only="true">Analyse</a>
+        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Analyse</a>
         <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
@@ -180,12 +180,11 @@
                   <tr>
                     <th>Employe</th>
                     <th>Role</th>
-                    <th>Heures</th>
+                    <th>Heures (clic pour modifier)</th>
                     <th>Jours actifs</th>
                     <th>Quart fort</th>
                     <th>Taux horaire</th>
                     <th>Paie estimee</th>
-                    <th>Ajuster heures</th>
                   </tr>
                 </thead>
                 <tbody id="stats-body"></tbody>
@@ -354,6 +353,7 @@
                 <input id="part-note" type="text" placeholder="Urgent, client, stock">
               </div>
             </div>
+            <div id="part-preview" class="part-preview"></div>
             <div class="parts-actions">
               <button id="add-expense" class="primary-button">Ajouter la commande</button>
             </div>

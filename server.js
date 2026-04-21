@@ -3,7 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const { Client, GatewayIntentBits, ActivityType, SlashCommandBuilder } = require("discord.js");
+const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const { encodeSession, decodeSession, parseCookies, buildCookie } = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
@@ -121,236 +121,32 @@ function getAdminFallbackRole(discordId) {
   return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
 }
 
-function buildDiscordSession(profile, memberRoles = [], memberNickname = null) {
-  const fallbackRole = getAdminFallbackRole(profile.id);
-  const resolvedRole = memberRoles.length ? resolveMemberRole(memberRoles) : (fallbackRole || ROLE_DEFINITIONS[3]);
-  const displayName = memberNickname || profile.global_name || profile.username;
-
-  return {
-    discordId: profile.id,
-    username: profile.username,
-    displayName,
-    roleName: resolvedRole.name,
-    roleId: resolvedRole.id,
-    avatar: profile.avatar || null,
-    isAdmin: getAdminIds().includes(profile.id) || resolvedRole.isAdmin || Boolean(fallbackRole)
-  };
-}
-
-async function punchInForSession(session) {
-  const supabase = getSupabase();
-  const roleRates = await getRoleRates(supabase);
-  const roleName = session.roleName || "Mecano";
-  const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
-  const { data: employee, error: employeeError } = await supabase
-    .from("employees")
-    .upsert({
-      discord_id: session.discordId,
-      discord_name: session.displayName || session.username,
-      role: roleName,
-      hourly_rate: roleRate,
-      is_active: true
-    }, { onConflict: "discord_id" })
-    .select()
-    .single();
-
-  if (employeeError) throw new Error(employeeError.message);
-
-  const { data: existingActive, error: existingActiveError } = await supabase
-    .from("shifts")
-    .select("id, punched_in_at")
-    .eq("employee_id", employee.id)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-
-  if (existingActiveError) throw new Error(existingActiveError.message);
-
-  if (existingActive) {
-    return {
-      ok: true,
-      alreadyActive: true,
-      employee,
-      punchedInAt: existingActive.punched_in_at
-    };
-  }
-
-  const punchedInAt = new Date().toISOString();
-  const { error: shiftError } = await supabase.from("shifts").insert({
-    employee_id: employee.id,
-    punched_in_at: punchedInAt,
-    status: "active"
-  });
-
-  if (shiftError) throw new Error(shiftError.message);
-
-  await sendActivityWebhook("punch_in", {
-    displayName: session.displayName || session.username,
-    username: session.username,
-    roleName,
-    discordId: session.discordId,
-    timestampLabel: new Date(punchedInAt).toLocaleString("fr-CA")
-  });
-
-  return { ok: true, alreadyActive: false, employee, punchedInAt };
-}
-
-async function punchOutForSession(session) {
-  const supabase = getSupabase();
-  const { data: employee, error: employeeError } = await supabase
-    .from("employees")
-    .select("*")
-    .eq("discord_id", session.discordId)
-    .single();
-
-  if (employeeError) throw new Error(employeeError.message);
-
-  const { data: shift, error: shiftError } = await supabase
-    .from("shifts")
-    .select("*")
-    .eq("employee_id", employee.id)
-    .eq("status", "active")
-    .order("punched_in_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (shiftError) throw new Error(shiftError.message);
-  if (!shift) {
-    return { ok: true, alreadyInactive: true, employee };
-  }
-
-  const punchedOutAt = new Date();
-  const punchedInAt = new Date(shift.punched_in_at);
-  const durationHours = Number(((punchedOutAt - punchedInAt) / 3600000).toFixed(2));
-  const shiftPeriod = getShiftPeriod(punchedInAt);
-
-  const { error: updateShiftError } = await supabase
-    .from("shifts")
-    .update({
-      punched_out_at: punchedOutAt.toISOString(),
-      duration_hours: durationHours,
-      shift_period: shiftPeriod,
-      status: "closed"
-    })
-    .eq("id", shift.id);
-
-  if (updateShiftError) throw new Error(updateShiftError.message);
-
-  const { error: updateEmployeeError } = await supabase
-    .from("employees")
-    .update({
-      discord_name: session.displayName || session.username,
-      role: session.roleName || employee.role,
-      is_active: false,
-      active_days: Number(employee.active_days || 0) + 1,
-      total_hours: Number(employee.total_hours || 0) + durationHours
-    })
-    .eq("id", employee.id);
-
-  if (updateEmployeeError) throw new Error(updateEmployeeError.message);
-
-  await sendActivityWebhook("punch_out", {
-    displayName: session.displayName || session.username,
-    username: session.username,
-    roleName: session.roleName || employee.role,
-    discordId: session.discordId,
-    timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
-    punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
-    durationHours
-  });
-
-  return { ok: true, alreadyInactive: false, durationHours, shiftPeriod, punchedInAt: shift.punched_in_at, punchedOutAt: punchedOutAt.toISOString(), employee };
-}
-
-async function registerSlashCommands() {
-  if (!discordClient?.application) return;
-
-  const commands = [
-    new SlashCommandBuilder()
-      .setName("in")
-      .setDescription("Se mettre en service dans TunerClock."),
-    new SlashCommandBuilder()
-      .setName("out")
-      .setDescription("Se retirer du service dans TunerClock.")
-  ].map((command) => command.toJSON());
-
-  await discordClient.application.commands.set(commands);
-}
-
-async function handleDiscordSlashCommand(interaction) {
-  if (!interaction.isChatInputCommand()) return;
-  if (!["in", "out"].includes(interaction.commandName)) return;
-
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    const session = buildDiscordSession({
-      id: interaction.user.id,
-      username: interaction.user.username,
-      global_name: interaction.user.globalName || interaction.user.displayName || interaction.user.username,
-      avatar: interaction.user.avatar
-    }, interaction.member?.roles?.cache ? [...interaction.member.roles.cache.keys()] : [], interaction.member?.nickname || null);
-
-    if (interaction.commandName === "in") {
-      const result = await punchInForSession(session);
-      if (result.alreadyActive) {
-        return interaction.editReply("Tu es deja en service.");
-      }
-      return interaction.editReply(`Tu es maintenant en service comme **${session.roleName}**.`);
-    }
-
-    const result = await punchOutForSession(session);
-    if (result.alreadyInactive) {
-      return interaction.editReply("Tu n'etais pas en service.");
-    }
-
-    return interaction.editReply(`Tu es maintenant hors service. Temps ajoute: **${Number(result.durationHours || 0).toFixed(2)} h**.`);
-  } catch (error) {
-    console.error("Erreur slash command Discord:", error.message);
-    return interaction.editReply(`Erreur: ${error.message}`);
-  }
-}
-
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
     return;
   }
 
-  if (discordClient) return;
+  if (discordClient) {
+    return;
+  }
 
   discordClient = new Client({
     intents: [GatewayIntentBits.Guilds]
   });
 
-  discordClient.once("ready", async () => {
+  discordClient.once("ready", () => {
     discordBotRuntime.online = true;
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
-
-    if (discordClient.user) {
-      try {
-        discordClient.user.setPresence({
-          activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
-          status: "online"
-        });
-      } catch (error) {
-        discordBotRuntime.error = error.message;
-        console.error("Erreur setPresence Discord:", error.message);
-      }
-    }
-
     try {
-      await registerSlashCommands();
-      console.log("Slash commands /in et /out enregistrees.");
-    } catch (error) {
-      discordBotRuntime.error = error.message;
-      console.error("Erreur enregistrement slash commands:", error.message);
-    }
+      discordClient.user.setPresence({
+        activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
+        status: "online"
+      });
+    } catch (_) {}
   });
-
-  discordClient.on("interactionCreate", handleDiscordSlashCommand);
 
   discordClient.on("error", (error) => {
     discordBotRuntime.online = false;
@@ -360,12 +156,6 @@ function startDiscordBot() {
 
   discordClient.on("shardDisconnect", () => {
     discordBotRuntime.online = false;
-  });
-
-  discordClient.on("shardError", (error) => {
-    discordBotRuntime.online = false;
-    discordBotRuntime.error = error.message;
-    console.error("Erreur shard Discord:", error.message);
   });
 
   discordClient.on("invalidated", () => {
@@ -411,21 +201,31 @@ async function sendActivityWebhook(type, payload) {
   }).catch(() => {});
 }
 
+function getStartOfTodayIso() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now.toISOString();
+}
+
 async function buildEmployeeSnapshots(supabase) {
-  const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }] = await Promise.all([
+  const todayIso = getStartOfTodayIso();
+  const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }, { data: activeShiftsToday, error: activeShiftsError }] = await Promise.all([
     supabase.from("employees").select("*").order("created_at", { ascending: true }),
-    supabase.from("shifts").select("*").order("punched_in_at", { ascending: true })
+    supabase.from("shifts").select("*").order("punched_in_at", { ascending: true }),
+    supabase.from("shifts").select("*").eq("status", "active").gte("punched_in_at", todayIso)
   ]);
 
   if (employeesError) throw employeesError;
   if (shiftsError) throw shiftsError;
+  if (activeShiftsError) throw activeShiftsError;
 
   const shiftsByEmployee = groupBy(shifts || [], (shift) => shift.employee_id);
+  const activeTodayByEmployee = groupBy(activeShiftsToday || [], (shift) => shift.employee_id);
 
   return (employees || []).map((employee) => {
     const employeeShifts = shiftsByEmployee.get(employee.id) || [];
     const closedShifts = employeeShifts.filter((shift) => shift.status === "closed");
-    const activeShift = [...employeeShifts].reverse().find((shift) => shift.status === "active") || null;
+    const activeShift = [...(activeTodayByEmployee.get(employee.id) || employeeShifts.filter((shift) => shift.status === "active"))].reverse()[0] || null;
     const shiftBuckets = { Jour: 0, Soir: 0, Nuit: 0 };
 
     closedShifts.forEach((shift) => {
@@ -563,14 +363,12 @@ app.get("/auth/discord/callback", async (req, res) => {
     }
 
     const session = {
-      ...buildDiscordSession({
-        id: profile.id,
-        username: profile.username,
-        global_name: displayName,
-        avatar: profile.avatar
-      }, roleId ? [roleId] : [], displayName),
+      discordId: profile.id,
+      username: profile.username,
+      displayName,
       roleName,
       roleId,
+      avatar: profile.avatar,
       isAdmin
     };
 
@@ -617,8 +415,54 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
 
 app.post("/api/punch-in", requireAuth, async (req, res) => {
   try {
-    const result = await punchInForSession(req.session);
-    res.json(result);
+    const supabase = getSupabase();
+    const roleRates = await getRoleRates(supabase);
+    const roleName = req.session.roleName || "Mecano";
+    const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .upsert({
+        discord_id: req.session.discordId,
+        discord_name: req.session.displayName || req.session.username,
+        role: roleName,
+        hourly_rate: roleRate,
+        is_active: true
+      }, { onConflict: "discord_id" })
+      .select()
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    const { data: existingActive } = await supabase
+      .from("shifts")
+      .select("id")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+
+    if (!existingActive) {
+      const { error: shiftError } = await supabase.from("shifts").insert({
+        employee_id: employee.id,
+        punched_in_at: new Date().toISOString(),
+        status: "active"
+      });
+      if (shiftError) {
+        return res.status(500).send(shiftError.message);
+      }
+    }
+
+    await sendActivityWebhook("punch_in", {
+      displayName: req.session.displayName || req.session.username,
+      username: req.session.username,
+      roleName,
+      discordId: req.session.discordId,
+      timestampLabel: new Date().toLocaleString("fr-CA")
+    });
+
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -626,8 +470,75 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
 
 app.post("/api/punch-out", requireAuth, async (req, res) => {
   try {
-    const result = await punchOutForSession(req.session);
-    res.json(result);
+    const supabase = getSupabase();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("discord_id", req.session.discordId)
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    const { data: shift, error: shiftError } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("punched_in_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError) {
+      return res.status(500).send(shiftError.message);
+    }
+
+    const punchedOutAt = new Date();
+    const punchedInAt = new Date(shift.punched_in_at);
+    const durationHours = Number(((punchedOutAt - punchedInAt) / 3600000).toFixed(2));
+    const shiftPeriod = getShiftPeriod(punchedInAt);
+
+    const { error: updateShiftError } = await supabase
+      .from("shifts")
+      .update({
+        punched_out_at: punchedOutAt.toISOString(),
+        duration_hours: durationHours,
+        shift_period: shiftPeriod,
+        status: "closed"
+      })
+      .eq("id", shift.id);
+
+    if (updateShiftError) {
+      return res.status(500).send(updateShiftError.message);
+    }
+
+    const { error: updateEmployeeError } = await supabase
+      .from("employees")
+      .update({
+        discord_name: req.session.displayName || req.session.username,
+        role: req.session.roleName || employee.role,
+        is_active: false,
+        active_days: Number(employee.active_days || 0) + 1,
+        total_hours: Number(employee.total_hours || 0) + durationHours
+      })
+      .eq("id", employee.id);
+
+    if (updateEmployeeError) {
+      return res.status(500).send(updateEmployeeError.message);
+    }
+
+    await sendActivityWebhook("punch_out", {
+      displayName: req.session.displayName || req.session.username,
+      username: req.session.username,
+      roleName: req.session.roleName || employee.role,
+      discordId: req.session.discordId,
+      timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
+      punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
+      durationHours
+    });
+
+    res.json({ ok: true, durationHours, shiftPeriod });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -772,6 +683,22 @@ app.post("/api/admin-finance-settings", requireAdmin, async (req, res) => {
     };
     const supabase = getSupabase();
     await upsertSetting(supabase, "finance_inputs", payload);
+
+    const { error: deleteError } = await supabase
+      .from("weekly_profit_entries")
+      .delete()
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+    if (deleteError) throw deleteError;
+
+    if (payload.weeklyProfit > 0) {
+      const { error: insertError } = await supabase.from("weekly_profit_entries").insert({
+        label: payload.calcNote || "Profit manuel",
+        amount: payload.weeklyProfit,
+        created_by_discord_id: req.session.discordId
+      });
+      if (insertError) throw insertError;
+    }
+
     res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
@@ -798,6 +725,29 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
       return res.status(500).send(error.message);
     }
     res.json({ ok: true, expense: data });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.delete("/api/admin-expense/:expenseId", requireAdmin, async (req, res) => {
+  try {
+    const expenseId = req.params.expenseId;
+    if (!expenseId) {
+      return res.status(400).send("expenseId manquant.");
+    }
+
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("expense_logs")
+      .delete()
+      .eq("id", expenseId);
+
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+
+    res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
   }

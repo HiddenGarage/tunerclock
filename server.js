@@ -144,10 +144,15 @@ function startDiscordBot() {
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
-    discordClient.user.setPresence({
-      activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
-      status: "online"
-    }).catch(() => {});
+    try {
+      discordClient.user.setPresence({
+        activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
+        status: "online"
+      });
+    } catch (error) {
+      discordBotRuntime.error = error.message;
+      console.error("Presence Discord impossible:", error.message);
+    }
   });
 
   discordClient.on("error", (error) => {

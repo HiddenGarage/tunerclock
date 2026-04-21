@@ -35,7 +35,7 @@
       <header class="topbar">
         <div>
           <p class="page-kicker">Centre des operations</p>
-          <h2 id="page-title">Tableau de bord professionnel du garage</h2>
+          <h2 id="page-title">Tableau de bord</h2>
         </div>
         <div class="topbar-tools">
           <div class="search-box">
@@ -43,7 +43,7 @@
           </div>
           <button id="logout-button" class="secondary-button topbar-button hidden">Se deconnecter</button>
           <div class="status-pill" id="bot-status-pill">Bot hors ligne</div>
-          <div class="status-pill" id="topbar-role-pill">Connexion securisee</div>
+          <div class="status-pill" id="topbar-role-pill">Connexion securise</div>
         </div>
       </header>
 
@@ -52,7 +52,7 @@
           <article class="card stat-card metric-card metric-revenue">
             <p class="section-kicker">Revenus</p>
             <h3 id="total-income">0$</h3>
-            <p class="muted">Entrees totales de l'entreprise</p>
+            <p class="muted">Totales de l'entreprise</p>
           </article>
           <article class="card stat-card metric-card metric-expenses">
             <p class="section-kicker">Depenses</p>
@@ -62,12 +62,12 @@
           <article class="card stat-card metric-card metric-payroll">
             <p class="section-kicker">Salaires dus</p>
             <h3 id="total-payroll">0$</h3>
-            <p class="muted">Montant encore payable a l'equipe</p>
+            <p class="muted">Montant payable a l'equipe</p>
           </article>
           <article class="card stat-card metric-card metric-profit">
             <p class="section-kicker">Profit brut</p>
             <h3 id="gross-profit">0$</h3>
-            <p class="muted">Resultat brut actuel du garage</p>
+            <p class="muted">Resultat brut actuel</p>
           </article>
         </div>
 
@@ -75,8 +75,8 @@
           <article class="card card-span-2 gradient-card enterprise-hero">
             <div class="card-head">
               <div>
-                <h3>Performance globale de l'entreprise</h3>
-                <p class="muted">Vue synthese des chiffres utiles: charge salariale, rentabilite, activite et cadence atelier.</p>
+                <h3>Performance globale</h3>
+                <p class="muted">Charge salariale, rentabilite, activite et cadence atelier.</p>
               </div>
               <span class="mini-pill success">Entreprise</span>
             </div>
@@ -102,7 +102,7 @@
                 <strong id="weekly-hours">0h 00m</strong>
               </div>
               <div class="summary-item">
-                <span>Leader activite</span>
+                <span>Leader</span>
                 <strong id="top-worker">-</strong>
               </div>
             </div>
@@ -111,7 +111,7 @@
           <article class="card chart-card">
             <div class="card-head">
               <div>
-                <h3>Repartition des quarts</h3>
+                <h3>Repartition</h3>
                 <p class="muted">Poids des heures Jour / Soir / Nuit dans l'entreprise.</p>
               </div>
             </div>
@@ -135,15 +135,15 @@
           <div class="pointage-head">
             <div>
               <h3>Punch personnel</h3>
-              <p id="shift-message" class="muted">Connecte-toi pour commencer ton quart.</p>
+              <p id="shift-message" class="muted">Connecte-toi pour commencer ton shift.</p>
             </div>
             <span id="shift-badge" class="mini-pill danger">Hors service</span>
           </div>
 
           <div class="button-row pointage-buttons">
-            <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
-            <button id="punch-in" class="primary-button" disabled>Entrer en service</button>
-            <button id="punch-out" class="danger-button" disabled>Sortir du service</button>
+            <button id="discord-login" class="secondary-button">Se connecter</button>
+            <button id="punch-in" class="primary-button" disabled>Punch In</button>
+            <button id="punch-out" class="danger-button" disabled>Punch Out</button>
           </div>
 
           <div class="demo-user">
@@ -153,11 +153,11 @@
 
           <div class="pointage-metrics">
             <div class="pointage-meter pointage-main-meter">
-              <span>Heures en direct</span>
+              <span>Heures</span>
               <strong id="today-hours">0h 00m</strong>
             </div>
             <div class="pointage-meter pointage-main-meter blue-meter">
-              <span>Argent gagne en direct</span>
+              <span>Argent gagne</span>
               <strong id="today-pay">0$</strong>
             </div>
           </div>
@@ -170,7 +170,7 @@
             <div class="card-head">
               <div>
                 <h3>Statistiques employes</h3>
-                <p class="muted">Vue confidentielle des heures, jours actifs, quarts forts et paie estimee.</p>
+                <p class="muted">Vue des heures, jours actifs, quarts forts et paie estimee.</p>
               </div>
               <span class="mini-pill success">Confidentiel</span>
             </div>
@@ -258,7 +258,7 @@
             <div class="card-head">
               <div>
                 <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale officielle du garage.</p>
+                <p class="muted">Chaque role a son propre taux. Modifier ici.</p>
               </div>
               <span class="mini-pill">Roles</span>
             </div>
@@ -285,7 +285,7 @@
             <div class="card-head">
               <div>
                 <h3>Ajouts du garage</h3>
-                <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
+                <p class="muted">Toutes les ajouts manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
               </div>
               <span class="mini-pill">Ajouts</span>
             </div>
@@ -307,12 +307,12 @@
                 <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="calc-note" class="input-label">Note interne</label>
+                <label for="calc-note" class="input-label">Note</label>
                 <input id="calc-note" type="text" placeholder="Note optionnelle">
               </div>
             </div>
             <div class="parts-actions">
-              <button id="save-finance" class="primary-button">Enregistrer la finance</button>
+              <button id="save-finance" class="primary-button">Enregistrer</button>
             </div>
           </article>
         </div>
@@ -381,7 +381,7 @@
             <div class="card-head">
               <div>
                 <h3>Analyse rentabilite</h3>
-                <p class="muted">Conseils automatiques selon les stats actuelles. Cette page ne modifie jamais les salaires officiels.</p>
+                <p class="muted">Conseils automatiques selon les stats actuelles.</p>
               </div>
               <span class="mini-pill success">Conseil</span>
             </div>
@@ -412,7 +412,7 @@
               </div>
             </div>
             <div class="parts-actions">
-              <button id="save-analysis" class="primary-button">Enregistrer l'analyse</button>
+              <button id="save-analysis" class="primary-button">Enregistrer</button>
             </div>
           </article>
 
@@ -424,12 +424,12 @@
           <article class="card stat-card metric-card metric-revenue">
             <p class="section-kicker">Prix revente conseille</p>
             <h3 id="sim-recommended-hourly">0$</h3>
-            <p class="muted">Prix minimum pour garder une marge saine.</p>
+            <p class="muted">Prix minimum pour garder une marge</p>
           </article>
           <article class="card stat-card metric-card metric-profit">
             <p class="section-kicker">Profit apres paie</p>
             <h3 id="sim-remaining-profit">0$</h3>
-            <p class="muted">Projection sans modifier les salaires actuels.</p>
+            <p class="muted">Projection sans modifier les salaires</p>
           </article>
           <article class="card stat-card metric-card metric-payroll">
             <p class="section-kicker">Nombre d'employes</p>
@@ -441,7 +441,7 @@
             <div class="card-head">
               <div>
                 <h3>Lecture recommandee</h3>
-                <p class="muted">Ce bloc t'aide a voir rapidement si ta paie actuelle est soutenable ou si tu dois ajuster les taux.</p>
+                <p class="muted">Ce bloc t'aide a voir rapidement si ta paie actuelle est bonne ou si tu dois ajuster les taux.</p>
               </div>
             </div>
             <div class="summary-band simulation-summary">
@@ -472,7 +472,7 @@
             <div class="card-head">
               <div>
                 <h3 class="gestion-title">Reboot complet</h3>
-                <p class="muted">Zone isolee pour eviter les clics accidentels. Cette action remet les donnees operationnelles a zero.</p>
+                <p class="muted">Cette action remet les donnees operationnelles a zero.</p>
               </div>
               <span class="mini-pill danger">Danger</span>
             </div>

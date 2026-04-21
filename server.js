@@ -140,10 +140,18 @@ function startDiscordBot() {
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
-    discordClient.user.setPresence({
-      activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
-      status: "online"
-    }).catch(() => {});
+
+    if (discordClient.user) {
+      try {
+        discordClient.user.setPresence({
+          activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
+          status: "online"
+        });
+      } catch (error) {
+        discordBotRuntime.error = error.message;
+        console.error("Erreur setPresence Discord:", error.message);
+      }
+    }
   });
 
   discordClient.on("error", (error) => {
@@ -154,6 +162,12 @@ function startDiscordBot() {
 
   discordClient.on("shardDisconnect", () => {
     discordBotRuntime.online = false;
+  });
+
+  discordClient.on("shardError", (error) => {
+    discordBotRuntime.online = false;
+    discordBotRuntime.error = error.message;
+    console.error("Erreur shard Discord:", error.message);
   });
 
   discordClient.on("invalidated", () => {

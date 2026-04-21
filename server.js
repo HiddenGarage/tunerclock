@@ -1045,10 +1045,15 @@ app.post("/api/admin-analysis-settings", requireAdmin, async (req, res) => {
 
 app.post("/api/admin-expense", requireAdmin, async (req, res) => {
   try {
+    const quantity = Math.max(1, Math.round(Number(req.body?.quantity || 1) || 1));
+    const unitCost = Number(req.body?.unitCost || req.body?.unit_cost || 105) || 105;
     const payload = {
       name: String(req.body?.name || "").trim(),
+      item_code: String(req.body?.itemCode || req.body?.item_code || "").trim() || null,
       category: String(req.body?.category || "Pieces").trim() || "Pieces",
-      cost: Number(req.body?.cost || 105),
+      quantity,
+      unit_cost: unitCost,
+      cost: Number(req.body?.cost || unitCost * quantity),
       note: String(req.body?.note || "-").trim() || "-",
       created_by_discord_id: req.session.discordId
     };
@@ -1058,10 +1063,35 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
     }
 
     const supabase = getSupabase();
-    const { data, error } = await supabase.from("expense_logs").insert(payload).select().single();
+    let { data, error } = await supabase.from("expense_logs").insert(payload).select().single();
+    if (error && /item_code|quantity|unit_cost/i.test(error.message || "")) {
+      const legacyPayload = {
+        name: payload.name,
+        category: payload.category,
+        cost: payload.cost,
+        note: `Qty: ${payload.quantity} | Unit: ${payload.unit_cost}$ | ${payload.note}`,
+        created_by_discord_id: payload.created_by_discord_id
+      };
+      const legacyInsert = await supabase.from("expense_logs").insert(legacyPayload).select().single();
+      data = legacyInsert.data;
+      error = legacyInsert.error;
+    }
+
     if (error) {
       return res.status(500).send(error.message);
     }
+
+    await writeAuditLog(supabase, req, "part_order_added", {
+      details: {
+        name: payload.name,
+        itemCode: payload.item_code,
+        category: payload.category,
+        quantity: payload.quantity,
+        unitCost: payload.unit_cost,
+        totalCost: payload.cost
+      }
+    });
+
     res.json({ ok: true, expense: data });
   } catch (error) {
     res.status(500).send(error.message);

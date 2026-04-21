@@ -724,3 +724,28 @@ td {
   color: var(--text);
   font-weight: 800;
 }
+
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+}
+
+.donut-frame {
+  height: 320px;
+  min-height: 320px;
+  max-height: 320px;
+  overflow: hidden;
+}
+
+.donut-frame canvas,
+#shift-chart {
+  width: 100% !important;
+  height: 320px !important;
+  max-height: 320px !important;
+  display: block;
+}
+
+.compact-table-wrap {
+  max-height: 320px;
+}

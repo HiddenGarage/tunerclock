@@ -107,6 +107,10 @@ function getDefaultRoleRates() {
   return Object.fromEntries(ROLE_DEFINITIONS.map((role) => [role.name, role.hourlyRate]));
 }
 
+function formatRpMoney(value) {
+  return `${Math.round(Number(value || 0))}$`;
+}
+
 async function getRoleRates(supabase) {
   const settings = await getSettingsMap(supabase);
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
@@ -140,14 +144,10 @@ function startDiscordBot() {
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
-    try {
-      discordClient.user.setPresence({
-        activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
-        status: "online"
-      });
-    } catch (error) {
-      console.error("Presence Discord impossible:", error.message);
-    }
+    discordClient.user.setPresence({
+      activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
+      status: "online"
+    }).catch(() => {});
   });
 
   discordClient.on("error", (error) => {
@@ -259,8 +259,8 @@ function buildPayslipPdf(res, payload) {
 
   const rows = [
     ["Heures payees", `${Number(payload.hoursPaid || 0).toFixed(2)} h`],
-    ["Taux horaire", `$${Number(payload.hourlyRate || 0).toFixed(2)}`],
-    ["Montant verse", `$${Number(payload.amountPaid || 0).toFixed(2)}`],
+    ["Taux horaire", formatRpMoney(payload.hourlyRate)],
+    ["Montant verse", formatRpMoney(payload.amountPaid)],
     ["Verse par", payload.paidBy || "Gestion"]
   ];
 
@@ -681,6 +681,23 @@ app.post("/api/admin-finance-settings", requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/api/admin-analysis-settings", requireAdmin, async (req, res) => {
+  try {
+    const payload = {
+      revenue: Number(req.body?.revenue || 0),
+      expenses: Number(req.body?.expenses || 0),
+      targetProfitPercent: Number(req.body?.targetProfitPercent || 0),
+      resalePrice: Number(req.body?.resalePrice || 0),
+      weeklyParts: Number(req.body?.weeklyParts || 0)
+    };
+    const supabase = getSupabase();
+    await upsertSetting(supabase, "analysis_settings", payload);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-expense", requireAdmin, async (req, res) => {
   try {
     const payload = {
@@ -701,30 +718,6 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
       return res.status(500).send(error.message);
     }
     res.json({ ok: true, expense: data });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
-
-app.delete("/api/admin-expense/:expenseId", requireAdmin, async (req, res) => {
-  try {
-    const expenseId = String(req.params.expenseId || "").trim();
-    if (!expenseId) {
-      return res.status(400).send("expenseId manquant.");
-    }
-
-    const supabase = getSupabase();
-    const { error } = await supabase
-      .from("expense_logs")
-      .delete()
-      .eq("id", expenseId);
-
-    if (error) {
-      return res.status(500).send(error.message);
-    }
-
-    res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -852,8 +845,8 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
       `TunerClock | Slip de paie`,
       `Employe: ${payslip.employeeName}`,
       `Heures payees: ${Number(payslip.hoursPaid || 0).toFixed(2)} h`,
-      `Taux horaire: $${Number(payslip.hourlyRate || 0).toFixed(2)}`,
-      `Montant verse: $${Number(payslip.amountPaid || 0).toFixed(2)}`,
+      `Taux horaire: ${formatRpMoney(payslip.hourlyRate)}`,
+      `Montant verse: ${formatRpMoney(payslip.amountPaid)}`,
       `Date: ${payslip.paidAtLabel || ""}`
     ].join("\n");
 

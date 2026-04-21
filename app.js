@@ -561,7 +561,7 @@ function drawShiftDonutChart() {
         backgroundColor: [chartPalette.teal, chartPalette.blue, chartPalette.orange],
         borderColor: "#ffffff",
         borderWidth: 6,
-        borderRadius: 10,
+        borderRadius: 4,
         spacing: 4,
         hoverOffset: 4
       }]
@@ -593,7 +593,7 @@ function drawShiftDonutChart() {
           borderColor: "#24364f",
           borderWidth: 1,
           padding: 12,
-          cornerRadius: 12,
+          cornerRadius: 4,
           callbacks: {
             label(context) {
               return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
@@ -683,7 +683,7 @@ function drawTrendChart() {
           borderColor: "#24364f",
           borderWidth: 1,
           padding: 12,
-          cornerRadius: 12,
+          cornerRadius: 4,
           callbacks: {
             label(context) {
               return `Heures: ${formatHoursMinutes(context.raw || 0)}`;

@@ -5,7 +5,7 @@ let activeShiftStartedAt = null;
 let liveTimerId = null;
 let financeSaveTimer = null;
 
-const routes = ["tableau", "pointage", "stats", "gestion", "finance", "pieces", "reboot"];
+const routes = ["tableau", "pointage", "stats", "gestion", "salaire", "finance", "pieces", "simulation", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -19,8 +19,10 @@ const pageTitles = {
   pointage: "Pointage personnel",
   stats: "Statistiques employes",
   gestion: "Gestion du garage",
+  salaire: "Salaires par role",
   finance: "Finance du garage",
   pieces: "Commandes de pieces",
+  simulation: "Simulation de paie",
   reboot: "Reboot du systeme"
 };
 
@@ -52,8 +54,6 @@ const elements = {
   totalCosts: document.getElementById("total-costs"),
   grossMargin: document.getElementById("gross-margin"),
   topWorker: document.getElementById("top-worker"),
-  dashboardHighlight: document.getElementById("dashboard-highlight"),
-  dashboardActiveLabel: document.getElementById("dashboard-active-label"),
   demoUserText: document.getElementById("demo-user-text"),
   shiftBadge: document.getElementById("shift-badge"),
   shiftMessage: document.getElementById("shift-message"),
@@ -74,15 +74,24 @@ const elements = {
   manualPayouts: document.getElementById("manual-payouts"),
   miscExpenses: document.getElementById("misc-expenses"),
   calcNote: document.getElementById("calc-note"),
+  saveFinance: document.getElementById("save-finance"),
   addExpense: document.getElementById("add-expense"),
   partName: document.getElementById("part-name"),
   partCost: document.getElementById("part-cost"),
   partCategory: document.getElementById("part-category"),
   partNote: document.getElementById("part-note"),
-  hoursChart: document.getElementById("hours-chart"),
   shiftChart: document.getElementById("shift-chart"),
-  utilizationGauge: document.getElementById("utilization-gauge"),
   analysisChart: document.getElementById("analysis-chart"),
+  simRevenue: document.getElementById("sim-revenue"),
+  simExpenses: document.getElementById("sim-expenses"),
+  simTargetProfit: document.getElementById("sim-target-profit"),
+  simSalaryCap: document.getElementById("sim-salary-cap"),
+  simPossiblePayroll: document.getElementById("sim-possible-payroll"),
+  simCurrentPayroll: document.getElementById("sim-current-payroll"),
+  simRemainingProfit: document.getElementById("sim-remaining-profit"),
+  simProfitTarget: document.getElementById("sim-profit-target"),
+  simPayrollGap: document.getElementById("sim-payroll-gap"),
+  simRecommendation: document.getElementById("sim-recommendation"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page"))
@@ -260,8 +269,6 @@ function renderOverview() {
   setText(elements.totalCosts, formatMoney(totalCosts));
   setText(elements.grossMargin, `${margin.toFixed(1)}%`);
   setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
-  setText(elements.dashboardHighlight, formatHoursMinutes(activeHours));
-  setText(elements.dashboardActiveLabel, activeEmployees.length ? `${activeEmployees.length} employe(s) en service` : "Aucun employe en service");
 }
 
 function renderStatsTables() {
@@ -292,6 +299,32 @@ function renderStatsTables() {
       <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
     </tr>
   `).join(""));
+}
+
+function renderSimulation() {
+  const revenue = getNumericValue(elements.simRevenue);
+  const extraExpenses = getNumericValue(elements.simExpenses);
+  const profitTargetPercent = getNumericValue(elements.simTargetProfit);
+  const salaryCapPercent = getNumericValue(elements.simSalaryCap);
+  const currentPayroll = getPayrollTotal();
+  const targetProfit = revenue * (profitTargetPercent / 100);
+  const salaryCapBudget = revenue * (salaryCapPercent / 100);
+  const possiblePayroll = Math.max(0, Math.min(salaryCapBudget, revenue - extraExpenses - targetProfit));
+  const remainingProfit = revenue - extraExpenses - currentPayroll;
+  const gap = possiblePayroll - currentPayroll;
+
+  setText(elements.simPossiblePayroll, formatMoney(possiblePayroll));
+  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
+  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
+  setText(elements.simProfitTarget, formatMoney(targetProfit));
+  setText(elements.simPayrollGap, formatMoney(gap));
+
+  let recommendation = "A analyser";
+  if (revenue <= 0) recommendation = "Entre un revenu pour simuler";
+  else if (gap >= 0) recommendation = "Ta paie actuelle semble soutenable";
+  else recommendation = "Reduire les taux ou augmenter le revenu";
+
+  setText(elements.simRecommendation, recommendation);
 }
 
 function renderGestionLists() {
@@ -391,78 +424,6 @@ function renderShiftState() {
   }
 }
 
-function drawRolePayrollChart() {
-  const canvas = elements.hoursChart;
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
-
-  const roles = roleOrder.map((roleName) => ({
-    roleName,
-    value: employees.filter((employee) => employee.roleName === roleName).reduce((sum, employee) => sum + employee.hours * employee.hourlyRate, 0)
-  })).filter((entry) => entry.value > 0);
-
-  if (!roles.length) {
-    ctx.fillStyle = "#6f8297";
-    ctx.font = "600 16px Manrope";
-    ctx.fillText("Aucune charge salariale a afficher.", 36, 150);
-    return;
-  }
-
-  const bg = ctx.createLinearGradient(0, 0, width, height);
-  bg.addColorStop(0, "#fbfdff");
-  bg.addColorStop(1, "#f3f8ff");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, width, height);
-
-  const left = 56;
-  const bottom = height - 42;
-  const top = 34;
-  const chartHeight = bottom - top;
-  const maxValue = Math.max(...roles.map((entry) => entry.value), 1);
-  const gap = 28;
-  const barWidth = Math.min(110, (width - left * 2) / roles.length - gap);
-
-  for (let i = 0; i < 4; i += 1) {
-    const y = top + (chartHeight / 3) * i;
-    ctx.strokeStyle = "#e7edf5";
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(width - 30, y);
-    ctx.stroke();
-  }
-
-  roles.forEach((entry, index) => {
-    const x = left + index * (barWidth + gap);
-    const barHeight = (entry.value / maxValue) * (chartHeight - 8);
-    const y = bottom - barHeight;
-    const shadowHeight = Math.max(10, barHeight);
-
-    const glow = ctx.createLinearGradient(0, y, 0, bottom);
-    glow.addColorStop(0, "rgba(59, 130, 246, 0.14)");
-    glow.addColorStop(1, "rgba(124, 58, 237, 0.02)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(x, y - 8, barWidth, shadowHeight + 8);
-
-    const gradient = ctx.createLinearGradient(0, y, 0, bottom);
-    gradient.addColorStop(0, "#2458ff");
-    gradient.addColorStop(0.55, "#4f8df5");
-    gradient.addColorStop(1, "#7c3aed");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(x, y, barWidth, barHeight);
-
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    ctx.fillRect(x + 10, y + 10, 12, Math.max(0, barHeight - 20));
-
-    ctx.fillStyle = "#17212d";
-    ctx.font = "700 12px Manrope";
-    ctx.fillText(entry.roleName, x, bottom + 18);
-    ctx.fillText(formatMoney(entry.value), x, y - 10);
-  });
-}
-
 function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
   if (!canvas) return;
@@ -533,57 +494,6 @@ function drawShiftDonutChart() {
   });
 }
 
-function drawUtilizationGauge() {
-  const canvas = elements.utilizationGauge;
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const centerX = canvas.width / 2;
-  const centerY = 178;
-  const radius = 108;
-  const activeHours = employees.filter((employee) => employee.active).reduce((sum, employee) => sum + employee.todayHours, 0);
-  const maxHours = Math.max(employees.length * 8, 1);
-  const percent = Math.min(activeHours / maxHours, 1);
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const bg = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  bg.addColorStop(0, "#fbfdff");
-  bg.addColorStop(1, "#f3fbfa");
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.lineWidth = 14;
-  ctx.strokeStyle = "#e6ecf4";
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, Math.PI, 0);
-  ctx.stroke();
-
-  const gradient = ctx.createLinearGradient(40, 0, canvas.width - 40, 0);
-  gradient.addColorStop(0, "#31c6a7");
-  gradient.addColorStop(1, "#4f8df5");
-  ctx.strokeStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, Math.PI, Math.PI + Math.PI * percent);
-  ctx.stroke();
-
-  const markerAngle = Math.PI + Math.PI * percent;
-  const markerX = centerX + Math.cos(markerAngle) * radius;
-  const markerY = centerY + Math.sin(markerAngle) * radius;
-  ctx.beginPath();
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#31c6a7";
-  ctx.lineWidth = 4;
-  ctx.arc(markerX, markerY, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.fillStyle = "#17212d";
-  ctx.font = "800 38px Manrope";
-  ctx.fillText(`${Math.round(percent * 100)}%`, centerX - 34, 116);
-  ctx.fillStyle = "#7f8b99";
-  ctx.font = "600 14px Manrope";
-  ctx.fillText(`${formatHoursMinutes(activeHours)} actifs`, centerX - 42, 144);
-}
-
 function drawTrendChart() {
   const canvas = elements.analysisChart;
   if (!canvas) return;
@@ -631,42 +541,26 @@ function drawTrendChart() {
     value: day.totalHours
   }));
 
-  const areaGradient = ctx.createLinearGradient(0, 0, 0, height);
-  areaGradient.addColorStop(0, "rgba(49, 198, 167, 0.30)");
-  areaGradient.addColorStop(0.6, "rgba(79, 141, 245, 0.12)");
-  areaGradient.addColorStop(1, "rgba(49, 198, 167, 0.02)");
-
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, bottom);
-  points.forEach((point) => ctx.lineTo(point.x, point.y));
-  ctx.lineTo(points[points.length - 1].x, bottom);
-  ctx.closePath();
-  ctx.fillStyle = areaGradient;
-  ctx.fill();
-
   ctx.beginPath();
   points.forEach((point, index) => {
     if (index === 0) ctx.moveTo(point.x, point.y);
     else ctx.lineTo(point.x, point.y);
   });
-  const lineGradient = ctx.createLinearGradient(left, 0, left + chartWidth, 0);
-  lineGradient.addColorStop(0, "#31c6a7");
-  lineGradient.addColorStop(1, "#4f8df5");
-  ctx.strokeStyle = lineGradient;
-  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#253a52";
+  ctx.lineWidth = 3;
   ctx.stroke();
 
   points.forEach((point) => {
     ctx.beginPath();
     ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#4f8df5";
-    ctx.lineWidth = 3;
-    ctx.arc(point.x, point.y, 7, 0, Math.PI * 2);
+    ctx.strokeStyle = "#253a52";
+    ctx.lineWidth = 2;
+    ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#17212d";
-    ctx.font = "700 12px Manrope";
-    ctx.fillText(formatHoursMinutes(point.value), point.x - 18, point.y - 14);
+    ctx.font = "700 11px Manrope";
+    ctx.fillText(formatHoursMinutes(point.value), point.x - 18, point.y - 12);
     ctx.fillStyle = "#6f8297";
     ctx.fillText(point.label, point.x - 10, bottom + 20);
   });
@@ -681,10 +575,9 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderShiftState();
-  drawRolePayrollChart();
   drawShiftDonutChart();
-  drawUtilizationGauge();
   drawTrendChart();
+  renderSimulation();
 }
 
 async function loadAdminDashboard() {
@@ -840,11 +733,6 @@ async function saveFinanceSettings() {
 
 function queueFinanceSave() {
   updateAll();
-  if (!state.isAdmin || !state.financeInputsLoaded) return;
-  clearTimeout(financeSaveTimer);
-  financeSaveTimer = setTimeout(() => {
-    saveFinanceSettings();
-  }, 350);
 }
 
 async function updateRoleRate(roleName, nextRate) {
@@ -1025,6 +913,7 @@ elements.discordLogin?.addEventListener("click", loginWithDiscord);
 elements.logoutButton?.addEventListener("click", logout);
 elements.punchIn?.addEventListener("click", punchIn);
 elements.punchOut?.addEventListener("click", punchOut);
+elements.saveFinance?.addEventListener("click", saveFinanceSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.rebootAll?.addEventListener("click", rebootAllData);
 
@@ -1049,7 +938,7 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
-[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote].forEach((element) => {
+[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit, elements.simSalaryCap].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 

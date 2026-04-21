@@ -15,13 +15,13 @@ const roleIdMap = {
   Apprenti: "1487852702519136496"
 };
 const pageTitles = {
-  tableau: "Tableau de bord professionnel du garage",
-  pointage: "Pointage personnel",
+  tableau: "Tableau de bord.",
+  pointage: "Punch",
   stats: "Statistiques employes",
-  gestion: "Gestion du garage",
+  gestion: "Gestion",
   salaire: "Salaires par role",
-  finance: "Finance du garage",
-  pieces: "Commandes de pieces",
+  finance: "Finances",
+  pieces: "Commandes",
   simulation: "Simulation de paie",
   reboot: "Reboot du systeme"
 };
@@ -450,7 +450,7 @@ function renderShiftState() {
   if (state.punchedIn) {
     setText(elements.shiftBadge, "En service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill success";
-    setText(elements.shiftMessage, "Tu es en service. Ton temps et ton argent montent en direct.");
+    setText(elements.shiftMessage, "Tu es en service.");
     startLiveTimer();
   } else {
     setText(elements.shiftBadge, "Hors service");

@@ -341,9 +341,11 @@ input, button, a { font: inherit; }
 }
 
 .stats-page,
+.salaire-page,
 .gestion-page,
 .finance-page,
 .parts-page,
+.simulation-page,
 .reboot-page {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -365,8 +367,13 @@ input, button, a { font: inherit; }
 }
 
 .finance-form-grid,
-.parts-form-grid {
+.parts-form-grid,
+.simulation-form-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.simulation-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .field { display: grid; }

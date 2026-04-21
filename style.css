@@ -416,22 +416,6 @@ a {
   min-height: 264px;
 }
 
-.chart-card {
-  background:
-    radial-gradient(circle at top right, rgba(75, 124, 246, 0.08), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(48, 196, 163, 0.08), transparent 24%),
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-}
-
-.chart-card canvas {
-  width: 100%;
-  display: block;
-}
-
-.large-chart-card canvas {
-  min-height: 300px;
-}
-
 .pointage-page,
 .stats-page,
 .gestion-page,
@@ -487,6 +471,10 @@ a {
   margin-top: 22px;
 }
 
+.pointage-metrics-extended {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .pointage-main-meter {
   min-height: 190px;
   align-content: center;
@@ -521,6 +509,10 @@ a {
 
 .clean-list li:last-child {
   border-bottom: 0;
+}
+
+.clean-list strong {
+  color: var(--text);
 }
 
 .form-grid {
@@ -682,7 +674,8 @@ td {
   .simulation-form-grid,
   .simulation-summary,
   .pointage-buttons,
-  .pointage-metrics {
+  .pointage-metrics,
+  .pointage-metrics-extended {
     grid-template-columns: 1fr;
   }
 
@@ -712,36 +705,4 @@ td {
   .search-box input {
     width: 100%;
   }
-}
-
-
-.pointage-metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.pointage-sub-meter {
-  min-height: 150px;
-  align-content: center;
-}
-
-.pointage-sub-meter strong {
-  font-size: 2.25rem;
-}
-
-@media (max-width: 1260px) {
-  .pointage-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .pointage-metrics {
-    grid-template-columns: 1fr;
-  }
-}
-
-
-/* Charts removed intentionally to avoid layout bugs */
-.enterprise-hero {
-  grid-column: 1 / -1;
 }

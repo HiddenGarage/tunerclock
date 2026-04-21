@@ -3,19 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "description": "TunerClock - panel de pointage et gestion garage FiveM",
+  "main": "server.js",
   "scripts": {
     "start": "netlify dev",
     "render:start": "node server.js",
-    "deploy:zip": "powershell -NoProfile -Command \"Compress-Archive -Path index.html,style.css,app.js,logo,netlify.toml,netlify,README_DEPLOY.md,.env.example,supabase,server.js -DestinationPath tunerclock-deploy.zip -Force\""
+    "deploy:zip": "powershell -NoProfile -Command \"Compress-Archive -Path index.html,style.css,app.js,logo,netlify.toml,netlify,README_DEPLOY.md,.env.example,supabase,server.js,package.json -DestinationPath tunerclock-deploy.zip -Force\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.56.1",
-    "discord.js": "^14.19.3",
+    "discord.js": "^14.21.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "pdfkit": "^0.17.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   }
 }

@@ -19,6 +19,7 @@
       <nav class="sidebar-nav">
         <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
         <a href="#pointage" class="nav-item" data-route="pointage">Pointage</a>
+        <a href="#presence" class="nav-item nav-item-highlight" data-route="presence" data-admin-only="true">Presence</a>
         <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Stats employe</a>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Gestion</a>
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
@@ -195,18 +196,7 @@
 
       <section id="page-gestion" class="app-page gestion-page">
         <div class="dashboard-grid">
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Presence actuelle</h3>
-                <p class="muted">Liste des employes en service en ce moment.</p>
-              </div>
-              <span class="mini-pill">Live</span>
-            </div>
-            <ul id="gestion-active-workers-list" class="clean-list"></ul>
-          </article>
-
-          <article class="card card-span-2">
+          <article class="card card-span-3">
             <div class="card-head">
               <div>
                 <h3>Reglement des employes</h3>
@@ -226,6 +216,36 @@
                   </tr>
                 </thead>
                 <tbody id="leaderboard-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-presence" class="app-page presence-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Presence live</h3>
+                <p class="muted">Controle des employes actuellement en service, rappels Discord et fermeture forcee des shifts oublies.</p>
+              </div>
+              <span class="mini-pill danger">Anti oubli</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employe</th>
+                    <th>Role</th>
+                    <th>Entree</th>
+                    <th>Duree live</th>
+                    <th>Cout live</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="presence-body"></tbody>
               </table>
             </div>
           </article>

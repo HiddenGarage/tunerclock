@@ -69,8 +69,6 @@ const elements = {
   shiftMessage: document.getElementById("shift-message"),
   todayHours: document.getElementById("today-hours"),
   todayPay: document.getElementById("today-pay"),
-  personalTotalHours: document.getElementById("personal-total-hours"),
-  personalTotalPay: document.getElementById("personal-total-pay"),
   punchIn: document.getElementById("punch-in"),
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
@@ -175,7 +173,11 @@ function destroyChart(key) {
 }
 
 function formatMoney(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
+  const numericValue = Number(value || 0);
+  const roundedValue = Math.round(Number.isFinite(numericValue) ? numericValue : 0);
+  const absoluteValue = Math.abs(roundedValue);
+  const formattedValue = absoluteValue.toLocaleString("fr-CA");
+  return `${roundedValue < 0 ? "-" : ""}${formattedValue}$`;
 }
 
 function getNumericValue(element) {
@@ -291,44 +293,17 @@ function getFinancePayload() {
   };
 }
 
-function getCurrentUserLiveHours() {
-  if (!state.loggedIn || !state.currentUser) return 0;
-  if (!state.punchedIn || !activeShiftStartedAt) return Number(state.currentUser.todayHours || 0);
-  return Math.max(0, (Date.now() - activeShiftStartedAt) / 3600000);
-}
-
-function getCurrentUserAccumulatedHours() {
-  if (!state.loggedIn || !state.currentUser) return 0;
-  return Number(state.currentUser.hours || 0) + getCurrentUserLiveHours();
-}
-
-function renderPersonalTotals() {
-  const liveHours = getCurrentUserLiveHours();
-  const totalHours = getCurrentUserAccumulatedHours();
-  const hourlyRate = Number(state.currentUser?.hourlyRate || 0);
-
-  setText(elements.todayHours, formatHoursMinutes(liveHours));
-  setText(elements.todayPay, formatMoney(liveHours * hourlyRate));
-  setText(elements.personalTotalHours, formatHoursMinutes(totalHours));
-  setText(elements.personalTotalPay, formatMoney(totalHours * hourlyRate));
-}
-
 function updateLivePunchMetrics() {
-  if (!state.loggedIn || !state.currentUser) {
-    setText(elements.todayHours, "0h 00m");
-    setText(elements.todayPay, "$0.00");
-    setText(elements.personalTotalHours, "0h 00m");
-    setText(elements.personalTotalPay, "$0.00");
-    setText(elements.personalTotalHours, "0h 00m");
-    setText(elements.personalTotalPay, "$0.00");
+  if (!state.loggedIn || !state.currentUser || !state.punchedIn || !activeShiftStartedAt) {
+    setText(elements.todayHours, state.currentUser ? formatHoursMinutes(state.currentUser.todayHours) : "0h 00m");
+    setText(elements.todayPay, state.currentUser ? formatMoney(state.currentUser.todayHours * state.currentUser.hourlyRate) : "$0.00");
     return;
   }
 
-  if (state.punchedIn && activeShiftStartedAt) {
-    state.currentUser.todayHours = getCurrentUserLiveHours();
-  }
-
-  renderPersonalTotals();
+  const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
+  state.currentUser.todayHours = elapsedHours;
+  setText(elements.todayHours, formatHoursMinutes(elapsedHours));
+  setText(elements.todayPay, formatMoney(elapsedHours * state.currentUser.hourlyRate));
 }
 
 async function refreshBotStatus() {
@@ -527,8 +502,6 @@ function renderShiftState() {
     setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
     setText(elements.todayHours, "0h 00m");
     setText(elements.todayPay, "$0.00");
-    setText(elements.personalTotalHours, "0h 00m");
-    setText(elements.personalTotalPay, "$0.00");
     if (elements.punchIn) elements.punchIn.disabled = true;
     if (elements.punchOut) elements.punchOut.disabled = true;
     setText(elements.discordLogin, "Se connecter avec Discord");
@@ -541,7 +514,6 @@ function renderShiftState() {
   if (elements.punchOut) elements.punchOut.disabled = !state.punchedIn;
   setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
   setText(elements.demoUserText, `${state.currentUser.name} | ${state.currentUser.roleName}`);
-  renderPersonalTotals();
 
   if (state.punchedIn) {
     setText(elements.shiftBadge, "En service");

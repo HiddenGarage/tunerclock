@@ -144,8 +144,26 @@ a {
   border-color: rgba(127, 168, 255, 0.24);
 }
 
+.nav-item-success {
+  color: #8ff0c8;
+  background: rgba(48, 196, 163, 0.08);
+  border-color: rgba(48, 196, 163, 0.13);
+}
+
+.nav-item-success.active,
+.nav-item-success:hover {
+  background: linear-gradient(180deg, rgba(48, 196, 163, 0.24) 0%, rgba(48, 196, 163, 0.12) 100%);
+  border-color: rgba(48, 196, 163, 0.28);
+}
+
 .nav-item-danger {
   color: #ffb4b4;
+}
+
+.nav-item-danger.active,
+.nav-item-danger:hover {
+  background: linear-gradient(180deg, rgba(217, 75, 75, 0.24) 0%, rgba(217, 75, 75, 0.12) 100%);
+  border-color: rgba(217, 75, 75, 0.28);
 }
 
 .main-panel {
@@ -598,6 +616,101 @@ input[readonly] {
   grid-template-columns: 1fr auto;
   gap: 10px;
   align-items: center;
+}
+
+.part-preview {
+  margin-top: 16px;
+}
+
+.part-preview-empty,
+.part-preview-card {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--muted);
+  padding: 14px;
+}
+
+.part-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.part-preview-card strong,
+.part-preview-card span {
+  display: block;
+}
+
+.part-preview-card strong {
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.part-icon,
+.part-icon-all {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: rgba(14, 22, 33, 0.08);
+  border: 1px solid rgba(163, 178, 201, 0.24);
+  padding: 5px;
+}
+
+.part-icon-all {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: #30c4a3;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.part-icon-stack {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.part-icon-stack .part-icon {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+}
+
+.part-table-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.part-table-cell .part-icon,
+.part-table-cell .part-icon-all {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+  padding: 3px;
+}
+
+.editable-hours-button {
+  border: 1px solid rgba(48, 196, 163, 0.28);
+  border-radius: 4px;
+  background: rgba(48, 196, 163, 0.11);
+  color: var(--text);
+  padding: 8px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editable-hours-button:hover {
+  border-color: rgba(48, 196, 163, 0.6);
+  background: rgba(48, 196, 163, 0.2);
 }
 
 .inline-button {

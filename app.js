@@ -38,7 +38,7 @@ const state = {
     Copatron: 45,
     Gerant: 35,
     Mecano: 25,
-    Apprenti: 18
+    Apprenti: 180
   }
 };
 

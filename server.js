@@ -106,6 +106,23 @@ async function upsertSetting(supabase, key, value) {
   }
 }
 
+async function writeAuditLog(supabase, req, action, options = {}) {
+  const payload = {
+    action,
+    actor_discord_id: req?.session?.discordId || null,
+    actor_name: req?.session?.displayName || req?.session?.username || "Systeme",
+    target_employee_id: options.targetEmployeeId || null,
+    target_discord_id: options.targetDiscordId || null,
+    target_name: options.targetName || null,
+    details: options.details || {}
+  };
+
+  const { error } = await supabase.from("audit_logs").insert(payload);
+  if (error) {
+    console.error("Audit log impossible:", error.message);
+  }
+}
+
 function getDefaultRoleRates() {
   return Object.fromEntries(ROLE_DEFINITIONS.map((role) => [role.name, role.hourlyRate]));
 }
@@ -740,6 +757,25 @@ app.get("/api/admin-dashboard", requireAdmin, async (req, res) => {
   }
 });
 
+app.get("/api/admin-audit-logs", requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(150);
+
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+
+    res.json({ logs: data || [] });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-update-employee-rate", requireAdmin, async (req, res) => {
   try {
     const { employeeId, hourlyRate } = req.body || {};
@@ -797,6 +833,10 @@ app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
       }
     }
 
+    await writeAuditLog(supabase, req, "role_rates_updated", {
+      details: { roleRates: merged }
+    });
+
     res.json({ ok: true, roleRates: merged });
   } catch (error) {
     res.status(500).send(error.message);
@@ -812,6 +852,12 @@ app.post("/api/admin-adjust-employee-hours", requireAdmin, async (req, res) => {
     }
 
     const supabase = getSupabase();
+    const { data: employeeBefore } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", employeeId)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("employees")
       .update({ total_hours: totalHours, is_active: false })
@@ -820,6 +866,16 @@ app.post("/api/admin-adjust-employee-hours", requireAdmin, async (req, res) => {
     if (error) {
       return res.status(500).send(error.message);
     }
+
+    await writeAuditLog(supabase, req, "employee_hours_adjusted", {
+      targetEmployeeId: employeeId,
+      targetDiscordId: employeeBefore?.discord_id || null,
+      targetName: employeeBefore?.discord_name || null,
+      details: {
+        previousHours: Number(employeeBefore?.total_hours || 0),
+        nextHours: totalHours
+      }
+    });
 
     res.json({ ok: true });
   } catch (error) {
@@ -861,6 +917,18 @@ app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
         `Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h`
       ].join("\n")
     );
+
+    await writeAuditLog(supabase, req, "shift_force_closed", {
+      targetEmployeeId: employee.id,
+      targetDiscordId: employee.discord_id,
+      targetName: employee.discord_name,
+      details: {
+        durationHours: result.durationHours,
+        shiftPeriod: result.shiftPeriod,
+        punchedInAt: result.punchedInAt.toISOString(),
+        punchedOutAt: result.punchedOutAt.toISOString()
+      }
+    });
 
     res.json({ ok: true, durationHours: result.durationHours, shiftPeriod: result.shiftPeriod });
   } catch (error) {
@@ -913,6 +981,16 @@ app.post("/api/admin-send-reminder", requireAdmin, async (req, res) => {
     if (!dmResult.ok) {
       return res.status(500).send(dmResult.reason || "DM impossible.");
     }
+
+    await writeAuditLog(supabase, req, "reminder_sent", {
+      targetEmployeeId: employee.id,
+      targetDiscordId: employee.discord_id,
+      targetName: employee.discord_name,
+      details: {
+        durationHours: Number(durationHours.toFixed(2)),
+        shiftId: shift.id
+      }
+    });
 
     res.json({ ok: true });
   } catch (error) {
@@ -1037,6 +1115,18 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
     if (resetError) {
       return res.status(500).send(resetError.message);
     }
+
+    await writeAuditLog(supabase, req, "employee_paid", {
+      targetEmployeeId: employee.id,
+      targetDiscordId: employee.discord_id,
+      targetName: employee.discord_name,
+      details: {
+        payoutId: payout.id,
+        hoursPaid,
+        hourlyRate,
+        amountPaid
+      }
+    });
 
     res.json({
       ok: true,
@@ -1164,6 +1254,9 @@ app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
       calcNote: ""
     });
     await upsertSetting(supabase, "reminder_state", {});
+    await writeAuditLog(supabase, req, "system_reboot", {
+      details: { scope: "complete" }
+    });
 
     res.json({ ok: true });
   } catch (error) {

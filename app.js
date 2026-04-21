@@ -1,6 +1,7 @@
 let employees = [];
 let expenses = [];
 let shifts = [];
+let auditLogs = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let adminLiveTimerId = null;
@@ -15,7 +16,7 @@ const chartPalette = {
   orange: "#f4a249"
 };
 
-const routes = ["tableau", "pointage", "presence", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "reboot"];
+const routes = ["tableau", "pointage", "presence", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "logs", "reboot"];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -34,6 +35,7 @@ const pageTitles = {
   finance: "Finance du garage",
   pieces: "Commandes de pieces",
   analyse: "Analyse rentabilite",
+  logs: "Audit logs",
   reboot: "Reboot du systeme"
 };
 
@@ -75,6 +77,7 @@ const elements = {
   punchOut: document.getElementById("punch-out"),
   leaderboardBody: document.getElementById("leaderboard-body"),
   presenceBody: document.getElementById("presence-body"),
+  auditBody: document.getElementById("audit-body"),
   statsBody: document.getElementById("stats-body"),
   roleRatesBody: document.getElementById("role-rates-body"),
   expenseBody: document.getElementById("expense-body"),
@@ -558,6 +561,44 @@ function renderLeaderboard() {
   }).join(""));
 }
 
+function formatAuditAction(action) {
+  const labels = {
+    role_rates_updated: "Salaires roles modifies",
+    employee_hours_adjusted: "Heures ajustees",
+    shift_force_closed: "Sortie forcee",
+    reminder_sent: "Rappel envoye",
+    employee_paid: "Employe paye",
+    system_reboot: "Reboot complet"
+  };
+  return labels[action] || action;
+}
+
+function renderAuditLogs() {
+  if (!elements.auditBody) return;
+  if (!auditLogs.length) {
+    setHtml(elements.auditBody, `<tr><td colspan="5">Aucun log pour le moment.</td></tr>`);
+    return;
+  }
+
+  setHtml(elements.auditBody, auditLogs.map((entry) => {
+    const details = entry.details || {};
+    const detailsText = Object.entries(details)
+      .slice(0, 4)
+      .map(([key, value]) => `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`)
+      .join(" | ") || "-";
+
+    return `
+      <tr>
+        <td>${entry.created_at ? new Date(entry.created_at).toLocaleString("fr-CA") : "-"}</td>
+        <td>${formatAuditAction(entry.action)}</td>
+        <td>${entry.actor_name || "-"}</td>
+        <td>${entry.target_name || entry.target_discord_id || "-"}</td>
+        <td>${detailsText}</td>
+      </tr>
+    `;
+  }).join(""));
+}
+
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
   setText(elements.topbarRolePill, state.loggedIn ? roleText : "Connexion securisee");
@@ -777,6 +818,7 @@ function updateAll() {
   renderPresenceList();
   renderExpenseTable();
   renderLeaderboard();
+  renderAuditLogs();
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
@@ -827,6 +869,8 @@ async function loadAdminDashboard() {
       note: entry.note || "-"
     }));
 
+    await loadAuditLogs();
+
     state.recordedPayouts = (data.payouts || []).reduce((sum, entry) => sum + Number(entry.amount_paid || 0), 0);
     const financeInputs = data.settings?.finance_inputs || {};
     setValue(elements.serviceIncome, financeInputs.serviceIncome ? String(financeInputs.serviceIncome) : "");
@@ -851,6 +895,14 @@ async function loadAdminDashboard() {
   } finally {
     state.financeInputsLoaded = true;
   }
+}
+
+async function loadAuditLogs() {
+  if (!state.isAdmin) return;
+  const response = await fetch("/api/admin-audit-logs", { credentials: "include" }).catch(() => null);
+  if (!response?.ok) return;
+  const data = await response.json().catch(() => null);
+  auditLogs = data?.logs || [];
 }
 
 async function loadMeState() {
@@ -1282,12 +1334,14 @@ async function rebootAllData() {
   }));
   expenses = [];
   shifts = [];
+  auditLogs = [];
   state.recordedPayouts = 0;
   state.punchedIn = false;
   activeShiftStartedAt = null;
   [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.partName, elements.partCategory, elements.partNote].forEach((element) => setValue(element, ""));
   setValue(elements.partCost, "105");
   showToast("Reboot complet effectue.");
+  await loadAuditLogs();
   updateAll();
 }
 

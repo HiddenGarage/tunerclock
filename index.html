@@ -24,7 +24,7 @@
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Finance</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Pieces</a>
-        <a href="#simulation" class="nav-item nav-item-highlight" data-route="simulation" data-admin-only="true">Simulation</a>
+        <a href="#analyse" class="nav-item nav-item-highlight" data-route="analyse" data-admin-only="true">Analyse</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
     </aside>
@@ -70,7 +70,7 @@
         </div>
 
         <div class="dashboard-grid enterprise-grid">
-          <article class="card card-span-3 gradient-card enterprise-hero">
+          <article class="card card-span-2 gradient-card enterprise-hero">
             <div class="card-head">
               <div>
                 <h3>Performance globale de l'entreprise</h3>
@@ -105,6 +105,26 @@
               </div>
             </div>
           </article>
+
+          <article class="card chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Repartition des quarts</h3>
+                <p class="muted">Poids des heures Jour / Soir / Nuit dans l'entreprise.</p>
+              </div>
+            </div>
+            <canvas id="shift-chart" width="720" height="320"></canvas>
+          </article>
+
+          <article class="card card-span-3 chart-card large-chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Tendance d'activite sur 7 jours</h3>
+                <p class="muted">Evolution recente des heures fermees et de la cadence atelier.</p>
+              </div>
+            </div>
+            <canvas id="analysis-chart" width="1280" height="300"></canvas>
+          </article>
         </div>
       </section>
 
@@ -129,7 +149,7 @@
             <span id="demo-user-text">Aucun employe connecte</span>
           </div>
 
-          <div class="pointage-metrics pointage-metrics-extended">
+          <div class="pointage-metrics">
             <div class="pointage-meter pointage-main-meter">
               <span>Heures en direct</span>
               <strong id="today-hours">0h 00m</strong>
@@ -137,14 +157,6 @@
             <div class="pointage-meter pointage-main-meter blue-meter">
               <span>Argent gagne en direct</span>
               <strong id="today-pay">0$</strong>
-            </div>
-            <div class="pointage-meter">
-              <span>Heures accumulees</span>
-              <strong id="accumulated-hours">0h 00m</strong>
-            </div>
-            <div class="pointage-meter">
-              <span>Argent accumule estime</span>
-              <strong id="accumulated-pay">0$</strong>
             </div>
           </div>
         </article>
@@ -328,7 +340,6 @@
                     <th>Categorie</th>
                     <th>Cout</th>
                     <th>Note</th>
-                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="expense-body"></tbody>
@@ -338,19 +349,19 @@
         </div>
       </section>
 
-      <section id="page-simulation" class="app-page simulation-page">
+      <section id="page-analyse" class="app-page analyse-page">
         <div class="dashboard-grid">
           <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <h3>Simulation de paie</h3>
-                <p class="muted">Teste combien l'entreprise peut se permettre de payer selon les revenus, les depenses et le profit que tu veux garder.</p>
+                <h3>Analyse rentabilite</h3>
+                <p class="muted">Conseils automatiques selon les stats actuelles. Cette page ne modifie jamais les salaires officiels.</p>
               </div>
-              <span class="mini-pill success">Calcul</span>
+              <span class="mini-pill success">Conseil</span>
             </div>
             <div class="form-grid simulation-form-grid">
               <div class="field">
-                <label for="sim-revenue" class="input-label">Revenu semaine / periode</label>
+                <label for="sim-revenue" class="input-label">Revenu vise / periode</label>
                 <input id="sim-revenue" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
@@ -365,23 +376,34 @@
                 <label for="sim-role-mix" class="input-label">Equipe actuelle</label>
                 <input id="sim-role-mix" type="text" value="Chargement..." readonly>
               </div>
+              <div class="field">
+                <label for="sim-resale-price" class="input-label">Prix revente piece moyen</label>
+                <input id="sim-resale-price" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="sim-weekly-parts" class="input-label">Pieces vendues / periode</label>
+                <input id="sim-weekly-parts" type="number" min="0" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="parts-actions">
+              <button id="save-analysis" class="primary-button">Enregistrer l'analyse</button>
             </div>
           </article>
 
           <article class="card stat-card">
-            <p class="section-kicker">Budget salaires possible</p>
+            <p class="section-kicker">Marge par piece</p>
             <h3 id="sim-possible-payroll">0$</h3>
-            <p class="muted">Montant recommandable selon tes contraintes.</p>
+            <p class="muted">Profit estime entre achat et revente.</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Salaire horaire recommande</p>
-            <h3 id="sim-recommended-hourly">0$/h</h3>
-            <p class="muted">Moyenne horaire viable avec les heures deja faites.</p>
+            <p class="section-kicker">Prix revente conseille</p>
+            <h3 id="sim-recommended-hourly">0$</h3>
+            <p class="muted">Prix minimum pour garder une marge saine.</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Profit estime restant</p>
+            <p class="section-kicker">Profit apres paie</p>
             <h3 id="sim-remaining-profit">0$</h3>
-            <p class="muted">Ce qui reste une fois depenses et paie couverts.</p>
+            <p class="muted">Projection sans modifier les salaires actuels.</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Nombre d'employes</p>
@@ -406,11 +428,11 @@
                 <strong id="sim-current-payroll">0$</strong>
               </div>
               <div class="summary-item">
-                <span>Ecart paie</span>
-                <strong id="sim-payroll-gap">0$</strong>
+                <span>Ratio salaires / revenus</span>
+                <strong id="sim-payroll-gap">0%</strong>
               </div>
               <div class="summary-item">
-                <span>Recommendation</span>
+                <span>Conseil final</span>
                 <strong id="sim-recommendation">A analyser</strong>
               </div>
             </div>
@@ -437,6 +459,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

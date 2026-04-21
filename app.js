@@ -3,6 +3,8 @@ let expenses = [];
 let shifts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
+let adminRefreshTimerId = null;
+let adminLiveTimerId = null;
 const chartState = {};
 const chartPalette = {
   text: "#1b2533",
@@ -266,12 +268,18 @@ function setStatusDot(active) {
   if (dot) dot.style.background = active ? "#22c55e" : "#d94b4b";
 }
 
+function getEmployeeTrackedHours(employee) {
+  const baseHours = Number(employee?.hours || 0);
+  const liveHours = employee?.active ? Number(employee?.todayHours || 0) : 0;
+  return baseHours + liveHours;
+}
+
 function getTopEmployee() {
-  return employees.length ? [...employees].sort((a, b) => b.hours - a.hours)[0] : null;
+  return employees.length ? [...employees].sort((a, b) => getEmployeeTrackedHours(b) - getEmployeeTrackedHours(a))[0] : null;
 }
 
 function getPayrollTotal() {
-  return employees.reduce((sum, employee) => sum + employee.hours * employee.hourlyRate, 0);
+  return employees.reduce((sum, employee) => sum + getEmployeeTrackedHours(employee) * employee.hourlyRate, 0);
 }
 
 function getExpenseTotal() {
@@ -343,8 +351,43 @@ function stopLiveTimer() {
   liveTimerId = null;
 }
 
+function startAdminRealtimeTimers() {
+  stopAdminRealtimeTimers();
+  if (!state.loggedIn || !state.isAdmin) return;
+
+  adminLiveTimerId = setInterval(() => {
+    let changed = false;
+    employees = employees.map((employee) => {
+      if (!employee.active) return employee;
+      changed = true;
+      return { ...employee, todayHours: Number(employee.todayHours || 0) + (1 / 3600) };
+    });
+
+    if (changed) {
+      if (state.currentUser?.discordId) {
+        const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
+        if (matching) state.currentUser = { ...state.currentUser, ...matching };
+      }
+      updateAll();
+    }
+  }, 1000);
+
+  adminRefreshTimerId = setInterval(async () => {
+    await loadAdminDashboard({ silent: true });
+    if (state.loggedIn) await loadMeState();
+    updateAll();
+  }, 5000);
+}
+
+function stopAdminRealtimeTimers() {
+  if (adminLiveTimerId) clearInterval(adminLiveTimerId);
+  if (adminRefreshTimerId) clearInterval(adminRefreshTimerId);
+  adminLiveTimerId = null;
+  adminRefreshTimerId = null;
+}
+
 function renderOverview() {
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeTrackedHours(employee), 0);
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
@@ -378,11 +421,11 @@ function renderStatsTables() {
       <tr>
         <td>${escapeHtml(employee.name)}</td>
         <td>${escapeHtml(employee.roleName)}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${formatHoursMinutes(getEmployeeTrackedHours(employee))}</td>
         <td>${employee.activeDays}</td>
         <td>${employee.preferredShift}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
-        <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
+        <td>${formatMoney(getEmployeeTrackedHours(employee) * employee.hourlyRate)}</td>
         <td>
           <input class="hour-adjust-input" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}" type="number" min="0" step="0.25" placeholder="${employee.hours.toFixed(2)}">
           <button class="secondary-button table-button save-hour-adjust-button" data-employee-index="${employees.findIndex((entry) => entry.discordId === employee.discordId)}">Ajuster</button>
@@ -410,7 +453,7 @@ function renderSimulation() {
   const possiblePayroll = Math.max(0, revenue - extraExpenses - targetProfit);
   const remainingProfit = revenue - extraExpenses - currentPayroll;
   const gap = possiblePayroll - currentPayroll;
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const totalHours = employees.reduce((sum, employee) => sum + getEmployeeTrackedHours(employee), 0);
   const projectedHours = totalHours > 0 ? totalHours : employees.length * 35;
   const recommendedHourly = projectedHours > 0 ? possiblePayroll / projectedHours : 0;
   const roleCounts = roleOrder
@@ -493,7 +536,8 @@ function renderLeaderboard() {
   const sortedEmployees = [...employees].sort((a, b) => b.hours - a.hours);
   setHtml(elements.leaderboardBody, sortedEmployees.map((employee) => {
     const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-    const estimatedPay = employee.hours * employee.hourlyRate;
+    const trackedHours = getEmployeeTrackedHours(employee);
+    const estimatedPay = trackedHours * employee.hourlyRate;
     const pdfButton = employee.lastPayslip?.payoutId ? `
       <a class="secondary-button secondary-table-button table-button" href="/api/payouts/${employee.lastPayslip.payoutId}/pdf" target="_blank" rel="noreferrer">PDF</a>
     ` : "";
@@ -505,10 +549,10 @@ function renderLeaderboard() {
       <tr>
         <td>${escapeHtml(employee.name)}</td>
         <td>${escapeHtml(employee.roleName)}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${formatHoursMinutes(getEmployeeTrackedHours(employee))}</td>
         <td>${formatMoney(estimatedPay)}</td>
         <td>
-          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${employee.hours <= 0 ? "disabled" : ""}>PAYER</button>
+          <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${trackedHours <= 0 ? "disabled" : ""}>PAYER</button>
           ${pdfButton}
           ${dmButton}
         </td>
@@ -558,7 +602,7 @@ function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
   if (!canvas || typeof Chart === "undefined") return;
   const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
-    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
+    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + getEmployeeTrackedHours(employee), 0)
   );
   const totalHours = buckets.reduce((sum, value) => sum + value, 0);
 
@@ -581,6 +625,8 @@ function drawShiftDonutChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 150,
+      animation: false,
       cutout: "72%",
       plugins: {
         doughnutCenterText: {
@@ -675,6 +721,8 @@ function drawTrendChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 150,
+      animation: false,
       plugins: {
         legend: {
           position: "top",
@@ -738,7 +786,7 @@ function updateAll() {
   renderSimulation();
 }
 
-async function loadAdminDashboard() {
+async function loadAdminDashboard(options = {}) {
   if (!state.isAdmin) return;
   try {
     const response = await fetch("/api/admin-dashboard", { credentials: "include" });
@@ -861,6 +909,7 @@ async function loadAuthSession() {
       syncCurrentUserFromSession(data.user);
       await loadMeState();
       await loadAdminDashboard();
+      startAdminRealtimeTimers();
     } else {
       state.loggedIn = false;
       state.isAdmin = false;
@@ -871,6 +920,7 @@ async function loadAuthSession() {
       shifts = [];
       state.recordedPayouts = 0;
       setStatusDot(false);
+      stopAdminRealtimeTimers();
     }
   } catch (error) {
     setText(elements.demoUserText, "Connexion Discord indisponible");
@@ -885,6 +935,7 @@ function loginWithDiscord() {
 }
 
 function logout() {
+  stopAdminRealtimeTimers();
   window.location.href = "/auth/logout";
 }
 
@@ -1203,6 +1254,13 @@ elements.saveFinance?.addEventListener("click", saveFinanceSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.rebootAll?.addEventListener("click", rebootAllData);
+
+elements.expenseBody?.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest(".delete-expense-button");
+  if (deleteButton) {
+    deleteExpense(deleteButton.dataset.expenseId);
+  }
+});
 
 elements.leaderboardBody?.addEventListener("click", (event) => {
   const dmButton = event.target.closest(".dm-payslip-button");

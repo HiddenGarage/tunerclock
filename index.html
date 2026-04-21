@@ -31,84 +31,74 @@
       <header class="topbar">
         <div>
           <p class="page-kicker">Centre des operations</p>
-          <h2 id="page-title">Tableau de bord</h2>
+          <h2 id="page-title">Tableau de bord professionnel du garage</h2>
         </div>
         <div class="topbar-tools">
           <div class="search-box">
-            <input type="text" value="Recherche rapide..." aria-label="Recherche rapide" readonly>
+            <input type="text" value="TunerClock entreprise" aria-label="Recherche rapide" readonly>
           </div>
           <button id="logout-button" class="secondary-button topbar-button hidden">Se deconnecter</button>
-          <div class="status-pill">Connexion securisee</div>
+          <div class="status-pill" id="topbar-role-pill">Connexion securisee</div>
         </div>
       </header>
 
-      <section id="page-tableau" class="app-page active-page">
+      <section id="page-tableau" class="app-page active-page dashboard-page">
         <div class="dashboard-grid dashboard-kpis">
           <article class="card stat-card">
-            <p class="section-kicker">Employes actifs</p>
-            <h3 id="active-count">0</h3>
-            <p class="muted" id="dashboard-active-label">Aucun employe en service</p>
+            <p class="section-kicker">Revenus</p>
+            <h3 id="total-income">$0.00</h3>
+            <p class="muted">Entrees totales de l'entreprise</p>
           </article>
           <article class="card stat-card">
-            <p class="section-kicker">Heures cumulees</p>
-            <h3 id="weekly-hours">0h 00m</h3>
-            <p class="muted">Temps total cumule de l'equipe</p>
+            <p class="section-kicker">Depenses</p>
+            <h3 id="total-expenses">$0.00</h3>
+            <p class="muted">Pieces, frais atelier et divers</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Salaires dus</p>
             <h3 id="total-payroll">$0.00</h3>
-            <p class="muted">Montant a payer aux employes</p>
+            <p class="muted">Montant encore payable a l'equipe</p>
           </article>
           <article class="card stat-card">
             <p class="section-kicker">Profit brut</p>
             <h3 id="gross-profit">$0.00</h3>
-            <p class="muted">Revenus moins couts et paiements</p>
+            <p class="muted">Resultat brut actuel du garage</p>
           </article>
         </div>
 
-        <div class="dashboard-grid dashboard-main-grid">
-          <article class="card card-span-2 gradient-card">
+        <div class="dashboard-grid enterprise-grid">
+          <article class="card card-span-2 gradient-card enterprise-hero">
             <div class="card-head">
               <div>
-                <p class="section-kicker">Performance entreprise</p>
-                <h3>Vue generale du garage</h3>
+                <h3>Performance globale de l'entreprise</h3>
+                <p class="muted">Vue synthese des chiffres utiles: charge salariale, rentabilite, activite et cadence atelier.</p>
               </div>
-              <span class="mini-pill success">Live</span>
+              <span class="mini-pill success">Entreprise</span>
             </div>
-            <div class="summary-band">
+            <div class="summary-band enterprise-summary">
               <div class="summary-item">
-                <span>Top employe</span>
-                <strong id="top-worker">-</strong>
-              </div>
-              <div class="summary-item">
-                <span>Revenus</span>
-                <strong id="total-income">$0.00</strong>
-              </div>
-              <div class="summary-item">
-                <span>Depenses</span>
-                <strong id="total-expenses">$0.00</strong>
+                <span>Marge brute</span>
+                <strong id="gross-margin">0%</strong>
               </div>
               <div class="summary-item">
                 <span>Cout total</span>
                 <strong id="total-costs">$0.00</strong>
               </div>
               <div class="summary-item">
-                <span>Marge brute</span>
-                <strong id="gross-margin">0%</strong>
+                <span>Paiements employes</span>
+                <strong id="employee-payments">$0.00</strong>
               </div>
               <div class="summary-item">
-                <span>Taux horaire</span>
-                <strong id="hourly-rate">-</strong>
+                <span>Employes actifs</span>
+                <strong id="active-count">0</strong>
               </div>
-            </div>
-            <div class="chart-grid">
-              <div class="chart-panel colorful-chart">
-                <p class="chart-title">Heures par employe</p>
-                <canvas id="hours-chart" width="640" height="280"></canvas>
+              <div class="summary-item">
+                <span>Heures cumulees</span>
+                <strong id="weekly-hours">0h 00m</strong>
               </div>
-              <div class="chart-panel colorful-chart">
-                <p class="chart-title">Repartition jour / soir / nuit</p>
-                <canvas id="shift-chart" width="640" height="280"></canvas>
+              <div class="summary-item">
+                <span>Leader activite</span>
+                <strong id="top-worker">-</strong>
               </div>
             </div>
           </article>
@@ -116,325 +106,275 @@
           <article class="card insight-card">
             <div class="card-head">
               <div>
-                <p class="section-kicker">Tendance</p>
-                <h3>Charge actuelle</h3>
+                <h3>Indice d'activite</h3>
+                <p class="muted">Lecture rapide de la charge atelier par rapport a la cible.</p>
               </div>
-              <span class="mini-pill">Gauge</span>
+              <span class="mini-pill">Live</span>
             </div>
             <div class="gauge-wrap">
               <canvas id="utilization-gauge" width="320" height="220"></canvas>
             </div>
             <div class="gauge-meta">
               <strong id="dashboard-highlight">0h 00m</strong>
-              <p class="muted">Heures actuellement travaillees en direct</p>
+              <p class="muted" id="dashboard-active-label">Aucun employe en service</p>
+            </div>
+          </article>
+
+          <article class="card chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Charge salariale par role</h3>
+                <p class="muted">Masse salariale potentielle par niveau de poste.</p>
+              </div>
+            </div>
+            <canvas id="hours-chart" width="720" height="320"></canvas>
+          </article>
+
+          <article class="card chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Repartition des quarts</h3>
+                <p class="muted">Poids des heures Jour / Soir / Nuit dans l'entreprise.</p>
+              </div>
+            </div>
+            <canvas id="shift-chart" width="720" height="320"></canvas>
+          </article>
+
+          <article class="card card-span-3 chart-card large-chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Tendance d'activite sur 7 jours</h3>
+                <p class="muted">Evolution recente des heures fermees et de la cadence atelier.</p>
+              </div>
+            </div>
+            <canvas id="analysis-chart" width="1280" height="300"></canvas>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-pointage" class="app-page pointage-page">
+        <article class="card pointage-shell">
+          <div class="pointage-head">
+            <div>
+              <h3>Pointage personnel</h3>
+              <p id="shift-message" class="muted">Connecte-toi pour commencer ton quart.</p>
+            </div>
+            <span id="shift-badge" class="mini-pill danger">Hors service</span>
+          </div>
+
+          <div class="button-row pointage-buttons">
+            <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
+            <button id="punch-in" class="primary-button" disabled>Entrer en service</button>
+            <button id="punch-out" class="danger-button" disabled>Sortir du service</button>
+          </div>
+
+          <div class="demo-user">
+            <span class="status-dot"></span>
+            <span id="demo-user-text">Aucun employe connecte</span>
+          </div>
+
+          <div class="pointage-metrics">
+            <div class="pointage-meter pointage-main-meter">
+              <span>Heures en direct</span>
+              <strong id="today-hours">0h 00m</strong>
+            </div>
+            <div class="pointage-meter pointage-main-meter blue-meter">
+              <span>Argent gagne en direct</span>
+              <strong id="today-pay">$0.00</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-stats" class="app-page stats-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Statistiques employes</h3>
+                <p class="muted">Vue confidentielle des heures, jours actifs, quarts forts et paie estimee.</p>
+              </div>
+              <span class="mini-pill success">Confidentiel</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employe</th>
+                    <th>Role</th>
+                    <th>Heures</th>
+                    <th>Jours actifs</th>
+                    <th>Quart fort</th>
+                    <th>Taux horaire</th>
+                    <th>Paie estimee</th>
+                  </tr>
+                </thead>
+                <tbody id="stats-body"></tbody>
+              </table>
             </div>
           </article>
 
           <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <p class="section-kicker">Vue operationnelle</p>
-                <h3>Indicateurs de l'entreprise</h3>
+                <h3>Salaires par role</h3>
+                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale du garage.</p>
               </div>
-              <span class="mini-pill">Entreprise</span>
+              <span class="mini-pill">Roles</span>
             </div>
-            <div class="progress-board">
-              <div class="progress-card">
-                <div class="progress-head">
-                  <span>Paiements employes</span>
-                  <strong id="employee-payments">$0.00</strong>
-                </div>
-                <div class="progress-bar"><div id="payments-progress" class="progress-fill teal-fill"></div></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Taux actuel</th>
+                    <th>Nouveau taux</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="role-rates-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-gestion" class="app-page gestion-page">
+        <div class="dashboard-grid">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Presence actuelle</h3>
+                <p class="muted">Liste des employes en service en ce moment.</p>
               </div>
-              <div class="progress-card">
-                <div class="progress-head">
-                  <span>Commandes de pieces</span>
-                  <strong id="dashboard-parts-count">0</strong>
-                </div>
-                <div class="progress-bar"><div id="parts-progress" class="progress-fill blue-fill"></div></div>
+              <span class="mini-pill">Live</span>
+            </div>
+            <ul id="gestion-active-workers-list" class="clean-list"></ul>
+          </article>
+
+          <article class="card card-span-2">
+            <div class="card-head">
+              <div>
+                <h3>Reglement des employes</h3>
+                <p class="muted">Classement des montants dus, paiement et envoi de la slip.</p>
               </div>
-              <div class="progress-card">
-                <div class="progress-head">
-                  <span>Employes en service</span>
-                  <strong id="dashboard-active-workers">0</strong>
-                </div>
-                <div class="progress-bar"><div id="active-progress" class="progress-fill orange-fill"></div></div>
+              <span class="mini-pill success">Paye</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employe</th>
+                    <th>Role</th>
+                    <th>Heures</th>
+                    <th>Paie estimee</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboard-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-finance" class="app-page finance-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Finance du garage</h3>
+                <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
+              </div>
+              <span class="mini-pill">Finance</span>
+            </div>
+            <div class="form-grid finance-form-grid">
+              <div class="field">
+                <label for="service-income" class="input-label">Revenus garage / ventes</label>
+                <input id="service-income" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="weekly-profit" class="input-label">Profit de la semaine ajoute manuellement</label>
+                <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="manual-payouts" class="input-label">Paiements hors systeme</label>
+                <input id="manual-payouts" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="misc-expenses" class="input-label">Autres depenses garage</label>
+                <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="calc-note" class="input-label">Note interne</label>
+                <input id="calc-note" type="text" placeholder="Note optionnelle">
               </div>
             </div>
           </article>
         </div>
       </section>
 
-      <section id="page-pointage" class="dashboard-grid pointage-layout app-page">
-        <article class="card pointage-hero card-span-3">
-          <div class="pointage-left">
+      <section id="page-pieces" class="app-page parts-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <p class="section-kicker">Pointage employe</p>
-                <h3>Etat de service en direct</h3>
+                <h3>Commandes de pieces</h3>
+                <p class="muted">Chaque piece ajoutee est automatiquement comptabilisee a 105$.</p>
               </div>
-              <span id="shift-badge" class="mini-pill danger">Hors service</span>
+              <span class="mini-pill danger">Atelier</span>
             </div>
-            <p id="shift-message" class="muted">Connecte-toi pour commencer ton quart.</p>
-            <div class="button-row pointage-buttons">
-              <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
-              <button id="punch-in" class="primary-button" disabled>Me mettre en service</button>
-              <button id="punch-out" class="danger-button" disabled>Me retirer du service</button>
+            <div class="form-grid parts-form-grid">
+              <div class="field">
+                <label for="part-name" class="input-label">Nom de la piece</label>
+                <input id="part-name" type="text" placeholder="Ex: Kit turbo, huile moteur, suspension">
+              </div>
+              <div class="field">
+                <label for="part-cost" class="input-label">Cout fixe</label>
+                <input id="part-cost" type="number" value="105" readonly>
+              </div>
+              <div class="field">
+                <label for="part-category" class="input-label">Categorie</label>
+                <input id="part-category" type="text" placeholder="Pieces, livraison, outils">
+              </div>
+              <div class="field">
+                <label for="part-note" class="input-label">Note</label>
+                <input id="part-note" type="text" placeholder="Urgent, client, stock">
+              </div>
             </div>
-            <div class="demo-user" id="demo-user">
-              <span class="status-dot"></span>
-              <span id="demo-user-text">Aucun employe connecte</span>
+            <div class="parts-actions">
+              <button id="add-expense" class="primary-button">Ajouter la depense</button>
             </div>
-          </div>
-          <div class="pointage-right">
-            <div class="pointage-meter meter-green">
-              <span>Heures en direct</span>
-              <strong id="today-hours">0h 00m</strong>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Commande</th>
+                    <th>Categorie</th>
+                    <th>Cout</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody id="expense-body"></tbody>
+              </table>
             </div>
-            <div class="pointage-meter meter-blue">
-              <span>Argent gagne en direct</span>
-              <strong id="today-pay">$0.00</strong>
-            </div>
-            <div class="pointage-meter meter-orange">
-              <span>Type de session</span>
-              <strong id="session-kind">Non connecte</strong>
-            </div>
-          </div>
-        </article>
+          </article>
+        </div>
       </section>
 
-      <section id="page-stats" class="dashboard-grid stats-layout app-page">
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker">Stats employe</p>
-              <h3>Salaire individuel et performance</h3>
+      <section id="page-reboot" class="app-page reboot-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3 reboot-card">
+            <div class="card-head">
+              <div>
+                <h3 class="gestion-title">Reboot complet</h3>
+                <p class="muted">Zone isolee pour eviter les clics accidentels. Cette action remet les donnees operationnelles a zero.</p>
+              </div>
+              <span class="mini-pill danger">Danger</span>
             </div>
-            <span class="mini-pill success">Employes</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employe</th>
-                  <th>Heures</th>
-                  <th>Jours actifs</th>
-                  <th>Quart fort</th>
-                  <th>Taux horaire</th>
-                  <th>Paie estimee</th>
-                </tr>
-              </thead>
-              <tbody id="stats-body"></tbody>
-            </table>
-          </div>
-        </article>
-
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker">Classement</p>
-              <h3>Leaderboard des employes payables</h3>
-            </div>
-            <span class="mini-pill">Top</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employe</th>
-                  <th>Heures</th>
-                  <th>Jours actifs</th>
-                  <th>Quart fort</th>
-                  <th>Paie estimee</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="leaderboard-body"></tbody>
-            </table>
-          </div>
-        </article>
-
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker">Configuration salaires</p>
-              <h3>Modifier le salaire par employe</h3>
-            </div>
-            <span class="mini-pill">Salaire</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Employe</th>
-                  <th>Taux horaire actuel</th>
-                  <th>Nouveau taux</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody id="salary-config-body"></tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-
-      <section id="page-gestion" class="dashboard-grid gestion-layout app-page">
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker gestion-kicker">Gestion</p>
-              <h3 class="gestion-title">Vue operationnelle du garage</h3>
-            </div>
-            <span class="mini-pill success">Gestion</span>
-          </div>
-          <div class="summary-band management-band">
-            <div class="summary-item">
-              <span>Employes actifs</span>
-              <strong id="gestion-active-count">0</strong>
-            </div>
-            <div class="summary-item">
-              <span>Heures cumulees</span>
-              <strong id="gestion-weekly-hours">0h 00m</strong>
-            </div>
-            <div class="summary-item">
-              <span>Taux horaire global</span>
-              <strong id="gestion-hourly-rate">-</strong>
-            </div>
-          </div>
-        </article>
-
-        <article class="card">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker gestion-kicker">Presence actuelle</p>
-              <h3>Employes en service</h3>
-            </div>
-            <span class="mini-pill">Live</span>
-          </div>
-          <ul id="gestion-active-workers-list" class="clean-list"></ul>
-        </article>
-
-        <article class="card">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker gestion-kicker">Configuration</p>
-              <h3>Taux horaire global</h3>
-            </div>
-            <span class="mini-pill">$ / H</span>
-          </div>
-          <label for="rate-input" class="input-label">Salaire horaire general</label>
-          <div class="button-row">
-            <input id="rate-input" type="number" min="0" step="1" placeholder="Entrer le taux">
-            <button id="save-rate" class="primary-button">Mettre a jour</button>
-          </div>
-        </article>
-
-        <article class="card card-span-2">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker gestion-kicker">Analyse</p>
-              <h3>Lecture graphique des quarts</h3>
-            </div>
-            <span class="mini-pill">Analyse</span>
-          </div>
-          <div class="analysis-chart-wrap">
-            <canvas id="analysis-chart" width="920" height="280"></canvas>
-          </div>
-        </article>
-      </section>
-
-      <section id="page-finance" class="dashboard-grid finance-layout app-page">
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker">Calculateur financier</p>
-              <h3>Depenses, paiements et profit brut</h3>
-            </div>
-            <span class="mini-pill">Finance</span>
-          </div>
-          <div class="form-grid">
-            <div class="field">
-              <label for="service-income" class="input-label">Revenus garage / ventes</label>
-              <input id="service-income" type="number" min="0" step="1" placeholder="0">
-            </div>
-            <div class="field">
-              <label for="weekly-profit" class="input-label">Profit de la semaine ajoute manuellement</label>
-              <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
-            </div>
-            <div class="field">
-              <label for="manual-payouts" class="input-label">Paiements employes deja effectues</label>
-              <input id="manual-payouts" type="number" min="0" step="1" placeholder="0">
-            </div>
-            <div class="field">
-              <label for="misc-expenses" class="input-label">Autres depenses garage</label>
-              <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
-            </div>
-            <div class="field">
-              <label for="calc-note" class="input-label">Note interne</label>
-              <input id="calc-note" type="text" placeholder="Note optionnelle">
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section id="page-pieces" class="dashboard-grid parts-layout app-page">
-        <article class="card card-span-3">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker">Commandes de pieces</p>
-              <h3>Suivi des achats atelier</h3>
-            </div>
-            <span class="mini-pill danger">Journal des depenses</span>
-          </div>
-          <div class="form-grid parts-form">
-            <div class="field">
-              <label for="part-name" class="input-label">Nom de la piece</label>
-              <input id="part-name" type="text" placeholder="Ex: Kit turbo, jantes, huile moteur">
-            </div>
-            <div class="field">
-              <label for="part-cost" class="input-label">Cout fixe par piece</label>
-              <input id="part-cost" type="number" value="105" readonly>
-            </div>
-            <div class="field">
-              <label for="part-category" class="input-label">Categorie</label>
-              <input id="part-category" type="text" placeholder="Pieces, livraison, outils">
-            </div>
-            <div class="field">
-              <label for="part-note" class="input-label">Note</label>
-              <input id="part-note" type="text" placeholder="Commande urgente, stock, client">
-            </div>
-          </div>
-          <div class="parts-actions">
-            <button id="add-expense" class="primary-button">Ajouter la depense</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Commande</th>
-                  <th>Categorie</th>
-                  <th>Cout</th>
-                  <th>Note</th>
-                </tr>
-              </thead>
-              <tbody id="expense-body"></tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-
-      <section id="page-reboot" class="dashboard-grid reboot-layout app-page">
-        <article class="card card-span-3 reboot-card">
-          <div class="card-head">
-            <div>
-              <p class="section-kicker gestion-kicker">Reboot</p>
-              <h3 class="gestion-title">Zone de remise a zero</h3>
-            </div>
-            <span class="mini-pill danger">Danger</span>
-          </div>
-          <p class="muted">Cet onglet existe pour eviter les erreurs. Le reboot remet toutes les donnees affichees a zero.</p>
-          <button id="reboot-all" class="danger-button reboot-main-button">Reboot complet</button>
-        </article>
+            <button id="reboot-all" class="danger-button reboot-main-button">Reboot complet</button>
+          </article>
+        </div>
       </section>
     </main>
   </div>

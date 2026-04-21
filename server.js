@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const PDFDocument = require("pdfkit");
+const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const { encodeSession, decodeSession, parseCookies, buildCookie } = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
@@ -10,6 +11,13 @@ const { getSupabase } = require("./netlify/functions/lib/supabase");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_HOURLY_RATE = 25;
+let discordClient = null;
+const discordBotRuntime = {
+  configured: Boolean(process.env.DISCORD_BOT_TOKEN),
+  online: false,
+  tag: null,
+  error: null
+};
 const ADMIN_ROLE_FALLBACKS = {
   "417605116070461442": "Patron",
   "893278269170933810": "Copatron"
@@ -25,6 +33,15 @@ const ROLE_DEFINITIONS = [
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
+
+app.get("/api/bot-status", (req, res) => {
+  res.json({
+    configured: discordBotRuntime.configured,
+    online: discordBotRuntime.online,
+    tag: discordBotRuntime.tag,
+    error: discordBotRuntime.error
+  });
+});
 
 function getSession(req) {
   const cookies = parseCookies(req.headers.cookie || "");
@@ -102,6 +119,53 @@ function resolveMemberRole(memberRoles) {
 function getAdminFallbackRole(discordId) {
   const roleName = ADMIN_ROLE_FALLBACKS[discordId];
   return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
+}
+
+function startDiscordBot() {
+  if (!process.env.DISCORD_BOT_TOKEN) {
+    console.log("Discord bot token absent: bot non demarre.");
+    return;
+  }
+
+  if (discordClient) {
+    return;
+  }
+
+  discordClient = new Client({
+    intents: [GatewayIntentBits.Guilds]
+  });
+
+  discordClient.once("ready", () => {
+    discordBotRuntime.online = true;
+    discordBotRuntime.error = null;
+    discordBotRuntime.tag = discordClient.user?.tag || null;
+    console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
+    discordClient.user.setPresence({
+      activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
+      status: "online"
+    }).catch(() => {});
+  });
+
+  discordClient.on("error", (error) => {
+    discordBotRuntime.online = false;
+    discordBotRuntime.error = error.message;
+    console.error("Erreur bot Discord:", error.message);
+  });
+
+  discordClient.on("shardDisconnect", () => {
+    discordBotRuntime.online = false;
+  });
+
+  discordClient.on("invalidated", () => {
+    discordBotRuntime.online = false;
+    discordBotRuntime.error = "Session invalidee";
+  });
+
+  discordClient.login(process.env.DISCORD_BOT_TOKEN).catch((error) => {
+    discordBotRuntime.online = false;
+    discordBotRuntime.error = error.message;
+    console.error("Connexion bot Discord impossible:", error.message);
+  });
 }
 
 async function sendActivityWebhook(type, payload) {
@@ -821,6 +885,8 @@ app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
+
+startDiscordBot();
 
 app.listen(PORT, () => {
   console.log(`TunerClock running on port ${PORT}`);

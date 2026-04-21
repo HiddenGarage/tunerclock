@@ -11,7 +11,10 @@ const { getSupabase } = require("./netlify/functions/lib/supabase");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DEFAULT_HOURLY_RATE = 25;
+const REMINDER_AFTER_HOURS = Number(process.env.REMINDER_AFTER_HOURS || 3);
+const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
 let discordClient = null;
+let reminderMonitorId = null;
 const discordBotRuntime = {
   configured: Boolean(process.env.DISCORD_BOT_TOKEN),
   online: false,
@@ -208,6 +211,170 @@ async function sendActivityWebhook(type, payload) {
   }).catch(() => {});
 }
 
+async function sendDiscordDm(discordId, message) {
+  if (!discordId || !message || !process.env.DISCORD_BOT_TOKEN) {
+    return { ok: false, reason: "Bot Discord non configure." };
+  }
+
+  const createDmResponse = await fetch("https://discord.com/api/v10/users/@me/channels", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
+    },
+    body: JSON.stringify({ recipient_id: discordId })
+  });
+
+  if (!createDmResponse.ok) {
+    return { ok: false, reason: await createDmResponse.text() };
+  }
+
+  const dmChannel = await createDmResponse.json();
+  const sendResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
+    },
+    body: JSON.stringify({ content: message })
+  });
+
+  if (!sendResponse.ok) {
+    return { ok: false, reason: await sendResponse.text() };
+  }
+
+  return { ok: true };
+}
+
+async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "Systeme") {
+  const { data: shift, error: shiftError } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("employee_id", employee.id)
+    .eq("status", "active")
+    .order("punched_in_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (shiftError) {
+    throw shiftError;
+  }
+
+  const punchedOutAt = new Date();
+  const punchedInAt = new Date(shift.punched_in_at);
+  const durationHours = Number(((punchedOutAt - punchedInAt) / 3600000).toFixed(2));
+  const shiftPeriod = getShiftPeriod(punchedInAt);
+
+  const { error: updateShiftError } = await supabase
+    .from("shifts")
+    .update({
+      punched_out_at: punchedOutAt.toISOString(),
+      duration_hours: durationHours,
+      shift_period: shiftPeriod,
+      status: "closed"
+    })
+    .eq("id", shift.id);
+
+  if (updateShiftError) {
+    throw updateShiftError;
+  }
+
+  const { error: updateEmployeeError } = await supabase
+    .from("employees")
+    .update({
+      is_active: false,
+      active_days: Number(employee.active_days || 0) + 1,
+      total_hours: Number(employee.total_hours || 0) + durationHours
+    })
+    .eq("id", employee.id);
+
+  if (updateEmployeeError) {
+    throw updateEmployeeError;
+  }
+
+  await sendActivityWebhook("punch_out", {
+    displayName: employee.discord_name,
+    username: employee.discord_name,
+    roleName: employee.role,
+    discordId: employee.discord_id,
+    timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
+    punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
+    durationHours,
+    closedByLabel
+  });
+
+  return { durationHours, shiftPeriod, punchedInAt, punchedOutAt };
+}
+
+async function scanLongActiveShifts() {
+  if (!process.env.DISCORD_BOT_TOKEN) return;
+
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const reminderState = settings.reminder_state || {};
+    const { data: activeShifts, error: shiftsError } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("status", "active")
+      .order("punched_in_at", { ascending: true });
+
+    if (shiftsError) {
+      throw shiftsError;
+    }
+
+    let stateChanged = false;
+    const now = Date.now();
+
+    for (const shift of activeShifts || []) {
+      if (reminderState[shift.id]) continue;
+
+      const punchedInAt = new Date(shift.punched_in_at).getTime();
+      const durationHours = (now - punchedInAt) / 3600000;
+      if (durationHours < REMINDER_AFTER_HOURS) continue;
+
+      const { data: employee, error: employeeError } = await supabase
+        .from("employees")
+        .select("*")
+        .eq("id", shift.employee_id)
+        .single();
+
+      if (employeeError || !employee?.discord_id) continue;
+
+      const dmResult = await sendDiscordDm(
+        employee.discord_id,
+        [
+          "TunerClock | Verification de presence",
+          `Tu es en service depuis ${Number(durationHours || 0).toFixed(2)} h.`,
+          "Si tu travailles encore, parfait.",
+          "Si tu as oublie de sortir, utilise /out ou retourne sur le site pour punch out."
+        ].join("\n")
+      );
+
+      reminderState[shift.id] = {
+        sentAt: new Date().toISOString(),
+        durationHours: Number(durationHours.toFixed(2)),
+        employeeId: employee.id,
+        discordId: employee.discord_id,
+        ok: dmResult.ok
+      };
+      stateChanged = true;
+    }
+
+    if (stateChanged) {
+      await upsertSetting(supabase, "reminder_state", reminderState);
+    }
+  } catch (error) {
+    console.error("Scan rappel presence impossible:", error.message);
+  }
+}
+
+function startReminderMonitor() {
+  if (reminderMonitorId) return;
+  reminderMonitorId = setInterval(scanLongActiveShifts, Math.max(1, REMINDER_SCAN_MINUTES) * 60000);
+  setTimeout(scanLongActiveShifts, 15000);
+}
+
 async function buildEmployeeSnapshots(supabase) {
   const [{ data: employees, error: employeesError }, { data: shifts, error: shiftsError }] = await Promise.all([
     supabase.from("employees").select("*").order("created_at", { ascending: true }),
@@ -242,7 +409,9 @@ async function buildEmployeeSnapshots(supabase) {
       today_hours: todayHours,
       preferred_shift: preferredShift,
       total_hours: Number(employee.total_hours || 0),
-      is_active: Boolean(activeShift || employee.is_active)
+      is_active: Boolean(activeShift || employee.is_active),
+      active_shift_id: activeShift?.id || null,
+      active_shift_started_at: activeShift?.punched_in_at || null
     };
   });
 }
@@ -658,6 +827,99 @@ app.post("/api/admin-adjust-employee-hours", requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
+  try {
+    const employeeId = req.body?.employeeId;
+    if (!employeeId) {
+      return res.status(400).send("employeeId manquant.");
+    }
+
+    const supabase = getSupabase();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", employeeId)
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    const result = await closeActiveShiftForEmployee(
+      supabase,
+      employee,
+      req.session.displayName || req.session.username || "Admin"
+    );
+
+    await sendDiscordDm(
+      employee.discord_id,
+      [
+        "TunerClock | Sortie de service forcee",
+        `Ton shift a ete ferme par ${req.session.displayName || req.session.username || "un admin"}.`,
+        `Entree: ${result.punchedInAt.toLocaleString("fr-CA")}`,
+        `Sortie: ${result.punchedOutAt.toLocaleString("fr-CA")}`,
+        `Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h`
+      ].join("\n")
+    );
+
+    res.json({ ok: true, durationHours: result.durationHours, shiftPeriod: result.shiftPeriod });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-send-reminder", requireAdmin, async (req, res) => {
+  try {
+    const employeeId = req.body?.employeeId;
+    if (!employeeId) {
+      return res.status(400).send("employeeId manquant.");
+    }
+
+    const supabase = getSupabase();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", employeeId)
+      .single();
+
+    if (employeeError) {
+      return res.status(500).send(employeeError.message);
+    }
+
+    const { data: shift, error: shiftError } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("punched_in_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError) {
+      return res.status(500).send(shiftError.message);
+    }
+
+    const durationHours = (Date.now() - new Date(shift.punched_in_at).getTime()) / 3600000;
+    const dmResult = await sendDiscordDm(
+      employee.discord_id,
+      [
+        "TunerClock | Rappel de service",
+        `Tu es en service depuis ${Number(durationHours || 0).toFixed(2)} h.`,
+        "Si tu travailles encore, tu peux ignorer ce message.",
+        "Si tu as oublie de sortir, utilise /out ou retourne sur le site pour punch out."
+      ].join("\n")
+    );
+
+    if (!dmResult.ok) {
+      return res.status(500).send(dmResult.reason || "DM impossible.");
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-part-settings", requireAdmin, async (req, res) => {
   try {
     const fixedCost = Number(req.body?.fixedCost || 105) || 105;
@@ -901,6 +1163,7 @@ app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
       miscExpenses: 0,
       calcNote: ""
     });
+    await upsertSetting(supabase, "reminder_state", {});
 
     res.json({ ok: true });
   } catch (error) {
@@ -913,6 +1176,7 @@ app.get("*", (req, res) => {
 });
 
 startDiscordBot();
+startReminderMonitor();
 
 app.listen(PORT, () => {
   console.log(`TunerClock running on port ${PORT}`);

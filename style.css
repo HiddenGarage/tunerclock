@@ -233,6 +233,12 @@ a {
   border-color: #dce7fb;
 }
 
+.mini-pill.warning {
+  background: var(--orange-soft);
+  color: #b76a12;
+  border-color: #f4d7ae;
+}
+
 .primary-button,
 .secondary-button,
 .danger-button {
@@ -439,6 +445,7 @@ a {
 }
 
 .pointage-page,
+.presence-page,
 .stats-page,
 .gestion-page,
 .salaire-page,

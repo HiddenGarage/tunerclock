@@ -2,6 +2,7 @@ let employees = [];
 let expenses = [];
 let shifts = [];
 let auditLogs = [];
+let reminderState = {};
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let adminLiveTimerId = null;
@@ -75,7 +76,7 @@ const pageTitles = {
   stats: "Statistiques",
   gestion: "Gestion Paie",
   salaire: "Salaires par role",
-  finance: "Ajouts du garage",
+  finance: "Profit du garage",
   pieces: "Commandes",
   analyse: "Analyse rentabilite",
   logs: "Audit logs",
@@ -493,6 +494,19 @@ function getPresenceStatus(hours) {
   return { label: "Normal", className: "mini-pill success" };
 }
 
+function getReminderInfo(employee) {
+  const entries = Object.values(reminderState || {});
+  const match = entries
+    .filter((entry) => entry?.employeeId === employee.id || entry?.discordId === employee.discordId)
+    .sort((a, b) => new Date(b.respondedAt || b.sentAt || 0) - new Date(a.respondedAt || a.sentAt || 0))[0];
+
+  if (!match) return { label: "Non envoye", className: "mini-pill" };
+  if (match.response === "still_active") return { label: "Reponse: actif", className: "mini-pill success" };
+  if (match.response === "punched_out") return { label: "Reponse: sorti", className: "mini-pill danger" };
+  if (match.ok === false) return { label: "Echec envoi", className: "mini-pill danger" };
+  return { label: "Envoye", className: "mini-pill warning" };
+}
+
 function startAdminLiveTimer() {
   if (adminLiveTimerId) clearInterval(adminLiveTimerId);
   if (!state.isAdmin || !employees.some((employee) => employee.active)) {
@@ -593,10 +607,6 @@ function renderSimulation() {
 
   if (revenue <= 0 || totalHours <= 0) {
     adjustmentFactor = 1;
-  } else if (payrollRatio < 8 && remainingProfit > 0) {
-    adjustmentFactor = 1.10;
-  } else if (payrollRatio < 15 && remainingProfit > 0) {
-    adjustmentFactor = 1.05;
   } else if (payrollRatio <= 28) {
     adjustmentFactor = 1;
   } else if (payrollRatio <= 38) {
@@ -640,11 +650,11 @@ function renderSimulation() {
     if (payrollRatio < 8) {
       headline = "Marge tres confortable";
       status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
-      action = "Conseil prudent: hausse maximale autour de 10%, pas plus, meme si les revenus sont tres hauts.";
+      action = "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
     } else if (payrollRatio < 15) {
       headline = "Paie encore tres saine";
       status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
-      action = "Conseil prudent: garde les taux ou hausse legerement les roles actifs.";
+      action = "Conseil prudent: garde les taux actuels.";
     } else if (payrollRatio <= 28) {
       headline = "Equilibre correct";
       status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
@@ -678,7 +688,7 @@ function renderPresenceList() {
   if (!elements.presenceBody) return;
   const activeEmployees = employees.filter((employee) => employee.active);
   if (!activeEmployees.length) {
-    setHtml(elements.presenceBody, `<tr><td colspan="7">Aucun employe en service.</td></tr>`);
+    setHtml(elements.presenceBody, `<tr><td colspan="8">Aucun employe en service.</td></tr>`);
     return;
   }
 
@@ -686,6 +696,7 @@ function renderPresenceList() {
     const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
     const liveHours = getLiveEmployeeHours(employee);
     const status = getPresenceStatus(liveHours);
+    const reminder = getReminderInfo(employee);
     const entryLabel = employee.activeShiftStartedAt
       ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
       : "-";
@@ -698,6 +709,7 @@ function renderPresenceList() {
         <td>${formatHoursMinutes(liveHours)}</td>
         <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
         <td><span class="${status.className}">${status.label}</span></td>
+        <td><span class="${reminder.className}">${reminder.label}</span></td>
         <td>
           <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
           <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
@@ -1057,6 +1069,7 @@ async function loadAdminDashboard() {
     const data = await response.json();
 
     state.roleRates = { ...state.roleRates, ...(data.settings?.role_rates || {}) };
+    reminderState = data.settings?.reminder_state || {};
     shifts = data.shifts || [];
     employees = (data.employees || []).map(normaliseEmployeeRecord);
 
@@ -1237,9 +1250,9 @@ async function saveFinanceSettings() {
     credentials: "include",
     body: JSON.stringify(getFinancePayload())
   }).then(() => {
-    showToast("Finance enregistree.");
+    showToast("Profit enregistre.");
   }).catch(() => {
-    showToast("Echec de l'enregistrement finance.", true);
+    showToast("Echec de l'enregistrement.", true);
   });
 }
 
@@ -1622,7 +1635,7 @@ async function rebootData(scope = "all") {
     shifts: "les pointages/heures",
     expenses: "les commandes de pieces",
     payouts: "les paies/slips",
-    finance: "les ajouts finance",
+    finance: "le profit",
     all: "tout le systeme operationnel"
   };
   if (!window.confirm(`Zone danger: tu vas reset ${labels[scope] || scope}. Continuer ?`)) return;

@@ -4,6 +4,7 @@ let shifts = [];
 let auditLogs = [];
 let reminderState = {};
 let contracts = [];
+let inventoryStock = {};
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let adminLiveTimerId = null;
@@ -22,6 +23,7 @@ const chartPalette = {
 const routes = [
   "tableau",
   "pointage",
+  "inventaire",
   "presence",
   "stats",
   "gestion",
@@ -118,6 +120,7 @@ const roleIdMap = {
 const pageTitles = {
   tableau: "Tableau de bord",
   pointage: "Punch personnel",
+  inventaire: "Inventaire et Stock",
   presence: "Presence live",
   stats: "Statistiques",
   gestion: "Gestion Paie",
@@ -213,9 +216,14 @@ const elements = {
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page")),
+  inventoryBody: document.getElementById("inventory-body"),
   contractsBody: document.getElementById("contracts-body"),
   addContractBtn: document.getElementById("add-contract-btn"),
   submitPoliceReport: document.getElementById("submit-police-report"),
+  consumePartName: document.getElementById("consume-part-name"),
+  consumePartQuantity: document.getElementById("consume-part-quantity"),
+  consumePartNote: document.getElementById("consume-part-note"),
+  consumeBtn: document.getElementById("consume-btn")
 };
 
 const doughnutCenterTextPlugin = {
@@ -349,15 +357,19 @@ function getRoleRate(roleName) {
 
 function populatePartOptions() {
   if (!elements.partName || elements.partName.dataset.loaded === "true") return;
-  elements.partName.innerHTML = [
-    `<option value="">Selectionner une piece</option>`,
-    `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`,
-    ...garageParts.map(
-      (part) =>
-        `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`,
-    ),
-  ].join("");
+  const options = garageParts.map(
+    (part) => `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`
+  );
+  
+  if (elements.partName) {
+    elements.partName.innerHTML = [`<option value="">Selectionner une piece</option>`, `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`, ...options].join("");
+  }
   elements.partName.dataset.loaded = "true";
+
+  if (elements.consumePartName) {
+    elements.consumePartName.innerHTML = [`<option value="">Selectionner une piece</option>`, ...options].join("");
+  }
+  
   syncSelectedPartCategory();
 }
 
@@ -484,7 +496,6 @@ function applyAccessControl() {
         "finance",
         "pieces",
         "analyse",
-        "contrats",
         "logs",
         "reboot",
         "salaire",
@@ -523,6 +534,8 @@ function routeToCurrentPage() {
       "stats",
       "gestion",
       "pointage",
+      "inventaire",
+      "contrats",
     ];
     if (!allowedRoutes.includes(route)) {
       route = "tableau";
@@ -530,7 +543,7 @@ function routeToCurrentPage() {
         history.replaceState(null, "", "#tableau");
       }
     }
-  } else if (!state.isAdmin && route !== "pointage") {
+  } else if (!state.isAdmin && !["pointage", "contrats", "inventaire"].includes(route)) {
     route = "pointage";
     if (window.location.hash !== "#pointage") {
       history.replaceState(null, "", "#pointage");
@@ -1035,6 +1048,8 @@ function renderContractsTable() {
     return;
   }
 
+  const canEdit = state.isAdmin && !state.isSupervision;
+
   setHtml(
     elements.contractsBody,
     contracts
@@ -1046,13 +1061,35 @@ function renderContractsTable() {
       <td>${formatMoney(c.cost)}</td>
       <td>${escapeHtml(c.note)}</td>
       <td>
-        <button class="danger-button table-button delete-contract-btn" data-id="${c.id}">Supprimer</button>
+        ${canEdit ? `<button class="danger-button table-button delete-contract-btn" data-id="${c.id}">Supprimer</button>` : "-"}
       </td>
     </tr>
   `,
       )
       .join(""),
   );
+}
+
+function renderInventory() {
+  if (!elements.inventoryBody) return;
+  
+  const html = garageParts.map(part => {
+    const currentStock = inventoryStock[part.code] || 0;
+    let stockPill = `<span class="mini-pill success">${currentStock}</span>`;
+    if (currentStock === 0) stockPill = `<span class="mini-pill danger">Rupture</span>`;
+    else if (currentStock <= 5) stockPill = `<span class="mini-pill warning">${currentStock} (Bas)</span>`;
+    
+    return `
+      <tr>
+        <td>${getPartIconMarkup(part.code, part.name)}</td>
+        <td>${escapeHtml(part.name)}</td>
+        <td>${escapeHtml(part.category)}</td>
+        <td>${stockPill}</td>
+      </tr>
+    `;
+  }).join("");
+  
+  setHtml(elements.inventoryBody, html);
 }
 
 function renderLeaderboard() {
@@ -1109,6 +1146,7 @@ function formatAuditAction(action) {
     employee_hours_adjusted: "Heures ajustees",
     shift_force_closed: "Sortie forcee",
     reminder_sent: "Rappel envoye",
+    part_consumed: "Piece consommee",
     part_order_added: "Commande piece ajoutee",
     part_order_deleted: "Commande piece supprimee",
     employee_paid: "Employe paye",
@@ -1436,6 +1474,7 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderAuditLogs();
+  renderInventory();
   renderContractsTable();
   renderShiftState();
   drawShiftDonutChart();
@@ -1461,6 +1500,7 @@ async function loadAdminDashboard() {
     reminderState = data.settings?.reminder_state || {};
     shifts = data.shifts || [];
     contracts = data.contracts || [];
+    inventoryStock = data.inventoryStock || {};
     employees = (data.employees || []).map(normaliseEmployeeRecord);
 
     const latestPayoutByEmployee = new Map();
@@ -1601,6 +1641,13 @@ async function loadMeState() {
     } else {
       activeShiftStartedAt = null;
       state.punchedIn = false;
+    }
+
+    if (data.contracts) {
+      contracts = data.contracts;
+    }
+    if (data.inventoryStock) {
+      inventoryStock = data.inventoryStock;
     }
   } catch (error) {
     console.error(error);
@@ -2151,6 +2198,35 @@ async function rebootData(scope = "all") {
   updateAll();
 }
 
+async function consumePart() {
+  if (state.readOnly) return;
+  const select = elements.consumePartName;
+  if (!select || !select.value) {
+    showToast("Selectionne une piece a consommer.", true);
+    return;
+  }
+  
+  const itemCode = select.value;
+  const partName = select.options[select.selectedIndex].text;
+  const quantity = Math.max(1, Number(elements.consumePartQuantity?.value || 1));
+  const note = elements.consumePartNote?.value || "";
+
+  const response = await fetch("/api/consume-part", {
+    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+    body: JSON.stringify({ itemCode, partName, quantity, note })
+  }).catch(() => null);
+
+  if (!response?.ok) return showToast("Erreur lors de la consommation.", true);
+
+  const data = await response.json();
+  if (data.stock) inventoryStock = data.stock;
+  showToast(`${quantity}x ${partName} consomme(s).`);
+  if (elements.consumePartQuantity) elements.consumePartQuantity.value = "1";
+  if (elements.consumePartNote) elements.consumePartNote.value = "";
+  select.value = "";
+  updateAll();
+}
+
 async function deleteContract(id) {
   if (state.readOnly || !window.confirm("Supprimer ce contrat ?")) return;
   const response = await fetch(`/api/admin-contracts/${id}`, {
@@ -2167,7 +2243,7 @@ async function deleteContract(id) {
 }
 
 elements.addContractBtn?.addEventListener("click", async () => {
-  if (state.readOnly) return;
+  if (!state.isAdmin || state.isSupervision) return;
   const name = document.getElementById("contract-name")?.value;
   const discount = document.getElementById("contract-discount")?.value;
   const cost = document.getElementById("contract-cost")?.value;
@@ -2220,6 +2296,7 @@ elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.partQuantity?.addEventListener("input", renderPartPreview);
+elements.consumeBtn?.addEventListener("click", consumePart);
 elements.rebootButtons.forEach((button) => {
   button.addEventListener("click", () =>
     rebootData(button.dataset.rebootScope || "all"),

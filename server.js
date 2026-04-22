@@ -17,7 +17,7 @@ const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
 const KEEPALIVE_ENABLED = String(process.env.KEEPALIVE_ENABLED || "false").toLowerCase() === "true";
 const KEEPALIVE_INTERVAL_MINUTES = Math.max(5, Number(process.env.KEEPALIVE_INTERVAL_MINUTES || 10));
 const KEEPALIVE_URL = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "";
-const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID = process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1496343277220397116";
+const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID = process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1495989501166747669";
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -168,6 +168,10 @@ function formatRpMoney(value) {
   return `${Math.round(Number(value || 0))}$`;
 }
 
+function numberOrDefault(value, fallback) {
+  return value === null || value === undefined || value === "" ? fallback : Number(value);
+}
+
 async function getRoleRates(supabase) {
   const settings = await getSettingsMap(supabase);
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
@@ -225,7 +229,11 @@ function buildEmployeeGuideEmbed() {
       },
       {
         name: "/paye",
-        value: "Affiche tes heures actuelles, ton taux horaire et l'argent gagne jusqu'a maintenant."
+        value: "Affiche tes heures actuelles, ton taux horaire et l'argent gagne jusqu'a maintenant. Le resultat est prive: seulement toi peux voir ton solde."
+      },
+      {
+        name: "Panel web",
+        value: "Pour consulter le [PANEL WEB](https://tunerclock.onrender.com/#presence)."
       },
       {
         name: "Rappel automatique",
@@ -620,7 +628,7 @@ async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "
 async function punchInDiscordUser(discordId, displayName, roleName = "Mecano") {
   const supabase = getSupabase();
   const roleRates = await getRoleRates(supabase);
-  const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
+  const roleRate = numberOrDefault(roleRates[roleName], DEFAULT_HOURLY_RATE);
   const { data: existingEmployee } = await supabase
     .from("employees")
     .select("*")
@@ -711,7 +719,7 @@ async function getPaySummaryForDiscordUser(discordId) {
 
   const liveHours = activeShift ? Math.max(0, (Date.now() - new Date(activeShift.punched_in_at).getTime()) / 3600000) : 0;
   const totalHours = Number(employee.total_hours || 0) + liveHours;
-  const hourlyRate = Number(employee.hourly_rate || DEFAULT_HOURLY_RATE);
+  const hourlyRate = numberOrDefault(employee.hourly_rate, DEFAULT_HOURLY_RATE);
   return {
     employee,
     liveHours,
@@ -1023,7 +1031,7 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
     const supabase = getSupabase();
     const roleRates = await getRoleRates(supabase);
     const roleName = req.session.roleName || "Mecano";
-    const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
+    const roleRate = numberOrDefault(roleRates[roleName], DEFAULT_HOURLY_RATE);
     const { data: existingEmployee } = await supabase
       .from("employees")
       .select("*")
@@ -1587,7 +1595,7 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
-    const hourlyRate = Number(employee.hourly_rate || DEFAULT_HOURLY_RATE);
+    const hourlyRate = numberOrDefault(employee.hourly_rate, DEFAULT_HOURLY_RATE);
     const hoursPaid = Number(employee.total_hours || 0);
     const amountPaid = Number((hoursPaid * hourlyRate).toFixed(2));
 

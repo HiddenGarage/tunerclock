@@ -15,7 +15,7 @@ const DEFAULT_HOURLY_RATE = 25;
 const REMINDER_AFTER_HOURS = Number(process.env.REMINDER_AFTER_HOURS || 3);
 const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
 const KEEPALIVE_ENABLED = String(process.env.KEEPALIVE_ENABLED || "false").toLowerCase() === "true";
-const KEEPALIVE_INTERVAL_MINUTES = Math.max(5, Number(process.env.KEEPALIVE_INTERVAL_MINUTES || 5));
+const KEEPALIVE_INTERVAL_MINUTES = Math.max(5, Number(process.env.KEEPALIVE_INTERVAL_MINUTES || 10));
 const KEEPALIVE_URL = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "";
 let discordClient = null;
 let reminderMonitorId = null;
@@ -35,6 +35,7 @@ const ROLE_DEFINITIONS = [
   { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
   { name: "Copatron", id: "1487666934412611594", hourlyRate: 45, isAdmin: true },
   { name: "Gerant", id: "1487852908077781168", hourlyRate: 35, isAdmin: true },
+  { name: "Gouvernement", id: "1494749026694987816", hourlyRate: 0, isAdmin: true, canManage: false },
   { name: "Mecano", id: "1487852832643354665", hourlyRate: 25, isAdmin: false },
   { name: "Apprenti", id: "1487852702519136496", hourlyRate: 18, isAdmin: false }
 ];
@@ -74,10 +75,19 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function requireAdmin(req, res, next) {
+function requireAdminAccess(req, res, next) {
   const session = getSession(req);
   if (!session || !session.isAdmin) {
     return res.status(403).send("Acces refuse.");
+  }
+  req.session = session;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  const session = getSession(req);
+  if (!session || !session.isAdmin || session.canManage === false) {
+    return res.status(403).send("Acces lecture seule.");
   }
   req.session = session;
   next();
@@ -744,6 +754,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     let roleName = "Mecano";
     let roleId = null;
     let isAdmin = getAdminIds().includes(profile.id);
+    let canManage = true;
 
     if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
       const memberResponse = await fetch(`https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`, {
@@ -757,12 +768,14 @@ app.get("/auth/discord/callback", async (req, res) => {
         roleName = resolvedRole.name;
         roleId = resolvedRole.id;
         isAdmin = isAdmin || resolvedRole.isAdmin;
+        canManage = resolvedRole.canManage !== false;
       } else {
         const fallbackRole = getAdminFallbackRole(profile.id);
         if (fallbackRole) {
           roleName = fallbackRole.name;
           roleId = fallbackRole.id;
           isAdmin = true;
+          canManage = true;
         }
       }
     } else {
@@ -771,6 +784,7 @@ app.get("/auth/discord/callback", async (req, res) => {
         roleName = fallbackRole.name;
         roleId = fallbackRole.id;
         isAdmin = true;
+        canManage = true;
       }
     }
 
@@ -781,7 +795,9 @@ app.get("/auth/discord/callback", async (req, res) => {
       roleName,
       roleId,
       avatar: profile.avatar,
-      isAdmin
+      isAdmin,
+      canManage,
+      readOnly: isAdmin && canManage === false
     };
 
     res.setHeader("Set-Cookie", buildCookie("tunerclock_session", encodeSession(session, required("SESSION_SECRET"))));
@@ -956,7 +972,7 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin-dashboard", requireAdmin, async (req, res) => {
+app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
   try {
     const supabase = getSupabase();
     const [employees, expensesResult, payoutsResult, profitsResult, shiftsResult, settings] = await Promise.all([
@@ -986,7 +1002,7 @@ app.get("/api/admin-dashboard", requireAdmin, async (req, res) => {
   }
 });
 
-app.get("/api/admin-audit-logs", requireAdmin, async (req, res) => {
+app.get("/api/admin-audit-logs", requireAdminAccess, async (req, res) => {
   try {
     const supabase = getSupabase();
     const { data, error } = await supabase
@@ -1507,33 +1523,49 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
 app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
+    const scope = String(req.body?.scope || "all");
+    const allowedScopes = new Set(["shifts", "expenses", "payouts", "finance", "all"]);
+    if (!allowedScopes.has(scope)) {
+      return res.status(400).send("Scope reboot invalide.");
+    }
 
-    const [{ error: shiftsError }, { error: expensesError }, { error: payoutsError }, { error: profitsError }, { error: employeesError }] = await Promise.all([
-      supabase.from("shifts").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-      supabase.from("expense_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-      supabase.from("payouts").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-      supabase.from("weekly_profit_entries").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-      supabase.from("employees").update({ total_hours: 0, active_days: 0, is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000")
-    ]);
+    if (scope === "shifts" || scope === "all") {
+      const { error: shiftsError } = await supabase.from("shifts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      if (shiftsError) throw shiftsError;
+      const { error: employeesError } = await supabase.from("employees").update({ total_hours: 0, active_days: 0, is_active: false }).neq("id", "00000000-0000-0000-0000-000000000000");
+      if (employeesError) throw employeesError;
+      await upsertSetting(supabase, "reminder_state", {});
+    }
 
-    if (shiftsError) throw shiftsError;
-    if (expensesError) throw expensesError;
-    if (payoutsError) throw payoutsError;
-    if (profitsError) throw profitsError;
-    if (employeesError) throw employeesError;
+    if (scope === "expenses" || scope === "all") {
+      const { error: expensesError } = await supabase.from("expense_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      if (expensesError) throw expensesError;
+    }
 
-    await upsertSetting(supabase, "global_hourly_rate", { amount: DEFAULT_HOURLY_RATE });
-    await upsertSetting(supabase, "role_rates", getDefaultRoleRates());
-    await upsertSetting(supabase, "finance_inputs", {
-      serviceIncome: 0,
-      weeklyProfit: 0,
-      manualPayouts: 0,
-      miscExpenses: 0,
-      calcNote: ""
-    });
-    await upsertSetting(supabase, "reminder_state", {});
+    if (scope === "payouts" || scope === "all") {
+      const { error: payoutsError } = await supabase.from("payouts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      if (payoutsError) throw payoutsError;
+    }
+
+    if (scope === "finance" || scope === "all") {
+      const { error: profitsError } = await supabase.from("weekly_profit_entries").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      if (profitsError) throw profitsError;
+      await upsertSetting(supabase, "finance_inputs", {
+        serviceIncome: 0,
+        weeklyProfit: 0,
+        manualPayouts: 0,
+        miscExpenses: 0,
+        calcNote: ""
+      });
+    }
+
+    if (scope === "all") {
+      await upsertSetting(supabase, "global_hourly_rate", { amount: DEFAULT_HOURLY_RATE });
+      await upsertSetting(supabase, "role_rates", getDefaultRoleRates());
+    }
+
     await writeAuditLog(supabase, req, "system_reboot", {
-      details: { scope: "complete" }
+      details: { scope }
     });
 
     res.json({ ok: true });

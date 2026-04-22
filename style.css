@@ -39,8 +39,16 @@ body {
   min-height: 100vh;
   font-family: "Manrope", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(75, 124, 246, 0.08), transparent 22%),
-    radial-gradient(circle at bottom right, rgba(48, 196, 163, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top left,
+      rgba(75, 124, 246, 0.08),
+      transparent 22%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(48, 196, 163, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, #f7f9fd 0%, #f3f6fb 100%);
   color: var(--text);
 }
@@ -101,7 +109,11 @@ a {
   border-radius: 4px;
   border: 1px solid transparent;
   font-weight: 600;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .nav-item:hover,
@@ -140,7 +152,11 @@ a {
 }
 
 .nav-item-highlight.active {
-  background: linear-gradient(180deg, rgba(75, 124, 246, 0.22) 0%, rgba(75, 124, 246, 0.14) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(75, 124, 246, 0.22) 0%,
+    rgba(75, 124, 246, 0.14) 100%
+  );
   border-color: rgba(127, 168, 255, 0.24);
 }
 
@@ -152,7 +168,11 @@ a {
 
 .nav-item-success.active,
 .nav-item-success:hover {
-  background: linear-gradient(180deg, rgba(48, 196, 163, 0.24) 0%, rgba(48, 196, 163, 0.12) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(48, 196, 163, 0.24) 0%,
+    rgba(48, 196, 163, 0.12) 100%
+  );
   border-color: rgba(48, 196, 163, 0.28);
 }
 
@@ -162,7 +182,11 @@ a {
 
 .nav-item-danger.active,
 .nav-item-danger:hover {
-  background: linear-gradient(180deg, rgba(217, 75, 75, 0.24) 0%, rgba(217, 75, 75, 0.12) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(217, 75, 75, 0.24) 0%,
+    rgba(217, 75, 75, 0.12) 100%
+  );
   border-color: rgba(217, 75, 75, 0.28);
 }
 
@@ -270,7 +294,10 @@ a {
   align-items: center;
   justify-content: center;
   text-decoration: none;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .primary-button:hover,
@@ -343,7 +370,11 @@ a {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55),
+    rgba(255, 255, 255, 0)
+  );
   opacity: 0.75;
 }
 
@@ -354,8 +385,16 @@ a {
 
 .gradient-card {
   background:
-    radial-gradient(circle at top right, rgba(75, 124, 246, 0.16), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(48, 196, 163, 0.12), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(75, 124, 246, 0.16),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(48, 196, 163, 0.12),
+      transparent 30%
+    ),
     linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
 }
 
@@ -403,7 +442,7 @@ a {
   border-radius: 4px;
   background:
     linear-gradient(135deg, rgba(75, 124, 246, 0.12), rgba(75, 124, 246, 0.02)),
-    linear-gradient(180deg, rgba(48, 196, 163, 0.10), rgba(48, 196, 163, 0));
+    linear-gradient(180deg, rgba(48, 196, 163, 0.1), rgba(48, 196, 163, 0));
   opacity: 0.9;
 }
 
@@ -414,7 +453,11 @@ a {
 
 .summary-item,
 .pointage-meter {
-  background: linear-gradient(180deg, rgba(247, 250, 255, 0.98) 0%, rgba(242, 247, 255, 0.98) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(247, 250, 255, 0.98) 0%,
+    rgba(242, 247, 255, 0.98) 100%
+  );
   border: 1px solid #e7edf8;
   border-radius: 4px;
   padding: 16px;
@@ -442,8 +485,16 @@ a {
 
 .chart-card {
   background:
-    radial-gradient(circle at top right, rgba(75, 124, 246, 0.08), transparent 26%),
-    radial-gradient(circle at bottom left, rgba(48, 196, 163, 0.08), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(75, 124, 246, 0.08),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(48, 196, 163, 0.08),
+      transparent 24%
+    ),
     linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
   contain: layout paint;
   overflow: hidden;
@@ -478,8 +529,16 @@ a {
 .pointage-shell {
   min-height: 360px;
   background:
-    radial-gradient(circle at top right, rgba(75, 124, 246, 0.12), transparent 28%),
-    radial-gradient(circle at bottom left, rgba(48, 196, 163, 0.12), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(75, 124, 246, 0.12),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(48, 196, 163, 0.12),
+      transparent 30%
+    ),
     linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
 }
 
@@ -583,7 +642,11 @@ a {
 .analysis-recommendation {
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,254,0.96));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.96),
+    rgba(246, 249, 254, 0.96)
+  );
   padding: 16px;
 }
 
@@ -617,7 +680,11 @@ a {
 .analysis-recommendation {
   margin-top: 16px;
   background:
-    radial-gradient(circle at top right, rgba(48, 196, 163, 0.14), transparent 30%),
+    radial-gradient(
+      circle at top right,
+      rgba(48, 196, 163, 0.14),
+      transparent 30%
+    ),
     linear-gradient(180deg, #ffffff 0%, #f5fbf9 100%);
 }
 
@@ -675,7 +742,9 @@ select {
   color: var(--text);
   padding: 12px 14px;
   outline: none;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 select {
@@ -869,7 +938,9 @@ td {
 }
 
 .read-only-mode .card {
-  box-shadow: inset 4px 0 0 rgba(48, 196, 163, 0.28), 0 18px 48px rgba(22, 29, 42, 0.08);
+  box-shadow:
+    inset 4px 0 0 rgba(48, 196, 163, 0.28),
+    0 18px 48px rgba(22, 29, 42, 0.08);
 }
 
 .read-only-mode .main-panel button:not(#logout-button),
@@ -885,7 +956,11 @@ td {
 
 .reboot-card {
   background:
-    radial-gradient(circle at top right, rgba(226, 92, 92, 0.10), transparent 24%),
+    radial-gradient(
+      circle at top right,
+      rgba(226, 92, 92, 0.1),
+      transparent 24%
+    ),
     linear-gradient(180deg, #fff9f9 0%, #ffffff 100%);
   border-color: #f1dbdb;
 }
@@ -954,57 +1029,56 @@ td {
 }
 
 /* Visual polish: Payonex / TrafficTrace inspired dashboard */
-body {
-  background: #edf1f7;
-}
-
-.app-shell {
-  background: #f6f8fc;
-}
-
-.sidebar {
-  box-shadow: 18px 0 48px rgba(21, 23, 26, 0.08);
-}
-
 .brand-block {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--sidebar-line);
   padding-bottom: 18px;
 }
 
 .nav-item {
-  padding-left: 42px;
+  padding-left: 16px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
 }
 
+.nav-item:hover,
+.nav-item.active {
+  border-left-color: var(--red);
+}
 .nav-item::before {
-  left: 16px;
-  width: 14px;
-  height: 14px;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,0.72) 0 3px, transparent 3px 5px, rgba(255,255,255,0.72) 5px 8px, transparent 8px 10px, rgba(255,255,255,0.72) 10px 14px);
-  opacity: 0.62;
-}
-
-.nav-item.active::before {
-  background:
-    linear-gradient(180deg, #ffffff 0%, #bcd0ff 100%);
-  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
-  opacity: 1;
+  display: none;
 }
 
 .main-panel {
-  background: #f6f8fc;
-  border-left: 1px solid #e4e9f2;
+  background-image: radial-gradient(
+    circle at top right,
+    rgba(230, 57, 70, 0.05),
+    transparent 40%
+  );
+  background-color: var(--bg);
+  border-left: none;
 }
 
 .topbar {
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid #e6ebf4;
-  box-shadow: 0 18px 46px rgba(36, 47, 66, 0.06);
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #1b1b1e 0,
+      #1b1b1e 2px,
+      #141415 2px,
+      #141415 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(0, 0, 0, 0.5) 0,
+      rgba(0, 0, 0, 0.5) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+  background-color: #141415;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
   padding: 18px 20px;
-}
-
-.card {
-  box-shadow: 0 18px 42px rgba(35, 45, 64, 0.07);
+  border-radius: 8px;
 }
 
 .metric-card {
@@ -1013,100 +1087,49 @@ body {
   overflow: hidden;
 }
 
-.metric-card::before {
-  top: 22px;
-  right: 22px;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 12px 24px rgba(24, 37, 56, 0.08);
-}
-
-.metric-card::after {
-  opacity: 1;
-  background:
-    linear-gradient(90deg, transparent 0 55%, rgba(255,255,255,0.65) 55% 100%),
-    linear-gradient(135deg, transparent 0 58%, rgba(75,124,246,0.16) 58% 60%, transparent 60% 64%, rgba(75,124,246,0.16) 64% 66%, transparent 66%);
-  inset: auto 0 0 auto;
-  width: 190px;
-  height: 82px;
-}
-
 .metric-card h3 {
   font-size: 2.25rem;
   letter-spacing: -0.05em;
 }
 
+/* Top borders for metrics */
 .metric-revenue {
-  border-top: 4px solid var(--blue);
+  border-top: 4px solid var(--teal);
 }
-
-.metric-revenue::before {
-  background: linear-gradient(135deg, #eaf1ff 0%, #dce8ff 100%);
-}
-
 .metric-expenses {
   border-top: 4px solid var(--orange);
 }
-
-.metric-expenses::before {
-  background: linear-gradient(135deg, #fff4e5 0%, #ffe2bc 100%);
-}
-
 .metric-payroll {
-  border-top: 4px solid #7c5cf4;
-}
-
-.metric-payroll::before {
-  background: linear-gradient(135deg, #f1edff 0%, #e2d9ff 100%);
-}
-
-.metric-profit {
-  border-top: 4px solid var(--teal);
-}
-
-.metric-profit::before {
-  background: linear-gradient(135deg, #e8fbf6 0%, #cff4e9 100%);
-}
-
-.metric-parts {
   border-top: 4px solid var(--red);
 }
-
-.metric-parts::before {
-  background: linear-gradient(135deg, #fff0f0 0%, #ffd8d8 100%);
+.metric-profit {
+  border-top: 4px solid var(--blue);
+}
+.metric-parts {
+  border-top: 4px solid var(--muted);
 }
 
 .enterprise-hero {
-  background:
-    linear-gradient(90deg, rgba(75,124,246,0.08), transparent 38%),
-    linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  background: var(--panel);
 }
 
 .summary-item {
-  background: #ffffff;
-  box-shadow: inset 0 0 0 1px #eef2f8;
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .summary-item strong {
-  color: #111827;
+  color: white;
   font-size: 1.55rem;
 }
 
 .chart-card {
   min-height: 388px;
-  background:
-    linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+  background: var(--panel);
 }
 
 .chart-card::before {
-  content: "";
-  position: absolute;
-  left: 22px;
-  right: 22px;
-  bottom: 26px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #e6ebf4, transparent);
+  display: none;
 }
 
 .large-chart-card {
@@ -1121,24 +1144,18 @@ body {
 }
 
 .pointage-shell {
-  border-top: 4px solid var(--blue);
-  background:
-    linear-gradient(135deg, rgba(75,124,246,0.08), transparent 38%),
-    linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+  border-top: 4px solid var(--red);
+  background: var(--panel);
 }
 
 .pointage-main-meter {
-  background:
-    linear-gradient(90deg, rgba(75,124,246,0.10) 0 34%, transparent 34%),
-    #ffffff;
-  border-left: 4px solid var(--blue);
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 4px solid var(--teal);
 }
 
 .blue-meter {
-  background:
-    linear-gradient(90deg, rgba(48,196,163,0.12) 0 34%, transparent 34%),
-    #ffffff;
-  border-left-color: var(--teal);
+  background: rgba(0, 0, 0, 0.2);
+  border-left-color: var(--red);
 }
 
 .pointage-main-meter strong {
@@ -1146,13 +1163,13 @@ body {
 }
 
 table {
-  background: #ffffff;
+  background: transparent;
 }
 
 th {
-  background: #f8fafd;
+  background: transparent;
 }
 
 tbody tr:hover {
-  background: #fbfdff;
+  background: var(--panel-soft);
 }

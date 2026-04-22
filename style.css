@@ -1,15 +1,15 @@
 :root {
-  --bg: #f4f7fb;
+  --bg: #1a1b1d;
   --bg-soft: #eef3fb;
-  --panel: #ffffff;
+  --panel: #222325;
   --panel-soft: #f8fbff;
   --panel-muted: #f1f5fb;
   --sidebar: #232425;
   --sidebar-soft: #2a2c2e;
   --sidebar-line: rgba(255, 255, 255, 0.07);
-  --line: #e7edf6;
+  --line: #33363a;
   --line-strong: #d8e1ef;
-  --text: #1b2533;
+  --text: #f4f7fb;
   --muted: #7d8898;
   --blue: #4b7cf6;
   --blue-soft: #edf3ff;
@@ -38,18 +38,7 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: "Manrope", sans-serif;
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(75, 124, 246, 0.08),
-      transparent 22%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(48, 196, 163, 0.08),
-      transparent 24%
-    ),
-    linear-gradient(180deg, #f7f9fd 0%, #f3f6fb 100%);
+  background-color: var(--bg);
   color: var(--text);
 }
 

@@ -1,9 +1,10 @@
 require("dotenv").config();
 
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
+const { ActionRowBuilder, AttachmentBuilder, ButtonBuilder, ButtonStyle, Client, GatewayIntentBits, ActivityType, EmbedBuilder, Partials } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const { encodeSession, decodeSession, parseCookies, buildCookie } = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
@@ -29,6 +30,7 @@ const ADMIN_ROLE_FALLBACKS = {
   "417605116070461442": "Patron",
   "893278269170933810": "Copatron"
 };
+const PAYSLIP_SIGNATURE = "Signé Léo Belleamy et Niko Walker | Santos Tuners Inc";
 const ROLE_DEFINITIONS = [
   { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
   { name: "Copatron", id: "1487666934412611594", hourlyRate: 45, isAdmin: true },
@@ -157,6 +159,17 @@ function getAdminFallbackRole(discordId) {
   return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
 }
 
+function resolveRoleFromDiscordMember(member, discordId) {
+  const roleIds = Array.isArray(member?.roles)
+    ? member.roles
+    : Array.from(member?.roles?.cache?.keys?.() || []);
+  return resolveMemberRole(roleIds) || getAdminFallbackRole(discordId) || ROLE_DEFINITIONS[3];
+}
+
+function getLogoPath() {
+  return path.join(__dirname, "logo", "TurboPunch.png");
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -168,7 +181,8 @@ function startDiscordBot() {
   }
 
   discordClient = new Client({
-    intents: [GatewayIntentBits.Guilds]
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+    partials: [Partials.Channel]
   });
 
   discordClient.once("ready", () => {
@@ -200,6 +214,69 @@ function startDiscordBot() {
   discordClient.on("invalidated", () => {
     discordBotRuntime.online = false;
     discordBotRuntime.error = "Session invalidee";
+  });
+
+  discordClient.on("interactionCreate", async (interaction) => {
+    try {
+      if (interaction.isChatInputCommand()) {
+        const roleDefinition = resolveRoleFromDiscordMember(interaction.member, interaction.user.id);
+        const displayName = interaction.member?.displayName || interaction.user.globalName || interaction.user.username;
+
+        if (interaction.commandName === "in") {
+          await interaction.deferReply({ ephemeral: true });
+          const result = await punchInDiscordUser(interaction.user.id, displayName, roleDefinition.name);
+          await interaction.editReply(result.alreadyActive
+            ? "Tu etais deja en service."
+            : `Tu es maintenant en service comme ${roleDefinition.name}.`);
+          return;
+        }
+
+        if (interaction.commandName === "out") {
+          await interaction.deferReply({ ephemeral: true });
+          const result = await punchOutDiscordUser(interaction.user.id);
+          await interaction.editReply(`Sortie enregistree. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`);
+          return;
+        }
+      }
+
+      if (interaction.isButton()) {
+        const [action, employeeId] = String(interaction.customId || "").split(":");
+        if (!["tc_reminder_out", "tc_reminder_active"].includes(action)) return;
+
+        await interaction.deferReply({ ephemeral: true });
+        const supabase = getSupabase();
+        const { data: employee, error: employeeError } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("id", employeeId)
+          .single();
+
+        if (employeeError || !employee) {
+          await interaction.editReply("Employe introuvable dans TunerClock.");
+          return;
+        }
+
+        if (employee.discord_id !== interaction.user.id) {
+          await interaction.editReply("Ce rappel ne t'est pas destine.");
+          return;
+        }
+
+        if (action === "tc_reminder_active") {
+          await interaction.editReply("Parfait, tu restes en service. Merci d'avoir confirme.");
+          return;
+        }
+
+        const result = await closeActiveShiftForEmployee(supabase, employee, "Rappel Discord");
+        await interaction.editReply(`Punch out effectue. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`);
+      }
+    } catch (error) {
+      console.error("Interaction Discord impossible:", error.message);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(`Erreur TunerClock: ${error.message}`).catch(() => {});
+      } else {
+        await interaction.reply({ content: `Erreur TunerClock: ${error.message}`, ephemeral: true }).catch(() => {});
+      }
+    }
   });
 
   discordClient.login(process.env.DISCORD_BOT_TOKEN).catch((error) => {
@@ -275,6 +352,65 @@ async function sendDiscordDm(discordId, message) {
   return { ok: true };
 }
 
+async function sendDiscordDmPayload(discordId, payload) {
+  if (!discordId || !process.env.DISCORD_BOT_TOKEN) {
+    return { ok: false, reason: "Bot Discord non configure." };
+  }
+
+  if (discordClient?.isReady?.()) {
+    const user = await discordClient.users.fetch(discordId).catch(() => null);
+    if (!user) return { ok: false, reason: "Utilisateur Discord introuvable." };
+    await user.send(payload);
+    return { ok: true };
+  }
+
+  return sendDiscordDm(discordId, payload.content || "Message TunerClock.");
+}
+
+function buildReminderPayload(employee, durationHours) {
+  const embed = new EmbedBuilder()
+    .setColor(0x30c4a3)
+    .setTitle("Verification de presence TunerClock")
+    .setDescription("Tu es encore en service. Est-ce que tu as oublie de punch out ?")
+    .addFields(
+      { name: "Employe", value: employee.discord_name || "Employe", inline: true },
+      { name: "Duree actuelle", value: `${Number(durationHours || 0).toFixed(2)} h`, inline: true },
+      { name: "Action", value: "Clique Oui pour te sortir automatiquement, ou Non si tu travailles encore." }
+    )
+    .setFooter({ text: "Santos Tuners Inc" })
+    .setTimestamp();
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`tc_reminder_out:${employee.id}`)
+      .setLabel("Oui, punch out")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`tc_reminder_active:${employee.id}`)
+      .setLabel("Non, je travaille")
+      .setStyle(ButtonStyle.Success)
+  );
+
+  return { embeds: [embed], components: [row] };
+}
+
+function buildPayslipText(payload) {
+  return [
+    "TunerClock | Slip de paie officiel",
+    "Santos Tuners Inc",
+    "",
+    `Employe: ${payload.employeeName}`,
+    `Discord ID: ${payload.discordId || "-"}`,
+    `Heures payees: ${Number(payload.hoursPaid || 0).toFixed(2)} h`,
+    `Taux horaire: ${formatRpMoney(payload.hourlyRate)}`,
+    `Montant verse: ${formatRpMoney(payload.amountPaid)}`,
+    `Date: ${payload.paidAtLabel || ""}`,
+    `Verse par: ${payload.paidBy || "Gestion"}`,
+    "",
+    PAYSLIP_SIGNATURE
+  ].join("\n");
+}
+
 async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "Systeme") {
   const { data: shift, error: shiftError } = await supabase
     .from("shifts")
@@ -283,10 +419,13 @@ async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "
     .eq("status", "active")
     .order("punched_in_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (shiftError) {
     throw shiftError;
+  }
+  if (!shift) {
+    throw new Error("Aucun shift actif a fermer.");
   }
 
   const punchedOutAt = new Date();
@@ -335,6 +474,66 @@ async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "
   return { durationHours, shiftPeriod, punchedInAt, punchedOutAt };
 }
 
+async function punchInDiscordUser(discordId, displayName, roleName = "Mecano") {
+  const supabase = getSupabase();
+  const roleRates = await getRoleRates(supabase);
+  const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .upsert({
+      discord_id: discordId,
+      discord_name: displayName,
+      role: roleName,
+      hourly_rate: roleRate,
+      is_active: true
+    }, { onConflict: "discord_id" })
+    .select()
+    .single();
+
+  if (employeeError) throw employeeError;
+
+  const { data: existingActive } = await supabase
+    .from("shifts")
+    .select("id")
+    .eq("employee_id", employee.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+
+  if (existingActive) {
+    return { alreadyActive: true, employee };
+  }
+
+  const { error: shiftError } = await supabase.from("shifts").insert({
+    employee_id: employee.id,
+    punched_in_at: new Date().toISOString(),
+    status: "active"
+  });
+  if (shiftError) throw shiftError;
+
+  await sendActivityWebhook("punch_in", {
+    displayName,
+    username: displayName,
+    roleName,
+    discordId,
+    timestampLabel: new Date().toLocaleString("fr-CA")
+  });
+
+  return { alreadyActive: false, employee };
+}
+
+async function punchOutDiscordUser(discordId) {
+  const supabase = getSupabase();
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("discord_id", discordId)
+    .single();
+
+  if (employeeError) throw employeeError;
+  return closeActiveShiftForEmployee(supabase, employee, "Discord");
+}
+
 async function scanLongActiveShifts() {
   if (!process.env.DISCORD_BOT_TOKEN) return;
 
@@ -370,15 +569,7 @@ async function scanLongActiveShifts() {
 
       if (employeeError || !employee?.discord_id) continue;
 
-      const dmResult = await sendDiscordDm(
-        employee.discord_id,
-        [
-          "TunerClock | Verification de presence",
-          `Tu es en service depuis ${Number(durationHours || 0).toFixed(2)} h.`,
-          "Si tu travailles encore, parfait.",
-          "Si tu as oublie de sortir, utilise /out ou retourne sur le site pour punch out."
-        ].join("\n")
-      );
+      const dmResult = await sendDiscordDmPayload(employee.discord_id, buildReminderPayload(employee, durationHours));
 
       reminderState[shift.id] = {
         sentAt: new Date().toISOString(),
@@ -472,6 +663,10 @@ function buildPayslipPdf(res, payload) {
   doc.pipe(res);
 
   doc.rect(0, 0, 595, 110).fill("#233648");
+  const logoPath = getLogoPath();
+  if (fs.existsSync(logoPath)) {
+    doc.image(logoPath, 470, 24, { width: 58, height: 58 });
+  }
   doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(26).text("TunerClock", 48, 34);
   doc.font("Helvetica").fontSize(12).text("Slip de paie officiel", 48, 68);
 
@@ -497,6 +692,8 @@ function buildPayslipPdf(res, payload) {
 
   doc.fillColor("#6b7785").font("Helvetica").fontSize(10);
   doc.text("Document genere automatiquement par TunerClock.", 48, 520);
+  doc.fillColor("#17212d").font("Helvetica-Bold").fontSize(11);
+  doc.text(PAYSLIP_SIGNATURE, 48, 548);
   doc.end();
 }
 
@@ -1000,15 +1197,7 @@ app.post("/api/admin-send-reminder", requireAdmin, async (req, res) => {
     }
 
     const durationHours = (Date.now() - new Date(shift.punched_in_at).getTime()) / 3600000;
-    const dmResult = await sendDiscordDm(
-      employee.discord_id,
-      [
-        "TunerClock | Rappel de service",
-        `Tu es en service depuis ${Number(durationHours || 0).toFixed(2)} h.`,
-        "Si tu travailles encore, tu peux ignorer ce message.",
-        "Si tu as oublie de sortir, utilise /out ou retourne sur le site pour punch out."
-      ].join("\n")
-    );
+    const dmResult = await sendDiscordDmPayload(employee.discord_id, buildReminderPayload(employee, durationHours));
 
     if (!dmResult.ok) {
       return res.status(500).send(dmResult.reason || "DM impossible.");
@@ -1130,6 +1319,38 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
   }
 });
 
+app.delete("/api/admin-expense/:expenseId", requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data: expense } = await supabase
+      .from("expense_logs")
+      .select("*")
+      .eq("id", req.params.expenseId)
+      .single();
+
+    const { error } = await supabase
+      .from("expense_logs")
+      .delete()
+      .eq("id", req.params.expenseId);
+
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+
+    await writeAuditLog(supabase, req, "part_order_deleted", {
+      details: {
+        expenseId: req.params.expenseId,
+        name: expense?.name || null,
+        cost: expense?.cost || null
+      }
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
   try {
     const employeeId = req.body?.employeeId;
@@ -1246,41 +1467,36 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
       return res.json({ ok: false });
     }
 
-    const createDmResponse = await fetch("https://discord.com/api/v10/users/@me/channels", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
-      },
-      body: JSON.stringify({ recipient_id: discordId })
-    });
-
-    if (!createDmResponse.ok) {
-      return res.status(500).send(await createDmResponse.text());
+    const textBuffer = Buffer.from(buildPayslipText({
+      ...payslip,
+      paidBy: req.session.displayName || req.session.username
+    }), "utf8");
+    const logoPath = getLogoPath();
+    const files = [
+      new AttachmentBuilder(textBuffer, { name: `slip-${String(payslip.employeeName || "employe").replace(/\s+/g, "-").toLowerCase()}.txt` })
+    ];
+    if (fs.existsSync(logoPath)) {
+      files.push(new AttachmentBuilder(logoPath, { name: "santos-tuners-logo.png" }));
     }
 
-    const dmChannel = await createDmResponse.json();
-    const message = [
-      `TunerClock | Slip de paie`,
-      `Employe: ${payslip.employeeName}`,
-      `Heures payees: ${Number(payslip.hoursPaid || 0).toFixed(2)} h`,
-      `Taux horaire: ${formatRpMoney(payslip.hourlyRate)}`,
-      `Montant verse: ${formatRpMoney(payslip.amountPaid)}`,
-      `Date: ${payslip.paidAtLabel || ""}`
-    ].join("\n");
+    const embed = new EmbedBuilder()
+      .setColor(0x30c4a3)
+      .setTitle("Slip de paie Santos Tuners Inc")
+      .setDescription(`Paiement emis pour **${payslip.employeeName}**.`)
+      .addFields(
+        { name: "Heures payees", value: `${Number(payslip.hoursPaid || 0).toFixed(2)} h`, inline: true },
+        { name: "Taux horaire", value: formatRpMoney(payslip.hourlyRate), inline: true },
+        { name: "Montant verse", value: formatRpMoney(payslip.amountPaid), inline: true },
+        { name: "Signature", value: PAYSLIP_SIGNATURE }
+      )
+      .setTimestamp();
 
-    const sendResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`
-      },
-      body: JSON.stringify({ content: message })
-    });
-
-    if (!sendResponse.ok) {
-      return res.status(500).send(await sendResponse.text());
+    if (fs.existsSync(logoPath)) {
+      embed.setThumbnail("attachment://santos-tuners-logo.png");
     }
+
+    const dmResult = await sendDiscordDmPayload(discordId, { embeds: [embed], files });
+    if (!dmResult.ok) return res.status(500).send(dmResult.reason || "DM impossible.");
 
     res.json({ ok: true });
   } catch (error) {

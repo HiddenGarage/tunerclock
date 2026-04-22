@@ -19,7 +19,6 @@
       <nav class="sidebar-nav">
         <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
         <a href="#pointage" class="nav-item" data-route="pointage">Punch</a>
-        <a href="#inventaire" class="nav-item" data-route="inventaire">Inventaire</a>
         <a href="#presence" class="nav-item nav-item-highlight" data-route="presence" data-admin-only="true">Presence</a>
         <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Statistiques</a>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Gestion Paie</a>
@@ -29,6 +28,7 @@
         <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Analyse</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
+        <a href="#inventaire" class="nav-item" data-route="inventaire">Inventaire</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
     </aside>
@@ -166,42 +166,6 @@
         </article>
       </section>
 
-      <section id="page-inventaire" class="app-page inventaire-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-2">
-            <div class="card-head">
-              <div>
-                <h3>Stock actuel</h3>
-                <p class="muted">Apercu des pieces disponibles dans l'atelier.</p>
-              </div>
-              <span class="mini-pill">Inventaire</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Icone</th><th>Piece</th><th>Categorie</th><th>En stock</th></tr></thead>
-                <tbody id="inventory-body"></tbody>
-              </table>
-            </div>
-          </article>
-
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Consommer une piece</h3>
-                <p class="muted">A utiliser lors d'une reparation ou modification.</p>
-              </div>
-              <span class="mini-pill warning">Action</span>
-            </div>
-            <div class="form-grid" style="grid-template-columns: 1fr;">
-              <div class="field"><label class="input-label">Piece utilisee</label><select id="consume-part-name"></select></div>
-              <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
-              <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
-            </div>
-            <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
-          </article>
-        </div>
-      </section>
-
       <section id="page-stats" class="app-page stats-page">
         <div class="dashboard-grid">
           <article class="card card-span-3">
@@ -250,6 +214,7 @@
                     <th>Role</th>
                     <th>Heures</th>
                     <th>Paie estimee</th>
+                    <th>Prime ($)</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -549,6 +514,42 @@
               <div class="field"><input id="police-reason" type="text" placeholder="Description de l'abus" style="margin-bottom: 0.5rem;"></div>
               <button id="submit-police-report" class="danger-button" style="width: 100%;">Signaler a la direction</button>
             </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-inventaire" class="app-page inventaire-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-2">
+            <div class="card-head">
+              <div>
+                <h3>Stock actuel</h3>
+                <p class="muted">Apercu des pieces disponibles dans l'atelier.</p>
+              </div>
+              <span class="mini-pill">Inventaire</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Icone</th><th>Piece</th><th>Categorie</th><th>En stock</th></tr></thead>
+                <tbody id="inventory-body"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Consommer une piece</h3>
+                <p class="muted">A utiliser lors d'une reparation ou modification.</p>
+              </div>
+              <span class="mini-pill warning">Action</span>
+            </div>
+            <div class="form-grid" style="grid-template-columns: 1fr;">
+              <div class="field"><label class="input-label">Piece utilisee</label><select id="consume-part-name"></select></div>
+              <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
+              <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
+            </div>
+            <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
           </article>
         </div>
       </section>

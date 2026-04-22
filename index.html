@@ -218,14 +218,7 @@
               </div>
               <span class="mini-pill success">Recrutement</span>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Candidat</th><th>Infos Perso</th><th>Experiences & Competences</th><th>Disponibilites</th><th>Motivation</th><th>Decisions</th></tr>
-                </thead>
-                <tbody id="recrutements-body"></tbody>
-              </table>
-            </div>
+            <div id="recrutements-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px;"></div>
           </article>
         </div>
       </section>
@@ -657,6 +650,19 @@
         <button id="close-notes-modal" class="secondary-button">Fermer</button>
         <button id="save-notes-modal" class="primary-button">Enregistrer</button>
       </div>
+    </div>
+  </div>
+
+  <div id="recruitment-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div class="card-head" style="flex-shrink: 0; border-bottom: 1px solid var(--line); padding-bottom: 1rem; margin-bottom: 1rem;">
+        <div>
+          <h3>Dossier de candidature</h3>
+          <p class="muted">Reponses au formulaire Discord.</p>
+        </div>
+        <button id="close-recruitment-modal" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
+      </div>
+      <div id="recruitment-content" style="overflow-y: auto; padding-right: 8px; flex-grow: 1;"></div>
     </div>
   </div>
 

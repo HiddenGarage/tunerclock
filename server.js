@@ -334,9 +334,11 @@ function buildEmployeeGuideEmbed() {
     .setColor(0x30c4a3)
     .setTitle("TunersHub | Guide employe")
     .setDescription(
-      "TunersHub ser
+      "TunersHub sert a suivre les heures, la paie et la presence des employes Santos Tuners."
+    )
     .addFields(
-      { "/in",
+      {
+        name: "/in",
         value:
           "Entre en service. Utilise cette commande quand tu commences a travailler au garage.",
       },
@@ -370,7 +372,8 @@ function buildEmployeeGuideEmbed() {
     .setTimestamp();
 }
 
-async function publishEmployeeGuideEmbed() {(OYEE_GUIDE_CHANNEL_ID) return;
+async function publishEmployeeGuideEmbed() {
+  if (!discordClient?.isReady?.() || !DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID) return;
 
   try {
     const supabase = getSupabase();
@@ -485,7 +488,7 @@ function startDiscordBot() {
         status: "online",
       });
       syncDiscordCommands();
-      publishEmployeeGuiEmbed();
+      publishEmployeeGuideEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -638,7 +641,8 @@ function startDiscordBot() {
         }
 
         if (action === "tc_boss_out" || action === "tc_boss_active") {
-          const bosses = ["89327826917093
+          const bosses = ["893278269170933810", "417605116070461442"];
+          if (!bosses.includes(interaction.user.id)) {
             await interaction.editReply(
               "Seul le patron peut utiliser ce bouton.",
             );
@@ -809,12 +813,13 @@ function startDiscordBot() {
           .reply({
             content: `Erreur TunersHub: ${error.message}`,
             ephemeral: true,
-          })
+          });
       }
     }
   });
 
-  discordClient.login(process.env.)e;
+  discordClient.login(process.env.DISCORD_BOT_TOKEN).catch((error) => {
+    discordBotRuntime.online = false;
     discordBotRuntime.error = error.message;
     console.error("Connexion bot Discord impossible:", error.message);
   });
@@ -957,6 +962,7 @@ function buildReminderPayload(employee, durationHours) {
         inline: true,
       },
       { 
+        name: "Duree actuelle",
         value: `${Number(durationHours || 0).toFixed(2)} h`,
         inline: true,
       },
@@ -996,7 +1002,8 @@ function buildPayslipText(payload) {
       ? [`Prime / Bonus: ${formatRpMoney(payload.prime)}`]
       : []),
     `Montant verse: ${formatRpMoney(payload.amountPaid)}`,
-    `Date: par: ${payload.paidBy || "Gestion"}`,
+    `Date: ${payload.paidAtLabel || ""}`,
+    `Verse par: ${payload.paidBy || "Gestion"}`,
     "",
     PAYSLIP_SIGNATURE,
   ].join("\n");
@@ -1427,7 +1434,7 @@ function buildPayslipPdf(res, payload) {
     .text(payload.employeeName);
   doc
     .font("Helvetica")
-    .fontSize(11
+    .fontSize(11)
     .text(`Discord ID: ${payload.discordId || "-"}`);
   doc.text(`Date de paiement: ${payload.paidAtLabel}`);
 
@@ -1604,7 +1611,8 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
       null;
 
     let activeShift = null;
-    if (eml{d
+    if (employee) {
+      const { data } = await supabase
         .from("shifts")
         .select("*")
         .eq("employee_id", employee.id)
@@ -2028,7 +2036,8 @@ app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
         durationHours: result.durationHours,
         shiftPeriod: result.shiftPeriod,
         punchedInAt: result.punchedInAt.toISOString(),
-        punchsc
+        punchedOutAt: result.punchedOutAt.toISOString(),
+      }
     });
 
     await sendFunnyForceOutMessage(employee.discord_id);

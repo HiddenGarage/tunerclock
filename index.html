@@ -19,18 +19,19 @@
       <nav class="sidebar-nav">
         <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
         <a href="#pointage" class="nav-item" data-route="pointage">Punch</a>
-        <a href="#presence" class="nav-item nav-item-highlight" data-route="presence" data-admin-only="true">Presence</a>
-        <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Statistiques</a>
-        <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Gestion Paie</a>
+        <a href="#presence" class="nav-item nav-item-highlight" data-route="presence" data-admin-only="true">Sur le plancher</a>
+        <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Équipe</a>
+        <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Profit</a>
-        <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Commandes</a>
-        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Analyse</a>
+        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Trésorerie</a>
+        <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Fournisseurs</a>
+        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
-        <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
-        <a href="#inventaire" class="nav-item" data-route="inventaire">Inventaire</a>
-        <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
+        <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Registre</a>
+        <a href="#inventaire" class="nav-item" data-route="inventaire">Gestion Stock</a>
+        <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Système</a>
       </nav>
+      <div class="sidebar-footer">© No One</div>
     </aside>
 
     <main class="main-panel">
@@ -187,6 +188,7 @@
                     <th>Quart fort</th>
                     <th>Taux horaire</th>
                     <th>Paie estimee</th>
+                    <th>Dossier</th>
                   </tr>
                 </thead>
                 <tbody id="stats-body"></tbody>
@@ -603,6 +605,27 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <div id="notes-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div class="card-head">
+        <div>
+          <h3 id="notes-modal-title">Dossier Employe</h3>
+          <p class="muted">Notes secretes de la direction.</p>
+        </div>
+        <span class="mini-pill warning">Prive</span>
+      </div>
+      <div class="form-grid" style="grid-template-columns: 1fr; margin-top: 1rem;">
+        <div class="field">
+          <textarea id="employee-notes-text" rows="6" placeholder="Avertissements, bons coups, remarques..." style="background: #111827; color: #f8fbff; border: 1px solid #2a3b55; border-radius: 6px; padding: 0.75rem; width: 100%; resize: vertical; font-family: inherit; font-size: 0.95rem;"></textarea>
+        </div>
+      </div>
+      <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button id="close-notes-modal" class="secondary-button">Fermer</button>
+        <button id="save-notes-modal" class="primary-button">Enregistrer</button>
+      </div>
+    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

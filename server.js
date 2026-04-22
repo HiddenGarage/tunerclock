@@ -1687,6 +1687,32 @@ app.get("/api/admin-audit-logs", requireAdminAccess, async (req, res) => {
   }
 });
 
+app.get("/api/admin-notes/:id", requireAdminAccess, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const notes = settings.employee_notes || {};
+    res.json({ note: notes[req.params.id] || "" });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-notes/:id", requireAdminAccess, async (req, res) => {
+  try {
+    if (req.session.isSupervision)
+      return res.status(403).send("Lecture seule.");
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const notes = settings.employee_notes || {};
+    notes[req.params.id] = String(req.body.note || "");
+    await upsertSetting(supabase, "employee_notes", notes);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-update-employee-rate", requireAdmin, async (req, res) => {
   try {
     const { employeeId, hourlyRate } = req.body || {};

@@ -381,46 +381,34 @@
           <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <h3>Analyse rentabilite</h3>
-                <p class="muted">Conseils automatiques selon les stats actuelles. Cette page ne modifie jamais les salaires officiels.</p>
+                <h3>Analyse automatique</h3>
+                <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses. Aucun champ manuel, aucun salaire modifie.</p>
               </div>
-              <span class="mini-pill success">Conseil</span>
+              <span class="mini-pill success">Automatique</span>
             </div>
-            <div class="form-grid simulation-form-grid">
-              <div class="field">
-                <label for="sim-revenue" class="input-label">Revenu vise / periode</label>
-                <input id="sim-revenue" type="number" min="0" step="1" placeholder="0">
+            <div class="analysis-auto-grid">
+              <div class="analysis-auto-item">
+                <span>Source</span>
+                <strong>Stats live</strong>
+                <small>Dashboard + Supabase</small>
               </div>
-              <div class="field">
-                <label for="sim-expenses" class="input-label">Depenses prevues</label>
-                <input id="sim-expenses" type="number" min="0" step="1" placeholder="0">
+              <div class="analysis-auto-item">
+                <span>Equipe</span>
+                <strong id="sim-role-mix">Chargement...</strong>
+                <small>Roles actuellement enregistres</small>
               </div>
-              <div class="field">
-                <label for="sim-target-profit" class="input-label">Profit cible %</label>
-                <input id="sim-target-profit" type="number" min="0" max="100" step="1" placeholder="20">
+              <div class="analysis-auto-item">
+                <span>Regle</span>
+                <strong>Bornes anti-abus</strong>
+                <small>Conseil limite a +/- 20%</small>
               </div>
-              <div class="field">
-                <label for="sim-role-mix" class="input-label">Equipe actuelle</label>
-                <input id="sim-role-mix" type="text" value="Chargement..." readonly>
-              </div>
-              <div class="field">
-                <label for="sim-resale-price" class="input-label">Prix revente piece moyen</label>
-                <input id="sim-resale-price" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
-                <label for="sim-weekly-parts" class="input-label">Pieces vendues / periode</label>
-                <input id="sim-weekly-parts" type="number" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="parts-actions">
-              <button id="save-analysis" class="primary-button">Enregistrer l'analyse</button>
             </div>
           </article>
 
           <article class="card stat-card metric-card metric-parts">
-            <p class="section-kicker">Marge par piece</p>
+            <p class="section-kicker">Paie estimee</p>
             <h3 id="sim-possible-payroll">0$</h3>
-            <p class="muted">Profit estime entre achat et revente.</p>
+            <p class="muted">Salaires dus avec heures live incluses.</p>
           </article>
           <article class="card stat-card metric-card metric-revenue">
             <p class="section-kicker">Taux horaire conseille</p>
@@ -428,9 +416,9 @@
             <p class="muted">Base Mecano conseillee selon tes revenus.</p>
           </article>
           <article class="card stat-card metric-card metric-profit">
-            <p class="section-kicker">Profit apres paie</p>
+            <p class="section-kicker">Profit net actuel</p>
             <h3 id="sim-remaining-profit">0$</h3>
-            <p class="muted">Projection sans modifier les salaires actuels.</p>
+            <p class="muted">Revenus moins paies, paiements et depenses.</p>
           </article>
           <article class="card stat-card metric-card metric-payroll">
             <p class="section-kicker">Nombre d'employes</p>
@@ -438,16 +426,16 @@
             <p class="muted">Effectif actuellement enregistre.</p>
           </article>
 
-          <article class="card card-span-3">
+          <article class="card card-span-3 analysis-advice-card">
             <div class="card-head">
               <div>
-                <h3>Lecture recommandee</h3>
-                <p class="muted">Ce bloc t'aide a voir rapidement si ta paie actuelle est soutenable ou si tu dois ajuster les taux.</p>
+                <h3>Conseil final</h3>
+                <p class="muted">Recommandation lisible selon les donnees actuelles, sans toucher aux taux officiels.</p>
               </div>
             </div>
             <div class="summary-band simulation-summary">
               <div class="summary-item">
-                <span>Profit cible</span>
+                <span>Marge actuelle</span>
                 <strong id="sim-profit-target">0$</strong>
               </div>
               <div class="summary-item">
@@ -458,11 +446,8 @@
                 <span>Ratio salaires / revenus</span>
                 <strong id="sim-payroll-gap">0%</strong>
               </div>
-              <div class="summary-item">
-                <span>Conseil final</span>
-                <strong id="sim-recommendation">A analyser</strong>
-              </div>
             </div>
+            <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
           </article>
         </div>
       </section>
@@ -472,12 +457,18 @@
           <article class="card card-span-3 reboot-card">
             <div class="card-head">
               <div>
-                <h3 class="gestion-title">Reboot complet</h3>
-                <p class="muted">Zone isolee pour eviter les clics accidentels. Cette action remet les donnees operationnelles a zero.</p>
+                <h3 class="gestion-title">Reboot securitaire</h3>
+                <p class="muted">Choisis une section, tape RESET, puis confirme. Les resets sont separes pour eviter les accidents.</p>
               </div>
               <span class="mini-pill danger">Danger</span>
             </div>
-            <button id="reboot-all" class="danger-button reboot-main-button">Reboot complet</button>
+            <div class="reboot-grid">
+              <button class="danger-button reboot-scope-button" data-reboot-scope="shifts">Reset pointages</button>
+              <button class="danger-button reboot-scope-button" data-reboot-scope="expenses">Reset commandes</button>
+              <button class="danger-button reboot-scope-button" data-reboot-scope="payouts">Reset paies</button>
+              <button class="danger-button reboot-scope-button" data-reboot-scope="finance">Reset ajouts/finance</button>
+              <button id="reboot-all" class="danger-button reboot-main-button reboot-scope-button" data-reboot-scope="all">Reboot complet</button>
+            </div>
           </article>
         </div>
       </section>

@@ -7,17 +7,19 @@ let contracts = [];
 let inventoryStock = {};
 let activeShiftStartedAt = null;
 let liveTimerId = null;
+let currentNoteId = null;
 let adminLiveTimerId = null;
 let adminRefreshTimerId = null;
 const chartState = {};
 const chartPalette = {
-  text: "#1b2533",
-  muted: "#7d8898",
-  grid: "rgba(163, 178, 201, 0.18)",
+  text: "#e4e7eb",
+  muted: "#8b949e",
+  grid: "rgba(255, 255, 255, 0.05)",
   blue: "#4b7cf6",
   blueSoft: "rgba(75, 124, 246, 0.15)",
-  teal: "#30c4a3",
-  orange: "#f4a249",
+  teal: "#4caf50",
+  orange: "#f77f00",
+  red: "#e63946",
 };
 
 const routes = [
@@ -119,18 +121,18 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord",
-  pointage: "Punch personnel",
-  inventaire: "Inventaire et Stock",
-  presence: "Presence live",
-  stats: "Statistiques",
-  gestion: "Gestion Paie",
-  salaire: "Salaires par role",
-  finance: "Profit du garage",
-  pieces: "Commandes",
-  analyse: "Analyse rentabilite",
-  contrats: "Gestion Contrats",
-  logs: "Audit logs",
-  reboot: "Reboot du systeme",
+  pointage: "Punch",
+  inventaire: "Gestion Stock",
+  presence: "Sur le plancher",
+  stats: "Équipe",
+  gestion: "Comptabilité",
+  salaire: "Salaire",
+  finance: "Trésorerie",
+  pieces: "Fournisseurs",
+  analyse: "Bilan",
+  contrats: "Contrats",
+  logs: "Registre",
+  reboot: "Système",
 };
 
 const state = {
@@ -224,6 +226,11 @@ const elements = {
   consumePartQuantity: document.getElementById("consume-part-quantity"),
   consumePartNote: document.getElementById("consume-part-note"),
   consumeBtn: document.getElementById("consume-btn"),
+  notesModal: document.getElementById("notes-modal"),
+  notesModalTitle: document.getElementById("notes-modal-title"),
+  notesText: document.getElementById("employee-notes-text"),
+  closeNotesBtn: document.getElementById("close-notes-modal"),
+  saveNotesBtn: document.getElementById("save-notes-modal"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -817,6 +824,7 @@ function renderStatsTables() {
         <td>${escapeHtml(employee.preferredShift)}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
+        <td><button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button></td>
       </tr>
     `;
         })
@@ -1314,10 +1322,10 @@ function drawShiftDonutChart() {
           data: buckets,
           backgroundColor: [
             chartPalette.teal,
-            chartPalette.blue,
+            chartPalette.red,
             chartPalette.orange,
           ],
-          borderColor: "#ffffff",
+          borderColor: "#202124",
           borderWidth: 6,
           borderRadius: 4,
           spacing: 4,
@@ -1399,10 +1407,10 @@ function drawTrendChart() {
         {
           label: "Semaine actuelle",
           data: days.map((day) => Number(day.totalHours.toFixed(2))),
-          borderColor: chartPalette.blue,
-          backgroundColor: "rgba(75, 124, 246, 0.12)",
+          borderColor: chartPalette.red,
+          backgroundColor: "rgba(230, 57, 70, 0.15)",
           pointBackgroundColor: "#ffffff",
-          pointBorderColor: chartPalette.blue,
+          pointBorderColor: chartPalette.red,
           pointBorderWidth: 3,
           pointRadius: 4,
           pointHoverRadius: 6,
@@ -1413,7 +1421,7 @@ function drawTrendChart() {
           label: "Semaine precedente",
           data: days.map((day) => Number(day.previousHours.toFixed(2))),
           borderColor: chartPalette.orange,
-          backgroundColor: "rgba(244, 162, 73, 0.08)",
+          backgroundColor: "rgba(247, 127, 0, 0.15)",
           pointBackgroundColor: "#ffffff",
           pointBorderColor: chartPalette.orange,
           pointBorderWidth: 3,
@@ -2260,6 +2268,58 @@ async function consumePart() {
   updateAll();
 }
 
+async function openNotesModal(id, name) {
+  if (!state.isAdmin) return;
+  currentNoteId = id;
+  setText(elements.notesModalTitle, `Dossier : ${name}`);
+  setValue(elements.notesText, "Chargement...");
+  if (elements.notesModal) elements.notesModal.style.display = "flex";
+
+  const response = await fetch(`/api/admin-notes/${id}`, {
+    credentials: "include",
+  }).catch(() => null);
+  if (response?.ok) {
+    const data = await response.json();
+    setValue(elements.notesText, data.note || "");
+  } else {
+    setValue(elements.notesText, "");
+    showToast("Erreur de chargement des notes.", true);
+  }
+
+  if (state.isSupervision) {
+    if (elements.notesText) elements.notesText.readOnly = true;
+    if (elements.saveNotesBtn) elements.saveNotesBtn.style.display = "none";
+  } else {
+    if (elements.notesText) elements.notesText.readOnly = false;
+    if (elements.saveNotesBtn) elements.saveNotesBtn.style.display = "";
+  }
+}
+
+async function saveNotes() {
+  if (!currentNoteId || state.isSupervision) return;
+  const note = elements.notesText?.value || "";
+  if (elements.saveNotesBtn) {
+    elements.saveNotesBtn.disabled = true;
+    elements.saveNotesBtn.textContent = "Sauvegarde...";
+  }
+  const response = await fetch(`/api/admin-notes/${currentNoteId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ note }),
+  }).catch(() => null);
+  if (elements.saveNotesBtn) {
+    elements.saveNotesBtn.disabled = false;
+    elements.saveNotesBtn.textContent = "Enregistrer";
+  }
+  if (response?.ok) {
+    showToast("Dossier mis a jour.");
+    if (elements.notesModal) elements.notesModal.style.display = "none";
+  } else {
+    showToast("Impossible de sauvegarder le dossier.", true);
+  }
+}
+
 async function deleteContract(id) {
   if (state.readOnly || !window.confirm("Supprimer ce contrat ?")) return;
   const response = await fetch(`/api/admin-contracts/${id}`, {
@@ -2330,6 +2390,10 @@ elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.partQuantity?.addEventListener("input", renderPartPreview);
 elements.consumeBtn?.addEventListener("click", consumePart);
+elements.closeNotesBtn?.addEventListener("click", () => {
+  if (elements.notesModal) elements.notesModal.style.display = "none";
+});
+elements.saveNotesBtn?.addEventListener("click", saveNotes);
 elements.rebootButtons.forEach((button) => {
   button.addEventListener("click", () =>
     rebootData(button.dataset.rebootScope || "all"),
@@ -2371,6 +2435,10 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
+  const notesBtn = event.target.closest(".open-notes-btn");
+  if (notesBtn)
+    return openNotesModal(notesBtn.dataset.id, notesBtn.dataset.name);
+
   const hoursButton = event.target.closest(".editable-hours-button");
   if (!hoursButton) return;
   const employeeIndex = Number(hoursButton.dataset.employeeIndex);

@@ -85,6 +85,48 @@ const ROLE_DEFINITIONS = [
     isAdmin: false,
   },
 ];
+const GARAGE_PART_CODES = [
+  "engine_oil",
+  "tyre_replacement",
+  "clutch_replacement",
+  "air_filter",
+  "spark_plug",
+  "brakepad_replacement",
+  "suspension_parts",
+  "i4_engine",
+  "v6_engine",
+  "v8_engine",
+  "v12_engine",
+  "turbocharger",
+  "ev_motor",
+  "ev_battery",
+  "ev_coolant",
+  "awd_drivetrain",
+  "rwd_drivetrain",
+  "fwd_drivetrain",
+  "slick_tyres",
+  "semi_slick_tyres",
+  "offroad_tyres",
+  "drift_tuning_kit",
+  "ceramic_brakes",
+  "lighting_controller",
+  "stancing_kit",
+  "cosmetic_part",
+  "respray_kit",
+  "vehicle_wheels",
+  "tyre_smoke_kit",
+  "bulletproof_tyres",
+  "extras_kit",
+  "nitrous_bottle",
+  "empty_nitrous_bottle",
+  "nitrous_install_kit",
+  "cleaning_kit",
+  "repair_kit",
+  "duct_tape",
+  "performance_part",
+  "mechanic_tablet",
+  "manual_gearbox",
+];
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -1404,7 +1446,13 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
       activeShift = data;
     }
 
-    res.json({ employee, activeShift });
+    const settings = await getSettingsMap(supabase);
+    res.json({
+      employee,
+      activeShift,
+      contracts: settings.contracts_list || [],
+      inventoryStock: settings.inventory_stock || {},
+    });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -1606,6 +1654,7 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
       shifts: shiftsResult.data || [],
       settings,
       contracts: settings.contracts_list || [],
+      inventoryStock: settings.inventory_stock || {},
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -1913,8 +1962,11 @@ app.post("/api/admin-analysis-settings", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/admin-contracts", requireAdmin, async (req, res) => {
+app.post("/api/admin-contracts", requireAuth, async (req, res) => {
   try {
+    if (!req.session.isAdmin || req.session.isSupervision) {
+      return res.status(403).send("Acces refuse.");
+    }
     const supabase = getSupabase();
     const settings = await getSettingsMap(supabase);
     const contracts = settings.contracts_list || [];
@@ -1933,8 +1985,11 @@ app.post("/api/admin-contracts", requireAdmin, async (req, res) => {
   }
 });
 
-app.delete("/api/admin-contracts/:id", requireAdmin, async (req, res) => {
+app.delete("/api/admin-contracts/:id", requireAuth, async (req, res) => {
   try {
+    if (!req.session.isAdmin || req.session.isSupervision) {
+      return res.status(403).send("Acces refuse.");
+    }
     const supabase = getSupabase();
     const settings = await getSettingsMap(supabase);
     let contracts = settings.contracts_list || [];
@@ -1971,6 +2026,54 @@ app.post("/api/report-police", requireAuth, async (req, res) => {
       body: JSON.stringify({ embeds: [embed] }),
     }).catch(() => {});
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/consume-part", requireAuth, async (req, res) => {
+  try {
+    const { itemCode, quantity, note, partName } = req.body;
+    const qty = Math.max(1, Number(quantity) || 1);
+    if (!itemCode) return res.status(400).send("Piece manquante.");
+
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const stock = settings.inventory_stock || {};
+
+    const stockBefore = stock[itemCode] || 0;
+    stock[itemCode] = Math.max(0, stockBefore - qty);
+    await upsertSetting(supabase, "inventory_stock", stock);
+
+    await writeAuditLog(supabase, req, "part_consumed", {
+      details: {
+        itemCode,
+        partName: partName || itemCode,
+        quantity: qty,
+        note: note || "-",
+      },
+    });
+
+    if (stockBefore > 5 && stock[itemCode] <= 5) {
+      const embed = new EmbedBuilder()
+        .setColor(0xf4a249)
+        .setTitle("📦 Alerte : Stock Bas")
+        .setDescription(
+          `Le stock de la piece **${partName || itemCode}** vient de tomber a un niveau critique.`,
+        )
+        .addFields(
+          { name: "Piece", value: partName || itemCode, inline: true },
+          { name: "Stock restant", value: `${stock[itemCode]}`, inline: true },
+        )
+        .setTimestamp();
+
+      const bosses = ["893278269170933810", "417605116070461442"];
+      for (const bossId of bosses) {
+        await sendDiscordDmPayload(bossId, { embeds: [embed] });
+      }
+    }
+
+    res.json({ ok: true, stock });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -2027,6 +2130,22 @@ app.post("/api/admin-expense", requireAdmin, async (req, res) => {
       return res.status(500).send(error.message);
     }
 
+    const settings = await getSettingsMap(supabase);
+    const stock = settings.inventory_stock || {};
+    if (payload.item_code === "__all__") {
+      const qtyPerItem = Math.max(
+        1,
+        Math.round(payload.quantity / GARAGE_PART_CODES.length),
+      );
+      for (const code of GARAGE_PART_CODES) {
+        stock[code] = (stock[code] || 0) + qtyPerItem;
+      }
+    } else if (payload.item_code) {
+      stock[payload.item_code] =
+        (stock[payload.item_code] || 0) + payload.quantity;
+    }
+    await upsertSetting(supabase, "inventory_stock", stock);
+
     await writeAuditLog(supabase, req, "part_order_added", {
       details: {
         name: payload.name,
@@ -2061,6 +2180,24 @@ app.delete("/api/admin-expense/:expenseId", requireAdmin, async (req, res) => {
     if (error) {
       return res.status(500).send(error.message);
     }
+
+    const settings = await getSettingsMap(supabase);
+    const stock = settings.inventory_stock || {};
+    if (expense.item_code === "__all__") {
+      const qtyPerItem = Math.max(
+        1,
+        Math.round((expense.quantity || 1) / GARAGE_PART_CODES.length),
+      );
+      for (const code of GARAGE_PART_CODES) {
+        stock[code] = Math.max(0, (stock[code] || 0) - qtyPerItem);
+      }
+    } else if (expense.item_code) {
+      stock[expense.item_code] = Math.max(
+        0,
+        (stock[expense.item_code] || 0) - (expense.quantity || 1),
+      );
+    }
+    await upsertSetting(supabase, "inventory_stock", stock);
 
     await writeAuditLog(supabase, req, "part_order_deleted", {
       details: {

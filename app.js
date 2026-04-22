@@ -3,6 +3,7 @@ let expenses = [];
 let shifts = [];
 let auditLogs = [];
 let reminderState = {};
+let contracts = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let adminLiveTimerId = null;
@@ -28,6 +29,7 @@ const routes = [
   "finance",
   "pieces",
   "analyse",
+  "contrats",
   "logs",
   "reboot",
 ];
@@ -123,6 +125,7 @@ const pageTitles = {
   finance: "Profit du garage",
   pieces: "Commandes",
   analyse: "Analyse rentabilite",
+  contrats: "Gestion Contrats",
   logs: "Audit logs",
   reboot: "Reboot du systeme",
 };
@@ -210,6 +213,9 @@ const elements = {
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   pages: Array.from(document.querySelectorAll(".app-page")),
+  contractsBody: document.getElementById("contracts-body"),
+  addContractBtn: document.getElementById("add-contract-btn"),
+  submitPoliceReport: document.getElementById("submit-police-report"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -478,6 +484,7 @@ function applyAccessControl() {
         "finance",
         "pieces",
         "analyse",
+        "contrats",
         "logs",
         "reboot",
         "salaire",
@@ -557,10 +564,15 @@ function getPayrollTotal() {
   );
 }
 
+function getContractTotal() {
+  return contracts.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+}
+
 function getExpenseTotal() {
   return (
     expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) +
-    getNumericValue(elements.miscExpenses)
+    getNumericValue(elements.miscExpenses) +
+    getContractTotal()
   );
 }
 
@@ -1013,6 +1025,36 @@ function renderExpenseTable() {
   );
 }
 
+function renderContractsTable() {
+  if (!elements.contractsBody) return;
+  if (!contracts.length) {
+    setHtml(
+      elements.contractsBody,
+      `<tr><td colspan="5">Aucun contrat actif.</td></tr>`,
+    );
+    return;
+  }
+
+  setHtml(
+    elements.contractsBody,
+    contracts
+      .map(
+        (c) => `
+    <tr>
+      <td>${escapeHtml(c.name)}</td>
+      <td>${escapeHtml(c.discount)}</td>
+      <td>${formatMoney(c.cost)}</td>
+      <td>${escapeHtml(c.note)}</td>
+      <td>
+        <button class="danger-button table-button delete-contract-btn" data-id="${c.id}">Supprimer</button>
+      </td>
+    </tr>
+  `,
+      )
+      .join(""),
+  );
+}
+
 function renderLeaderboard() {
   if (!elements.leaderboardBody) return;
   if (!employees.length) {
@@ -1331,6 +1373,7 @@ function drawTrendChart() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      layout: { padding: { bottom: 18 } },
       resizeDelay: 120,
       plugins: {
         legend: {
@@ -1393,6 +1436,7 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderAuditLogs();
+  renderContractsTable();
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
@@ -1416,6 +1460,7 @@ async function loadAdminDashboard() {
     };
     reminderState = data.settings?.reminder_state || {};
     shifts = data.shifts || [];
+    contracts = data.contracts || [];
     employees = (data.employees || []).map(normaliseEmployeeRecord);
 
     const latestPayoutByEmployee = new Map();
@@ -2106,6 +2151,65 @@ async function rebootData(scope = "all") {
   updateAll();
 }
 
+async function deleteContract(id) {
+  if (state.readOnly || !window.confirm("Supprimer ce contrat ?")) return;
+  const response = await fetch(`/api/admin-contracts/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (response.ok) {
+    showToast("Contrat supprime.");
+    await loadAdminDashboard();
+    updateAll();
+  } else {
+    showToast("Impossible de supprimer.", true);
+  }
+}
+
+elements.addContractBtn?.addEventListener("click", async () => {
+  if (state.readOnly) return;
+  const name = document.getElementById("contract-name")?.value;
+  const discount = document.getElementById("contract-discount")?.value;
+  const cost = document.getElementById("contract-cost")?.value;
+  const note = document.getElementById("contract-note")?.value;
+  if (!name) return showToast("Le nom est obligatoire.", true);
+
+  const response = await fetch("/api/admin-contracts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ name, discount, cost, note }),
+  });
+  if (response.ok) {
+    showToast("Contrat ajoute.");
+    document.getElementById("contract-name").value = "";
+    document.getElementById("contract-discount").value = "";
+    document.getElementById("contract-cost").value = "";
+    document.getElementById("contract-note").value = "";
+    await loadAdminDashboard();
+    updateAll();
+  }
+});
+
+elements.submitPoliceReport?.addEventListener("click", async () => {
+  const matricule = document.getElementById("police-matricule")?.value;
+  const reason = document.getElementById("police-reason")?.value;
+  if (!matricule || !reason) return showToast("Remplis tous les champs.", true);
+  const response = await fetch("/api/report-police", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ matricule, reason }),
+  });
+  if (response.ok) {
+    showToast("Signalement envoye a la direction.");
+    document.getElementById("police-matricule").value = "";
+    document.getElementById("police-reason").value = "";
+  } else {
+    showToast("Erreur lors de l'envoi.", true);
+  }
+});
+
 elements.discordLogin?.addEventListener("click", loginWithDiscord);
 elements.logoutButton?.addEventListener("click", logout);
 elements.punchIn?.addEventListener("click", punchIn);
@@ -2126,6 +2230,11 @@ elements.expenseBody?.addEventListener("click", (event) => {
   const deleteButton = event.target.closest(".delete-expense-button");
   if (!deleteButton) return;
   deleteExpense(Number(deleteButton.dataset.expenseIndex));
+});
+
+elements.contractsBody?.addEventListener("click", (event) => {
+  const deleteBtn = event.target.closest(".delete-contract-btn");
+  if (deleteBtn) deleteContract(deleteBtn.dataset.id);
 });
 
 elements.leaderboardBody?.addEventListener("click", (event) => {

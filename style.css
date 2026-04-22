@@ -725,7 +725,7 @@ select {
   min-height: 48px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--text);
   padding: 12px 14px;
   outline: none;
@@ -746,7 +746,7 @@ select:focus {
 }
 
 input[readonly] {
-  background: #f7f9fd;
+  background: rgba(0, 0, 0, 0.4);
 }
 
 .inline-field {
@@ -765,7 +765,7 @@ input[readonly] {
   min-height: 72px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--muted);
   padding: 14px;
 }

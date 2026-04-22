@@ -1474,6 +1474,7 @@ app.get("/auth/discord/login", (req, res) => {
   url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
   url.searchParams.set("scope", "identify");
   url.searchParams.set("prompt", "consent");
+  res.redirect(url.toString());
 });
 
 app.get("/auth/discord/callback", async (req, res) => {

@@ -23,7 +23,6 @@ const chartPalette = {
 const routes = [
   "tableau",
   "pointage",
-  "inventaire",
   "presence",
   "stats",
   "gestion",
@@ -33,6 +32,7 @@ const routes = [
   "analyse",
   "contrats",
   "logs",
+  "inventaire",
   "reboot",
 ];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
@@ -223,7 +223,7 @@ const elements = {
   consumePartName: document.getElementById("consume-part-name"),
   consumePartQuantity: document.getElementById("consume-part-quantity"),
   consumePartNote: document.getElementById("consume-part-note"),
-  consumeBtn: document.getElementById("consume-btn")
+  consumeBtn: document.getElementById("consume-btn"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -358,18 +358,26 @@ function getRoleRate(roleName) {
 function populatePartOptions() {
   if (!elements.partName || elements.partName.dataset.loaded === "true") return;
   const options = garageParts.map(
-    (part) => `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`
+    (part) =>
+      `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`,
   );
-  
+
   if (elements.partName) {
-    elements.partName.innerHTML = [`<option value="">Selectionner une piece</option>`, `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`, ...options].join("");
+    elements.partName.innerHTML = [
+      `<option value="">Selectionner une piece</option>`,
+      `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`,
+      ...options,
+    ].join("");
   }
   elements.partName.dataset.loaded = "true";
 
   if (elements.consumePartName) {
-    elements.consumePartName.innerHTML = [`<option value="">Selectionner une piece</option>`, ...options].join("");
+    elements.consumePartName.innerHTML = [
+      `<option value="">Selectionner une piece</option>`,
+      ...options,
+    ].join("");
   }
-  
+
   syncSelectedPartCategory();
 }
 
@@ -543,7 +551,10 @@ function routeToCurrentPage() {
         history.replaceState(null, "", "#tableau");
       }
     }
-  } else if (!state.isAdmin && !["pointage", "contrats", "inventaire"].includes(route)) {
+  } else if (
+    !state.isAdmin &&
+    !["pointage", "contrats", "inventaire"].includes(route)
+  ) {
     route = "pointage";
     if (window.location.hash !== "#pointage") {
       history.replaceState(null, "", "#pointage");
@@ -1072,14 +1083,17 @@ function renderContractsTable() {
 
 function renderInventory() {
   if (!elements.inventoryBody) return;
-  
-  const html = garageParts.map(part => {
-    const currentStock = inventoryStock[part.code] || 0;
-    let stockPill = `<span class="mini-pill success">${currentStock}</span>`;
-    if (currentStock === 0) stockPill = `<span class="mini-pill danger">Rupture</span>`;
-    else if (currentStock <= 5) stockPill = `<span class="mini-pill warning">${currentStock} (Bas)</span>`;
-    
-    return `
+
+  const html = garageParts
+    .map((part) => {
+      const currentStock = inventoryStock[part.code] || 0;
+      let stockPill = `<span class="mini-pill success">${currentStock}</span>`;
+      if (currentStock === 0)
+        stockPill = `<span class="mini-pill danger">Rupture</span>`;
+      else if (currentStock <= 5)
+        stockPill = `<span class="mini-pill warning">${currentStock} (Bas)</span>`;
+
+      return `
       <tr>
         <td>${getPartIconMarkup(part.code, part.name)}</td>
         <td>${escapeHtml(part.name)}</td>
@@ -1087,8 +1101,9 @@ function renderInventory() {
         <td>${stockPill}</td>
       </tr>
     `;
-  }).join("");
-  
+    })
+    .join("");
+
   setHtml(elements.inventoryBody, html);
 }
 
@@ -1106,10 +1121,11 @@ function renderLeaderboard() {
   setHtml(
     elements.leaderboardBody,
     sortedEmployees
-      .map((employee) => {
+      .map((employee, index) => {
         const employeeIndex = employees.findIndex(
           (entry) => entry.discordId === employee.discordId,
         );
+        const isTopWorker = index === 0 && employee.hours > 0;
         const estimatedPay = employee.hours * employee.hourlyRate;
         const pdfButton = employee.lastPayslip?.payoutId
           ? `
@@ -1124,10 +1140,11 @@ function renderLeaderboard() {
 
         return `
       <tr>
-        <td>${employee.name}</td>
+        <td>${employee.name} ${isTopWorker ? '<span title="Employe de la semaine" style="cursor:help;">👑</span>' : ""}</td>
         <td>${employee.roleName}</td>
         <td>${formatHoursMinutes(employee.hours)}</td>
         <td>${formatMoney(estimatedPay)}</td>
+        <td><input type="number" class="prime-input" data-employee-index="${employeeIndex}" placeholder="0" min="0" step="1" style="width: 80px; padding: 0.25rem 0.5rem;"></td>
         <td>
           <button class="primary-button table-button pay-employee-button" data-employee-index="${employeeIndex}" ${employee.hours <= 0 ? "disabled" : ""}>PAYER</button>
           ${pdfButton}
@@ -1521,6 +1538,11 @@ async function loadAdminDashboard() {
           discordId: employee.discordId,
           hoursPaid: Number(payout.hours_paid || 0),
           hourlyRate: Number(payout.hourly_rate || 0),
+          prime: Math.max(
+            0,
+            Number(payout.amount_paid || 0) -
+              Number(payout.hours_paid || 0) * Number(payout.hourly_rate || 0),
+          ),
           amountPaid: Number(payout.amount_paid || 0),
           paidAtLabel: payout.paid_at
             ? new Date(payout.paid_at).toLocaleString("fr-CA")
@@ -2111,9 +2133,14 @@ async function markEmployeePaid(employeeIndex) {
   const employee = employees[employeeIndex];
   if (!employee || employee.hours <= 0) return;
 
+  const primeInput = document.querySelector(
+    `.prime-input[data-employee-index="${employeeIndex}"]`,
+  );
+  const prime = Number(primeInput?.value || 0) || 0;
+
   const paidDate = new Date();
   const fallbackAmount = Number(
-    (employee.hours * employee.hourlyRate).toFixed(2),
+    (employee.hours * employee.hourlyRate + prime).toFixed(2),
   );
   let payoutId = null;
   let amountPaid = fallbackAmount;
@@ -2125,7 +2152,7 @@ async function markEmployeePaid(employeeIndex) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ employeeId: employee.id }),
+      body: JSON.stringify({ employeeId: employee.id, prime }),
     }).catch(() => null);
 
     if (response?.ok) {
@@ -2143,6 +2170,7 @@ async function markEmployeePaid(employeeIndex) {
     discordId: employee.discordId,
     hoursPaid,
     hourlyRate,
+    prime,
     amountPaid,
     paidAtLabel: paidDate.toLocaleString("fr-CA"),
   };
@@ -2205,15 +2233,20 @@ async function consumePart() {
     showToast("Selectionne une piece a consommer.", true);
     return;
   }
-  
+
   const itemCode = select.value;
   const partName = select.options[select.selectedIndex].text;
-  const quantity = Math.max(1, Number(elements.consumePartQuantity?.value || 1));
+  const quantity = Math.max(
+    1,
+    Number(elements.consumePartQuantity?.value || 1),
+  );
   const note = elements.consumePartNote?.value || "";
 
   const response = await fetch("/api/consume-part", {
-    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-    body: JSON.stringify({ itemCode, partName, quantity, note })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ itemCode, partName, quantity, note }),
   }).catch(() => null);
 
   if (!response?.ok) return showToast("Erreur lors de la consommation.", true);

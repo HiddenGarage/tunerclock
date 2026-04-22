@@ -743,14 +743,21 @@ function getReminderInfo(employee) {
         new Date(a.respondedAt || a.sentAt || 0),
     )[0];
 
-  if (!match) return { label: "Non envoye", className: "mini-pill" };
+  if (!match) return { label: "Aucun", className: "mini-pill" };
   if (match.response === "still_active")
-    return { label: "Reponse: actif", className: "mini-pill success" };
+    return { label: "Présence confirmée", className: "mini-pill success" };
   if (match.response === "punched_out")
-    return { label: "Reponse: sorti", className: "mini-pill danger" };
+    return { label: "Sortie confirmée", className: "mini-pill danger" };
+  if (match.response === "boss_confirmed")
+    return { label: "Confirmé (Direction)", className: "mini-pill success" };
+  if (match.response === "boss_punched_out")
+    return { label: "Sorti (Direction)", className: "mini-pill danger" };
   if (match.ok === false)
-    return { label: "Echec envoi", className: "mini-pill danger" };
-  return { label: "Envoye", className: "mini-pill warning" };
+    return { label: "Erreur (MP bloqués)", className: "mini-pill danger" };
+  if (match.escalated)
+    return { label: "Alerte Direction", className: "mini-pill danger" };
+
+  return { label: "En attente de réponse...", className: "mini-pill warning" };
 }
 
 function startAdminLiveTimer() {

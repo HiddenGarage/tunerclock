@@ -23,7 +23,7 @@
         <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Statistiques</a>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Gestion Paie</a>
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Ajouts</a>
+        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Profit</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Commandes</a>
         <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Analyse</a>
         <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
@@ -52,7 +52,7 @@
           <article class="card stat-card metric-card metric-revenue">
             <p class="section-kicker">Revenus</p>
             <h3 id="total-income">0$</h3>
-            <p class="muted">Entrees totales de l'entreprise</p>
+            <p class="muted">Totales de l'entreprise</p>
           </article>
           <article class="card stat-card metric-card metric-expenses">
             <p class="section-kicker">Depenses</p>
@@ -62,12 +62,12 @@
           <article class="card stat-card metric-card metric-payroll">
             <p class="section-kicker">Salaires dus</p>
             <h3 id="total-payroll">0$</h3>
-            <p class="muted">Montant encore payable a l'equipe</p>
+            <p class="muted">Montant payable a l'équipe</p>
           </article>
           <article class="card stat-card metric-card metric-profit">
             <p class="section-kicker">Profit brut</p>
             <h3 id="gross-profit">0$</h3>
-            <p class="muted">Resultat brut actuel du garage</p>
+            <p class="muted">Resultat brut actuel</p>
           </article>
         </div>
 
@@ -170,7 +170,7 @@
             <div class="card-head">
               <div>
                 <h3>Statistiques employes</h3>
-                <p class="muted">Vue confidentielle des heures, jours actifs, quarts forts et paie estimee.</p>
+                <p class="muted">Vue des heures, jours actifs, quarts forts et paie estimee.</p>
               </div>
               <span class="mini-pill success">Confidentiel</span>
             </div>
@@ -242,6 +242,7 @@
                     <th>Duree live</th>
                     <th>Cout live</th>
                     <th>Statut</th>
+                    <th>Rappel</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -258,7 +259,7 @@
             <div class="card-head">
               <div>
                 <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux. Modifier ici applique la base salariale officielle du garage.</p>
+                <p class="muted">Chaque role a son propre taux.</p>
               </div>
               <span class="mini-pill">Roles</span>
             </div>
@@ -284,10 +285,10 @@
           <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <h3>Ajouts du garage</h3>
+                <h3>Profit du garage</h3>
                 <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
               </div>
-              <span class="mini-pill">Ajouts</span>
+              <span class="mini-pill">Profit</span>
             </div>
             <div class="form-grid finance-form-grid">
               <div class="field">
@@ -295,7 +296,7 @@
                 <input id="service-income" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="weekly-profit" class="input-label">Profit de la semaine ajoute manuellement</label>
+                <label for="weekly-profit" class="input-label">Profit de la semaine</label>
                 <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
@@ -312,7 +313,7 @@
               </div>
             </div>
             <div class="parts-actions">
-              <button id="save-finance" class="primary-button">Enregistrer la finance</button>
+              <button id="save-finance" class="primary-button">Enregistrer</button>
             </div>
           </article>
         </div>
@@ -382,7 +383,7 @@
             <div class="card-head">
               <div>
                 <h3>Analyse automatique</h3>
-                <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses. Aucun champ manuel, aucun salaire modifie.</p>
+                <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses.</p>
               </div>
               <span class="mini-pill success">Automatique</span>
             </div>
@@ -408,12 +409,12 @@
           <article class="card stat-card metric-card metric-parts">
             <p class="section-kicker">Paie estimee</p>
             <h3 id="sim-possible-payroll">0$</h3>
-            <p class="muted">Salaires dus avec heures live incluses.</p>
+            <p class="muted">Salaires dus</p>
           </article>
           <article class="card stat-card metric-card metric-revenue">
             <p class="section-kicker">Taux horaire conseille</p>
             <h3 id="sim-recommended-hourly">0$</h3>
-            <p class="muted">Base Mecano conseillee selon tes revenus.</p>
+            <p class="muted">Base Mecano conseillee</p>
           </article>
           <article class="card stat-card metric-card metric-profit">
             <p class="section-kicker">Profit net actuel</p>
@@ -423,7 +424,7 @@
           <article class="card stat-card metric-card metric-payroll">
             <p class="section-kicker">Nombre d'employes</p>
             <h3 id="sim-employee-count">0</h3>
-            <p class="muted">Effectif actuellement enregistre.</p>
+            <p class="muted">Effectif actuel</p>
           </article>
 
           <article class="card card-span-3 analysis-advice-card">
@@ -466,7 +467,7 @@
               <button class="danger-button reboot-scope-button" data-reboot-scope="shifts">Reset pointages</button>
               <button class="danger-button reboot-scope-button" data-reboot-scope="expenses">Reset commandes</button>
               <button class="danger-button reboot-scope-button" data-reboot-scope="payouts">Reset paies</button>
-              <button class="danger-button reboot-scope-button" data-reboot-scope="finance">Reset ajouts/finance</button>
+              <button class="danger-button reboot-scope-button" data-reboot-scope="finance">Reset profit</button>
               <button id="reboot-all" class="danger-button reboot-main-button reboot-scope-button" data-reboot-scope="all">Reboot complet</button>
             </div>
           </article>

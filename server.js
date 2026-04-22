@@ -130,6 +130,18 @@ async function upsertSetting(supabase, key, value) {
   }
 }
 
+async function updateReminderState(supabase, shiftId, patch) {
+  if (!shiftId) return;
+  const settings = await getSettingsMap(supabase);
+  const reminderState = settings.reminder_state || {};
+  reminderState[shiftId] = {
+    ...(reminderState[shiftId] || {}),
+    ...patch,
+    updatedAt: new Date().toISOString()
+  };
+  await upsertSetting(supabase, "reminder_state", reminderState);
+}
+
 async function writeAuditLog(supabase, req, action, options = {}) {
   const payload = {
     action,
@@ -180,6 +192,22 @@ function getLogoPath() {
   return path.join(__dirname, "logo", "TurboPunch.png");
 }
 
+async function syncDiscordCommands() {
+  if (!discordClient?.application) return;
+  const commands = [
+    { name: "in", description: "Entrer en service dans TunerClock" },
+    { name: "out", description: "Sortir du service dans TunerClock" },
+    { name: "paye", description: "Voir tes heures actuelles et ton argent gagne" }
+  ];
+
+  try {
+    await discordClient.application.commands.set(commands, process.env.DISCORD_GUILD_ID || undefined);
+    console.log("Commandes Discord synchronisees: /in /out /paye");
+  } catch (error) {
+    console.error("Synchronisation commandes Discord impossible:", error.message);
+  }
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -205,6 +233,7 @@ function startDiscordBot() {
         activities: [{ name: "TunerClock Garage", type: ActivityType.Watching }],
         status: "online"
       });
+      syncDiscordCommands();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -247,6 +276,18 @@ function startDiscordBot() {
           await interaction.editReply(`Sortie enregistree. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`);
           return;
         }
+
+        if (interaction.commandName === "paye") {
+          await interaction.deferReply({ ephemeral: true });
+          const summary = await getPaySummaryForDiscordUser(interaction.user.id);
+          await interaction.editReply([
+            `Argent gagne: ${formatRpMoney(summary.amount)}`,
+            `Heures actuelles: ${Number(summary.totalHours || 0).toFixed(2)} h`,
+            `Taux horaire: ${formatRpMoney(summary.hourlyRate)}/h`,
+            summary.liveHours > 0 ? `Inclut ton service en cours: ${Number(summary.liveHours).toFixed(2)} h` : "Aucun service actif en ce moment."
+          ].join("\n"));
+          return;
+        }
       }
 
       if (interaction.isButton()) {
@@ -272,11 +313,33 @@ function startDiscordBot() {
         }
 
         if (action === "tc_reminder_active") {
+          const { data: activeShift } = await supabase
+            .from("shifts")
+            .select("id")
+            .eq("employee_id", employee.id)
+            .eq("status", "active")
+            .order("punched_in_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          await updateReminderState(supabase, activeShift?.id, {
+            response: "still_active",
+            responseLabel: "Employe confirme actif",
+            respondedAt: new Date().toISOString(),
+            employeeId: employee.id,
+            discordId: employee.discord_id
+          });
           await interaction.editReply("Parfait, tu restes en service. Merci d'avoir confirme.");
           return;
         }
 
         const result = await closeActiveShiftForEmployee(supabase, employee, "Rappel Discord");
+        await updateReminderState(supabase, result.shiftId, {
+          response: "punched_out",
+          responseLabel: "Employe a demande punch out",
+          respondedAt: new Date().toISOString(),
+          employeeId: employee.id,
+          discordId: employee.discord_id
+        });
         await interaction.editReply(`Punch out effectue. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`);
       }
     } catch (error) {
@@ -481,24 +544,37 @@ async function closeActiveShiftForEmployee(supabase, employee, closedByLabel = "
     closedByLabel
   });
 
-  return { durationHours, shiftPeriod, punchedInAt, punchedOutAt };
+  return { durationHours, shiftPeriod, punchedInAt, punchedOutAt, shiftId: shift.id };
 }
 
 async function punchInDiscordUser(discordId, displayName, roleName = "Mecano") {
   const supabase = getSupabase();
   const roleRates = await getRoleRates(supabase);
   const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
-  const { data: employee, error: employeeError } = await supabase
+  const { data: existingEmployee } = await supabase
     .from("employees")
-    .upsert({
-      discord_id: discordId,
-      discord_name: displayName,
-      role: roleName,
-      hourly_rate: roleRate,
-      is_active: true
-    }, { onConflict: "discord_id" })
-    .select()
-    .single();
+    .select("*")
+    .eq("discord_id", discordId)
+    .maybeSingle();
+
+  const employeePayload = existingEmployee
+    ? {
+        discord_name: displayName,
+        is_active: true
+      }
+    : {
+        discord_id: discordId,
+        discord_name: displayName,
+        role: roleName,
+        hourly_rate: roleRate,
+        is_active: true
+      };
+
+  const employeeQuery = existingEmployee
+    ? supabase.from("employees").update(employeePayload).eq("id", existingEmployee.id).select().single()
+    : supabase.from("employees").insert(employeePayload).select().single();
+
+  const { data: employee, error: employeeError } = await employeeQuery;
 
   if (employeeError) throw employeeError;
 
@@ -542,6 +618,37 @@ async function punchOutDiscordUser(discordId) {
 
   if (employeeError) throw employeeError;
   return closeActiveShiftForEmployee(supabase, employee, "Discord");
+}
+
+async function getPaySummaryForDiscordUser(discordId) {
+  const supabase = getSupabase();
+  const { data: employee, error: employeeError } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("discord_id", discordId)
+    .single();
+
+  if (employeeError) throw employeeError;
+
+  const { data: activeShift } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("employee_id", employee.id)
+    .eq("status", "active")
+    .order("punched_in_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const liveHours = activeShift ? Math.max(0, (Date.now() - new Date(activeShift.punched_in_at).getTime()) / 3600000) : 0;
+  const totalHours = Number(employee.total_hours || 0) + liveHours;
+  const hourlyRate = Number(employee.hourly_rate || DEFAULT_HOURLY_RATE);
+  return {
+    employee,
+    liveHours,
+    totalHours,
+    hourlyRate,
+    amount: totalHours * hourlyRate
+  };
 }
 
 async function scanLongActiveShifts() {
@@ -847,17 +954,31 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
     const roleRates = await getRoleRates(supabase);
     const roleName = req.session.roleName || "Mecano";
     const roleRate = Number(roleRates[roleName] || DEFAULT_HOURLY_RATE);
-    const { data: employee, error: employeeError } = await supabase
+    const { data: existingEmployee } = await supabase
       .from("employees")
-      .upsert({
-        discord_id: req.session.discordId,
-        discord_name: req.session.displayName || req.session.username,
-        role: roleName,
-        hourly_rate: roleRate,
-        is_active: true
-      }, { onConflict: "discord_id" })
-      .select()
-      .single();
+      .select("*")
+      .eq("discord_id", req.session.discordId)
+      .maybeSingle();
+
+    const employeePayload = existingEmployee
+      ? {
+          discord_name: req.session.displayName || req.session.username,
+          role: req.session.roleName || existingEmployee.role,
+          is_active: true
+        }
+      : {
+          discord_id: req.session.discordId,
+          discord_name: req.session.displayName || req.session.username,
+          role: roleName,
+          hourly_rate: roleRate,
+          is_active: true
+        };
+
+    const employeeQuery = existingEmployee
+      ? supabase.from("employees").update(employeePayload).eq("id", existingEmployee.id).select().single()
+      : supabase.from("employees").insert(employeePayload).select().single();
+
+    const { data: employee, error: employeeError } = await employeeQuery;
 
     if (employeeError) {
       return res.status(500).send(employeeError.message);
@@ -1214,6 +1335,17 @@ app.post("/api/admin-send-reminder", requireAdmin, async (req, res) => {
 
     const durationHours = (Date.now() - new Date(shift.punched_in_at).getTime()) / 3600000;
     const dmResult = await sendDiscordDmPayload(employee.discord_id, buildReminderPayload(employee, durationHours));
+    const settings = await getSettingsMap(supabase);
+    const reminderState = settings.reminder_state || {};
+    reminderState[shift.id] = {
+      ...(reminderState[shift.id] || {}),
+      sentAt: new Date().toISOString(),
+      durationHours: Number(durationHours.toFixed(2)),
+      employeeId: employee.id,
+      discordId: employee.discord_id,
+      ok: dmResult.ok
+    };
+    await upsertSetting(supabase, "reminder_state", reminderState);
 
     if (!dmResult.ok) {
       return res.status(500).send(dmResult.reason || "DM impossible.");

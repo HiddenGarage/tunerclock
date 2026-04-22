@@ -866,9 +866,13 @@ td {
 }
 
 .secondary-table-button {
-  background: #eef4ff;
-  color: #3265aa;
-  border-color: #dae5f8;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.secondary-table-button:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .hour-adjust-input,

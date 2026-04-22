@@ -15,18 +15,38 @@ const chartPalette = {
   blue: "#4b7cf6",
   blueSoft: "rgba(75, 124, 246, 0.15)",
   teal: "#30c4a3",
-  orange: "#f4a249"
+  orange: "#f4a249",
 };
 
-const routes = ["tableau", "pointage", "presence", "stats", "gestion", "salaire", "finance", "pieces", "analyse", "logs", "reboot"];
+const routes = [
+  "tableau",
+  "pointage",
+  "presence",
+  "stats",
+  "gestion",
+  "salaire",
+  "finance",
+  "pieces",
+  "analyse",
+  "logs",
+  "reboot",
+];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const garageParts = [
   { code: "engine_oil", name: "Engine Oil", category: "Entretien" },
   { code: "tyre_replacement", name: "Tyre Replacement", category: "Entretien" },
-  { code: "clutch_replacement", name: "Clutch Replacement", category: "Entretien" },
+  {
+    code: "clutch_replacement",
+    name: "Clutch Replacement",
+    category: "Entretien",
+  },
   { code: "air_filter", name: "Air Filter", category: "Entretien" },
   { code: "spark_plug", name: "Spark Plug", category: "Entretien" },
-  { code: "brakepad_replacement", name: "Brakepad Replacement", category: "Entretien" },
+  {
+    code: "brakepad_replacement",
+    name: "Brakepad Replacement",
+    category: "Entretien",
+  },
   { code: "suspension_parts", name: "Suspension Parts", category: "Entretien" },
   { code: "i4_engine", name: "I4 Engine", category: "Moteur" },
   { code: "v6_engine", name: "V6 Engine", category: "Moteur" },
@@ -42,32 +62,56 @@ const garageParts = [
   { code: "slick_tyres", name: "Slick Tyres", category: "Pneus" },
   { code: "semi_slick_tyres", name: "Semi Slick Tyres", category: "Pneus" },
   { code: "offroad_tyres", name: "Offroad Tyres", category: "Pneus" },
-  { code: "drift_tuning_kit", name: "Drift Tuning Kit", category: "Performance" },
+  {
+    code: "drift_tuning_kit",
+    name: "Drift Tuning Kit",
+    category: "Performance",
+  },
   { code: "ceramic_brakes", name: "Ceramic Brakes", category: "Performance" },
-  { code: "lighting_controller", name: "Lighting Controller", category: "Cosmetique" },
+  {
+    code: "lighting_controller",
+    name: "Lighting Controller",
+    category: "Cosmetique",
+  },
   { code: "stancing_kit", name: "Stancer Kit", category: "Cosmetique" },
   { code: "cosmetic_part", name: "Cosmetic Parts", category: "Cosmetique" },
   { code: "respray_kit", name: "Respray Kit", category: "Cosmetique" },
-  { code: "vehicle_wheels", name: "Vehicle Wheels Set", category: "Cosmetique" },
+  {
+    code: "vehicle_wheels",
+    name: "Vehicle Wheels Set",
+    category: "Cosmetique",
+  },
   { code: "tyre_smoke_kit", name: "Tyre Smoke Kit", category: "Cosmetique" },
   { code: "bulletproof_tyres", name: "Bulletproof Tyres", category: "Pneus" },
   { code: "extras_kit", name: "Extras Kit", category: "Cosmetique" },
   { code: "nitrous_bottle", name: "Nitrous Bottle", category: "Nitro" },
-  { code: "empty_nitrous_bottle", name: "Empty Nitrous Bottle", category: "Nitro" },
-  { code: "nitrous_install_kit", name: "Nitrous Install Kit", category: "Nitro" },
+  {
+    code: "empty_nitrous_bottle",
+    name: "Empty Nitrous Bottle",
+    category: "Nitro",
+  },
+  {
+    code: "nitrous_install_kit",
+    name: "Nitrous Install Kit",
+    category: "Nitro",
+  },
   { code: "cleaning_kit", name: "Cleaning Kit", category: "Atelier" },
   { code: "repair_kit", name: "Repair Kit", category: "Atelier" },
   { code: "duct_tape", name: "Duct Tape", category: "Atelier" },
-  { code: "performance_part", name: "Performance Parts", category: "Performance" },
+  {
+    code: "performance_part",
+    name: "Performance Parts",
+    category: "Performance",
+  },
   { code: "mechanic_tablet", name: "Mechanic Tablet", category: "Outils" },
-  { code: "manual_gearbox", name: "Manual Gearbox", category: "Transmission" }
+  { code: "manual_gearbox", name: "Manual Gearbox", category: "Transmission" },
 ];
 const roleIdMap = {
   Patron: "1487868408228741171",
   Copatron: "1487666934412611594",
   Gerant: "1487852908077781168",
   Mecano: "1487852832643354665",
-  Apprenti: "1487852702519136496"
+  Apprenti: "1487852702519136496",
 };
 const pageTitles = {
   tableau: "Tableau de bord",
@@ -80,7 +124,7 @@ const pageTitles = {
   pieces: "Commandes",
   analyse: "Analyse rentabilite",
   logs: "Audit logs",
-  reboot: "Reboot du systeme"
+  reboot: "Reboot du systeme",
 };
 
 const state = {
@@ -97,8 +141,8 @@ const state = {
     Copatron: 45,
     Gerant: 35,
     Mecano: 25,
-    Apprenti: 18
-  }
+    Apprenti: 18,
+  },
 };
 
 const elements = {
@@ -165,7 +209,7 @@ const elements = {
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
-  pages: Array.from(document.querySelectorAll(".app-page"))
+  pages: Array.from(document.querySelectorAll(".app-page")),
 };
 
 const doughnutCenterTextPlugin = {
@@ -189,7 +233,7 @@ const doughnutCenterTextPlugin = {
     ctx.font = '600 12px "Manrope"';
     ctx.fillText(label, centerPoint.x, centerPoint.y + 22);
     ctx.restore();
-  }
+  },
 };
 
 function setText(element, value) {
@@ -211,6 +255,23 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function formatLongDate(dateString) {
+  if (!dateString) return "-";
+  const d = new Date(dateString);
+  const day = d.toLocaleDateString("fr-CA", { weekday: "long" });
+  const rest = d.toLocaleDateString("fr-CA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const time = d.toLocaleTimeString("fr-CA", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  return `${day.charAt(0).toUpperCase() + day.slice(1)}, ${rest} à ${time}`;
 }
 
 function showToast(message, isError = false) {
@@ -247,7 +308,9 @@ function roundToStep(value, step = 25) {
 }
 
 function numberOrDefault(value, fallback) {
-  return value === null || value === undefined || value === "" ? fallback : Number(value);
+  return value === null || value === undefined || value === ""
+    ? fallback
+    : Number(value);
 }
 
 function getNumericValue(element) {
@@ -283,7 +346,10 @@ function populatePartOptions() {
   elements.partName.innerHTML = [
     `<option value="">Selectionner une piece</option>`,
     `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`,
-    ...garageParts.map((part) => `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`)
+    ...garageParts.map(
+      (part) =>
+        `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`,
+    ),
   ].join("");
   elements.partName.dataset.loaded = "true";
   syncSelectedPartCategory();
@@ -296,7 +362,7 @@ function getSelectedPart() {
       code: "__all__",
       name: "Tout le catalogue",
       category: "Lot complet",
-      isAll: true
+      isAll: true,
     };
   }
   return garageParts.find((part) => part.code === selectedCode) || null;
@@ -311,7 +377,8 @@ function syncSelectedPartCategory() {
 }
 
 function getPartIconMarkup(partCode, altText = "Piece") {
-  if (!partCode || partCode === "__all__") return `<span class="part-icon part-icon-all">ALL</span>`;
+  if (!partCode || partCode === "__all__")
+    return `<span class="part-icon part-icon-all">ALL</span>`;
   return `<img class="part-icon" src="parts-icons/${escapeHtml(partCode)}.png" alt="${escapeHtml(altText)}" loading="lazy">`;
 }
 
@@ -319,35 +386,55 @@ function renderPartPreview() {
   if (!elements.partPreview) return;
   const part = getSelectedPart();
   if (!part) {
-    setHtml(elements.partPreview, `
-      <div class="part-preview-empty">Selectionne une piece pour voir son icone et sa categorie.</div>
-    `);
+    setHtml(
+      elements.partPreview,
+      `
+      <div class="part-preview-empty">Selectionne une piece pour voir son icone et l'estimation du prix.</div>
+    `,
+    );
     return;
   }
 
+  const quantity = Math.max(
+    1,
+    Math.round(Number(elements.partQuantity?.value || 1) || 1),
+  );
+  const unitCost = Number(elements.partCost?.value || 105) || 105;
+  const totalUnits = part.isAll ? garageParts.length * quantity : quantity;
+  const totalCost = unitCost * totalUnits;
+
   if (part.isAll) {
-    const sampleIcons = garageParts.slice(0, 8).map((entry) => getPartIconMarkup(entry.code, entry.name)).join("");
-    setHtml(elements.partPreview, `
+    const sampleIcons = garageParts
+      .slice(0, 8)
+      .map((entry) => getPartIconMarkup(entry.code, entry.name))
+      .join("");
+    setHtml(
+      elements.partPreview,
+      `
       <div class="part-preview-card">
         <div class="part-icon-stack">${sampleIcons}</div>
         <div>
           <strong>Tout le catalogue</strong>
-          <span>Lot complet: ${garageParts.length} pieces differentes seront comptabilisees.</span>
+          <span>Lot complet: ${garageParts.length} pieces.<br><b>Prix estime: ${formatMoney(totalCost)}</b></span>
         </div>
       </div>
-    `);
+    `,
+    );
     return;
   }
 
-  setHtml(elements.partPreview, `
+  setHtml(
+    elements.partPreview,
+    `
     <div class="part-preview-card">
       ${getPartIconMarkup(part.code, part.name)}
       <div>
         <strong>${escapeHtml(part.name)}</strong>
-        <span>${escapeHtml(part.category)} | Code inventory: ${escapeHtml(part.code)}</span>
+        <span>${escapeHtml(part.category)} | Qte: ${quantity}<br><b>Prix estime: ${formatMoney(totalCost)}</b></span>
       </div>
     </div>
-  `);
+  `,
+  );
 }
 
 function normaliseEmployeeRecord(record) {
@@ -364,9 +451,13 @@ function normaliseEmployeeRecord(record) {
     todayHours: Number(record.today_hours || record.todayHours || 0),
     active: Boolean(record.is_active ?? record.active),
     activeShiftId: record.active_shift_id || record.activeShiftId || null,
-    activeShiftStartedAt: record.active_shift_started_at || record.activeShiftStartedAt || null,
-    hourlyRate: numberOrDefault(record.hourly_rate ?? record.hourlyRate, getRoleRate(roleName)),
-    lastPayslip: record.lastPayslip || null
+    activeShiftStartedAt:
+      record.active_shift_started_at || record.activeShiftStartedAt || null,
+    hourlyRate: numberOrDefault(
+      record.hourly_rate ?? record.hourlyRate,
+      getRoleRate(roleName),
+    ),
+    lastPayslip: record.lastPayslip || null,
   };
 }
 
@@ -380,26 +471,71 @@ function applyAccessControl() {
   elements.navItems.forEach((item) => {
     const adminOnly = item.dataset.adminOnly === "true";
     item.classList.toggle("hidden", adminOnly && !state.isAdmin);
+
+    // Cache les pages non autorisées pour le Gérant
+    if (state.currentUser?.roleName === "Gerant") {
+      const hiddenForGerant = [
+        "finance",
+        "pieces",
+        "analyse",
+        "logs",
+        "reboot",
+        "salaire",
+      ];
+      if (hiddenForGerant.includes(item.dataset.route)) {
+        item.classList.toggle("hidden", true);
+      }
+    }
   });
   elements.logoutButton?.classList.toggle("hidden", !state.loggedIn);
   document.body.classList.toggle("read-only-mode", state.readOnly);
-  document.querySelectorAll(".main-panel button, .main-panel input:not([readonly]), .main-panel select").forEach((element) => {
-    if (element.id === "logout-button") return;
-    element.disabled = state.readOnly;
-  });
+  document
+    .querySelectorAll(
+      ".main-panel button, .main-panel input:not([readonly]), .main-panel select",
+    )
+    .forEach((element) => {
+      if (element.id === "logout-button") return;
+      // Le Gérant (qui est readOnly pour le panel) doit quand même pouvoir punch in/out
+      if (
+        element.id === "logout-button" ||
+        element.id === "punch-in" ||
+        element.id === "punch-out"
+      )
+        return;
+      element.disabled = state.readOnly;
+    });
 }
 
 function routeToCurrentPage() {
   let route = getRequestedRoute();
-  if (!state.isAdmin && route !== "pointage") {
+
+  if (state.currentUser?.roleName === "Gerant") {
+    const allowedRoutes = [
+      "tableau",
+      "presence",
+      "stats",
+      "gestion",
+      "pointage",
+    ];
+    if (!allowedRoutes.includes(route)) {
+      route = "tableau";
+      if (window.location.hash !== "#tableau") {
+        history.replaceState(null, "", "#tableau");
+      }
+    }
+  } else if (!state.isAdmin && route !== "pointage") {
     route = "pointage";
     if (window.location.hash !== "#pointage") {
       history.replaceState(null, "", "#pointage");
     }
   }
 
-  elements.navItems.forEach((item) => item.classList.toggle("active", item.dataset.route === route));
-  elements.pages.forEach((page) => page.classList.toggle("active-page", page.id === `page-${route}`));
+  elements.navItems.forEach((item) =>
+    item.classList.toggle("active", item.dataset.route === route),
+  );
+  elements.pages.forEach((page) =>
+    page.classList.toggle("active-page", page.id === `page-${route}`),
+  );
   setText(elements.pageTitle, pageTitles[route]);
 }
 
@@ -409,15 +545,23 @@ function setStatusDot(active) {
 }
 
 function getTopEmployee() {
-  return employees.length ? [...employees].sort((a, b) => b.hours - a.hours)[0] : null;
+  return employees.length
+    ? [...employees].sort((a, b) => b.hours - a.hours)[0]
+    : null;
 }
 
 function getPayrollTotal() {
-  return employees.reduce((sum, employee) => sum + employee.hours * employee.hourlyRate, 0);
+  return employees.reduce(
+    (sum, employee) => sum + employee.hours * employee.hourlyRate,
+    0,
+  );
 }
 
 function getExpenseTotal() {
-  return expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) + getNumericValue(elements.miscExpenses);
+  return (
+    expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) +
+    getNumericValue(elements.miscExpenses)
+  );
 }
 
 function getManualPayoutAdjustments() {
@@ -438,26 +582,48 @@ function getFinancePayload() {
     weeklyProfit: getNumericValue(elements.weeklyProfit),
     manualPayouts: getManualPayoutAdjustments(),
     miscExpenses: getNumericValue(elements.miscExpenses),
-    calcNote: elements.calcNote?.value || ""
+    calcNote: elements.calcNote?.value || "",
   };
 }
 
 function updateLivePunchMetrics() {
-  if (!state.loggedIn || !state.currentUser || !state.punchedIn || !activeShiftStartedAt) {
-    setText(elements.todayHours, state.currentUser ? formatHoursMinutes(state.currentUser.todayHours) : "0h 00m");
-    setText(elements.todayPay, state.currentUser ? formatMoney(state.currentUser.todayHours * state.currentUser.hourlyRate) : "0$");
+  if (
+    !state.loggedIn ||
+    !state.currentUser ||
+    !state.punchedIn ||
+    !activeShiftStartedAt
+  ) {
+    setText(
+      elements.todayHours,
+      state.currentUser
+        ? formatHoursMinutes(state.currentUser.todayHours)
+        : "0h 00m",
+    );
+    setText(
+      elements.todayPay,
+      state.currentUser
+        ? formatMoney(
+            state.currentUser.todayHours * state.currentUser.hourlyRate,
+          )
+        : "0$",
+    );
     return;
   }
 
   const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
   state.currentUser.todayHours = elapsedHours;
   setText(elements.todayHours, formatHoursMinutes(elapsedHours));
-  setText(elements.todayPay, formatMoney(elapsedHours * state.currentUser.hourlyRate));
+  setText(
+    elements.todayPay,
+    formatMoney(elapsedHours * state.currentUser.hourlyRate),
+  );
 }
 
 async function refreshBotStatus() {
   if (!elements.botStatusPill) return;
-  const response = await fetch("/api/bot-status", { credentials: "include" }).catch(() => null);
+  const response = await fetch("/api/bot-status", {
+    credentials: "include",
+  }).catch(() => null);
   if (!response?.ok) {
     setPillState(elements.botStatusPill, "Bot indisponible", "danger");
     return;
@@ -465,9 +631,17 @@ async function refreshBotStatus() {
 
   const data = await response.json().catch(() => null);
   if (data?.online) {
-    setPillState(elements.botStatusPill, data.tag ? `Bot en ligne | ${data.tag}` : "Bot en ligne", "success");
+    setPillState(
+      elements.botStatusPill,
+      data.tag ? `Bot en ligne | ${data.tag}` : "Bot en ligne",
+      "success",
+    );
   } else if (data?.configured) {
-    setPillState(elements.botStatusPill, "Bot configure mais hors ligne", "danger");
+    setPillState(
+      elements.botStatusPill,
+      "Bot configure mais hors ligne",
+      "danger",
+    );
   } else {
     setPillState(elements.botStatusPill, "Bot non configure", "info");
   }
@@ -487,27 +661,42 @@ function stopLiveTimer() {
 
 function getLiveEmployeeHours(employee) {
   if (!employee?.active) return Number(employee?.todayHours || 0);
-  const startedAt = employee.activeShiftStartedAt ? new Date(employee.activeShiftStartedAt).getTime() : null;
-  if (!startedAt || Number.isNaN(startedAt)) return Number(employee.todayHours || 0);
+  const startedAt = employee.activeShiftStartedAt
+    ? new Date(employee.activeShiftStartedAt).getTime()
+    : null;
+  if (!startedAt || Number.isNaN(startedAt))
+    return Number(employee.todayHours || 0);
   return Math.max(0, (Date.now() - startedAt) / 3600000);
 }
 
 function getPresenceStatus(hours) {
   if (hours >= 5) return { label: "Critique", className: "mini-pill danger" };
-  if (hours >= 3) return { label: "Rappel requis", className: "mini-pill warning" };
+  if (hours >= 3)
+    return { label: "Rappel requis", className: "mini-pill warning" };
   return { label: "Normal", className: "mini-pill success" };
 }
 
 function getReminderInfo(employee) {
   const entries = Object.values(reminderState || {});
   const match = entries
-    .filter((entry) => entry?.employeeId === employee.id || entry?.discordId === employee.discordId)
-    .sort((a, b) => new Date(b.respondedAt || b.sentAt || 0) - new Date(a.respondedAt || a.sentAt || 0))[0];
+    .filter(
+      (entry) =>
+        entry?.employeeId === employee.id ||
+        entry?.discordId === employee.discordId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.respondedAt || b.sentAt || 0) -
+        new Date(a.respondedAt || a.sentAt || 0),
+    )[0];
 
   if (!match) return { label: "Non envoye", className: "mini-pill" };
-  if (match.response === "still_active") return { label: "Reponse: actif", className: "mini-pill success" };
-  if (match.response === "punched_out") return { label: "Reponse: sorti", className: "mini-pill danger" };
-  if (match.ok === false) return { label: "Echec envoi", className: "mini-pill danger" };
+  if (match.response === "still_active")
+    return { label: "Reponse: actif", className: "mini-pill success" };
+  if (match.response === "punched_out")
+    return { label: "Reponse: sorti", className: "mini-pill danger" };
+  if (match.ok === false)
+    return { label: "Echec envoi", className: "mini-pill danger" };
   return { label: "Envoye", className: "mini-pill warning" };
 }
 
@@ -533,7 +722,10 @@ function startAdminRefreshLoop() {
 }
 
 function renderOverview() {
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
+  const totalHours = employees.reduce(
+    (sum, employee) => sum + employee.hours,
+    0,
+  );
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
@@ -542,7 +734,10 @@ function renderOverview() {
   const totalCosts = getTotalCosts();
   const grossProfit = totalIncome - totalCosts + weeklyProfit;
   const margin = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
-  const activeHours = activeEmployees.reduce((sum, employee) => sum + employee.todayHours, 0);
+  const activeHours = activeEmployees.reduce(
+    (sum, employee) => sum + employee.todayHours,
+    0,
+  );
 
   setText(elements.activeCount, String(activeEmployees.length));
   setText(elements.weeklyHours, formatHoursMinutes(totalHours));
@@ -560,12 +755,20 @@ function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
 
   if (!employees.length) {
-    setHtml(elements.statsBody, `<tr><td colspan="7">Aucune donnee employe.</td></tr>`);
+    setHtml(
+      elements.statsBody,
+      `<tr><td colspan="7">Aucune donnee employe.</td></tr>`,
+    );
   } else {
     const sorted = [...employees].sort((a, b) => b.hours - a.hours);
-    setHtml(elements.statsBody, sorted.map((employee) => {
-      const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-      return `
+    setHtml(
+      elements.statsBody,
+      sorted
+        .map((employee) => {
+          const employeeIndex = employees.findIndex(
+            (entry) => entry.discordId === employee.discordId,
+          );
+          return `
       <tr>
         <td>${escapeHtml(employee.name)}</td>
         <td>${escapeHtml(employee.roleName)}</td>
@@ -580,32 +783,53 @@ function renderStatsTables() {
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
       </tr>
     `;
-    }).join(""));
+        })
+        .join(""),
+    );
   }
 
-  setHtml(elements.roleRatesBody, roleOrder.map((roleName) => `
+  setHtml(
+    elements.roleRatesBody,
+    roleOrder
+      .map(
+        (roleName) => `
     <tr>
       <td>${roleName}</td>
       <td>${formatMoney(getRoleRate(roleName))}</td>
       <td><input class="role-rate-input" data-role-name="${roleName}" type="number" min="0" step="1" placeholder="${getRoleRate(roleName)}"></td>
       <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
     </tr>
-  `).join(""));
+  `,
+      )
+      .join(""),
+  );
 }
 
 function renderSimulation() {
-  const revenue = getNumericValue(elements.serviceIncome) + getNumericValue(elements.weeklyProfit);
+  const revenue =
+    getNumericValue(elements.serviceIncome) +
+    getNumericValue(elements.weeklyProfit);
   const expenseTotal = getExpenseTotal();
   const paidTotal = getTotalEmployeePayments();
   const currentPayroll = employees.reduce((sum, employee) => {
-    const payableHours = Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0);
+    const payableHours =
+      Number(employee.hours || 0) +
+      (employee.active ? getLiveEmployeeHours(employee) : 0);
     return sum + payableHours * numberOrDefault(employee.hourlyRate, 0);
   }, 0);
   const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
   const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
   const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
-  const activeEmployees = employees.filter((employee) => employee.active).length;
-  const totalHours = employees.reduce((sum, employee) => sum + Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0), 0);
+  const activeEmployees = employees.filter(
+    (employee) => employee.active,
+  ).length;
+  const totalHours = employees.reduce(
+    (sum, employee) =>
+      sum +
+      Number(employee.hours || 0) +
+      (employee.active ? getLiveEmployeeHours(employee) : 0),
+    0,
+  );
   const currentMecanoRate = getRoleRate("Mecano");
   let adjustmentFactor = 1;
 
@@ -614,39 +838,53 @@ function renderSimulation() {
   } else if (payrollRatio <= 28) {
     adjustmentFactor = 1;
   } else if (payrollRatio <= 38) {
-    adjustmentFactor = 0.90;
+    adjustmentFactor = 0.9;
   } else {
-    adjustmentFactor = 0.80;
+    adjustmentFactor = 0.8;
   }
 
-  const recommendedRates = Object.fromEntries(roleOrder.map((roleName) => {
-    const currentRate = getRoleRate(roleName);
-    const nextRate = currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
-    return [roleName, nextRate];
-  }));
-  const recommendedMecanoRate = recommendedRates.Mecano || roundToStep(currentMecanoRate * adjustmentFactor, 25);
-  const roleCounts = roleOrder
-    .map((roleName) => {
-      const count = employees.filter((employee) => employee.roleName === roleName).length;
-      return count ? `${count} ${roleName}` : null;
-    })
-    .filter(Boolean)
-    .join(" | ") || "Aucun employe";
+  const recommendedRates = Object.fromEntries(
+    roleOrder.map((roleName) => {
+      const currentRate = getRoleRate(roleName);
+      const nextRate =
+        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
+      return [roleName, nextRate];
+    }),
+  );
+  const recommendedMecanoRate =
+    recommendedRates.Mecano ||
+    roundToStep(currentMecanoRate * adjustmentFactor, 25);
+  const roleCounts =
+    roleOrder
+      .map((roleName) => {
+        const count = employees.filter(
+          (employee) => employee.roleName === roleName,
+        ).length;
+        return count ? `${count} ${roleName}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ") || "Aucun employe";
 
   setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
   setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
   setText(elements.simRemainingProfit, formatMoney(remainingProfit));
-  setText(elements.simRecommendedHourly, recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h");
+  setText(
+    elements.simRecommendedHourly,
+    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
+  );
   setText(elements.simEmployeeCount, String(employees.length));
   setText(elements.simRoleMix, roleCounts);
   setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
   setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
 
   let headline = "Analyse en attente";
-  let status = "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
+  let status =
+    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
   let action = "Aucune modification conseillee pour l'instant.";
   const rateAdvice = roleOrder
-    .filter((roleName) => employees.some((employee) => employee.roleName === roleName))
+    .filter((roleName) =>
+      employees.some((employee) => employee.roleName === roleName),
+    )
     .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
     .join("<br>");
 
@@ -654,7 +892,8 @@ function renderSimulation() {
     if (payrollRatio < 8) {
       headline = "Marge tres confortable";
       status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
-      action = "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
+      action =
+        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
     } else if (payrollRatio < 15) {
       headline = "Paie encore tres saine";
       status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
@@ -666,15 +905,19 @@ function renderSimulation() {
     } else if (payrollRatio <= 38) {
       headline = "Paie un peu lourde";
       status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
-      action = "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
+      action =
+        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
     } else {
       headline = "Risque de payer trop cher";
       status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
-      action = "Conseil prudent: reduis temporairement ou paie seulement une partie.";
+      action =
+        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
     }
   }
 
-  setHtml(elements.simRecommendation, `
+  setHtml(
+    elements.simRecommendation,
+    `
     <div class="analysis-recommendation-head">
       <span>${escapeHtml(headline)}</span>
       <strong>${recommendedMecanoRate}$/h Mecano</strong>
@@ -685,27 +928,36 @@ function renderSimulation() {
       <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
       <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
     </div>
-  `);
+  `,
+  );
 }
 
 function renderPresenceList() {
   if (!elements.presenceBody) return;
   const activeEmployees = employees.filter((employee) => employee.active);
   if (!activeEmployees.length) {
-    setHtml(elements.presenceBody, `<tr><td colspan="8">Aucun employe en service.</td></tr>`);
+    setHtml(
+      elements.presenceBody,
+      `<tr><td colspan="8">Aucun employe en service.</td></tr>`,
+    );
     return;
   }
 
-  setHtml(elements.presenceBody, activeEmployees.map((employee) => {
-    const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-    const liveHours = getLiveEmployeeHours(employee);
-    const status = getPresenceStatus(liveHours);
-    const reminder = getReminderInfo(employee);
-    const entryLabel = employee.activeShiftStartedAt
-      ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
-      : "-";
+  setHtml(
+    elements.presenceBody,
+    activeEmployees
+      .map((employee) => {
+        const employeeIndex = employees.findIndex(
+          (entry) => entry.discordId === employee.discordId,
+        );
+        const liveHours = getLiveEmployeeHours(employee);
+        const status = getPresenceStatus(liveHours);
+        const reminder = getReminderInfo(employee);
+        const entryLabel = employee.activeShiftStartedAt
+          ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
+          : "-";
 
-    return `
+        return `
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
@@ -720,17 +972,26 @@ function renderPresenceList() {
         </td>
       </tr>
     `;
-  }).join(""));
+      })
+      .join(""),
+  );
 }
 
 function renderExpenseTable() {
   if (!elements.expenseBody) return;
   if (!expenses.length) {
-    setHtml(elements.expenseBody, `<tr><td colspan="6">Aucune commande enregistree.</td></tr>`);
+    setHtml(
+      elements.expenseBody,
+      `<tr><td colspan="6">Aucune commande enregistree.</td></tr>`,
+    );
     return;
   }
 
-  setHtml(elements.expenseBody, expenses.map((expense, expenseIndex) => `
+  setHtml(
+    elements.expenseBody,
+    expenses
+      .map(
+        (expense, expenseIndex) => `
     <tr>
       <td>
         <span class="part-table-cell">
@@ -746,28 +1007,43 @@ function renderExpenseTable() {
         <button class="danger-button table-button delete-expense-button" data-expense-index="${expenseIndex}">Supprimer</button>
       </td>
     </tr>
-  `).join(""));
+  `,
+      )
+      .join(""),
+  );
 }
 
 function renderLeaderboard() {
   if (!elements.leaderboardBody) return;
   if (!employees.length) {
-    setHtml(elements.leaderboardBody, `<tr><td colspan="5">Aucune donnee employe pour le moment.</td></tr>`);
+    setHtml(
+      elements.leaderboardBody,
+      `<tr><td colspan="5">Aucune donnee employe pour le moment.</td></tr>`,
+    );
     return;
   }
 
   const sortedEmployees = [...employees].sort((a, b) => b.hours - a.hours);
-  setHtml(elements.leaderboardBody, sortedEmployees.map((employee) => {
-    const employeeIndex = employees.findIndex((entry) => entry.discordId === employee.discordId);
-    const estimatedPay = employee.hours * employee.hourlyRate;
-    const pdfButton = employee.lastPayslip?.payoutId ? `
+  setHtml(
+    elements.leaderboardBody,
+    sortedEmployees
+      .map((employee) => {
+        const employeeIndex = employees.findIndex(
+          (entry) => entry.discordId === employee.discordId,
+        );
+        const estimatedPay = employee.hours * employee.hourlyRate;
+        const pdfButton = employee.lastPayslip?.payoutId
+          ? `
       <a class="secondary-button secondary-table-button table-button" href="/api/payouts/${employee.lastPayslip.payoutId}/pdf" target="_blank" rel="noreferrer">PDF</a>
-    ` : "";
-    const dmButton = employee.lastPayslip ? `
+    `
+          : "";
+        const dmButton = employee.lastPayslip
+          ? `
       <button class="secondary-button secondary-table-button table-button dm-payslip-button" data-employee-index="${employeeIndex}">MP Discord</button>
-    ` : "";
+    `
+          : "";
 
-    return `
+        return `
       <tr>
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
@@ -780,7 +1056,9 @@ function renderLeaderboard() {
         </td>
       </tr>
     `;
-  }).join(""));
+      })
+      .join(""),
+  );
 }
 
 function formatAuditAction(action) {
@@ -792,7 +1070,7 @@ function formatAuditAction(action) {
     part_order_added: "Commande piece ajoutee",
     part_order_deleted: "Commande piece supprimee",
     employee_paid: "Employe paye",
-    system_reboot: "Reboot complet"
+    system_reboot: "Reboot complet",
   };
   return labels[action] || action;
 }
@@ -800,32 +1078,59 @@ function formatAuditAction(action) {
 function renderAuditLogs() {
   if (!elements.auditBody) return;
   if (!auditLogs.length) {
-    setHtml(elements.auditBody, `<tr><td colspan="5">Aucun log pour le moment.</td></tr>`);
+    setHtml(
+      elements.auditBody,
+      `<tr><td colspan="5">Aucun log pour le moment.</td></tr>`,
+    );
     return;
   }
 
-  setHtml(elements.auditBody, auditLogs.map((entry) => {
-    const details = entry.details || {};
-    const detailsText = Object.entries(details)
-      .slice(0, 4)
-      .map(([key, value]) => `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`)
-      .join(" | ") || "-";
+  setHtml(
+    elements.auditBody,
+    auditLogs
+      .map((entry) => {
+        const details = entry.details || {};
+        const detailsText =
+          Object.entries(details)
+            .slice(0, 4)
+            .map(
+              ([key, value]) =>
+                `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`,
+            )
+            .map(([key, value]) => {
+              if (typeof value === "object" && value !== null) {
+                return `${key}: ${Object.entries(value)
+                  .map(([k, v]) => `${k}=${v}`)
+                  .join(", ")}`;
+              }
+              return `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`;
+            })
+            .join(" | ") || "-";
 
-    return `
+        return `
       <tr>
-        <td>${entry.created_at ? new Date(entry.created_at).toLocaleString("fr-CA") : "-"}</td>
+        <td>${formatLongDate(entry.created_at)}</td>
         <td>${formatAuditAction(entry.action)}</td>
         <td>${entry.actor_name || "-"}</td>
         <td>${entry.target_name || entry.target_discord_id || "-"}</td>
         <td>${detailsText}</td>
       </tr>
     `;
-  }).join(""));
+      })
+      .join(""),
+  );
 }
 
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
-  setText(elements.topbarRolePill, state.readOnly ? "Bienvenue Gouvernement | Lecture seule" : (state.loggedIn ? roleText : "Connexion securisee"));
+  setText(
+    elements.topbarRolePill,
+    state.isSupervision
+      ? "Bienvenue Gouvernement | Lecture seule"
+      : state.loggedIn
+        ? roleText
+        : "Connexion securisee",
+  );
 
   if (!state.loggedIn || !state.currentUser) {
     setText(elements.shiftBadge, "Hors service");
@@ -841,16 +1146,23 @@ function renderShiftState() {
     return;
   }
 
-  if (state.readOnly) {
+  if (state.isSupervision) {
     setText(elements.shiftBadge, "Supervision");
-    if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill success";
-    setText(elements.shiftMessage, "Bienvenue Gouvernement. Acces supervision en lecture seule: aucune action ne peut etre executee.");
+    if (elements.shiftBadge)
+      elements.shiftBadge.className = "mini-pill success";
+    setText(
+      elements.shiftMessage,
+      "Bienvenue Gouvernement. Acces supervision en lecture seule: aucune action ne peut etre executee.",
+    );
     setText(elements.todayHours, "Lecture seule");
     setText(elements.todayPay, "Supervision");
     if (elements.punchIn) elements.punchIn.disabled = true;
     if (elements.punchOut) elements.punchOut.disabled = true;
     setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
-    setText(elements.demoUserText, `${state.currentUser.name} | Gouvernement | Lecture seule`);
+    setText(
+      elements.demoUserText,
+      `${state.currentUser.name} | Gouvernement | Lecture seule`,
+    );
     stopLiveTimer();
     return;
   }
@@ -858,17 +1170,27 @@ function renderShiftState() {
   if (elements.punchIn) elements.punchIn.disabled = state.punchedIn;
   if (elements.punchOut) elements.punchOut.disabled = !state.punchedIn;
   setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
-  setText(elements.demoUserText, `${state.currentUser.name} | ${state.currentUser.roleName}`);
+  setText(
+    elements.demoUserText,
+    `${state.currentUser.name} | ${state.currentUser.roleName}`,
+  );
 
   if (state.punchedIn) {
     setText(elements.shiftBadge, "En service");
-    if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill success";
-    setText(elements.shiftMessage, "Tu es en service. Ton temps et ton argent montent en direct.");
+    if (elements.shiftBadge)
+      elements.shiftBadge.className = "mini-pill success";
+    setText(
+      elements.shiftMessage,
+      "Tu es en service. Ton temps et ton argent montent en direct.",
+    );
     startLiveTimer();
   } else {
     setText(elements.shiftBadge, "Hors service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
-    setText(elements.shiftMessage, "Tu n'es pas en service. Entre en service pour lancer le pointage.");
+    setText(
+      elements.shiftMessage,
+      "Tu n'es pas en service. Entre en service pour lancer le pointage.",
+    );
     stopLiveTimer();
     updateLivePunchMetrics();
   }
@@ -878,7 +1200,9 @@ function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
   if (!canvas || typeof Chart === "undefined") return;
   const buckets = ["Jour", "Soir", "Nuit"].map((label) =>
-    employees.filter((employee) => employee.preferredShift === label).reduce((sum, employee) => sum + employee.hours, 0)
+    employees
+      .filter((employee) => employee.preferredShift === label)
+      .reduce((sum, employee) => sum + employee.hours, 0),
   );
   const totalHours = buckets.reduce((sum, value) => sum + value, 0);
 
@@ -888,15 +1212,21 @@ function drawShiftDonutChart() {
     plugins: [doughnutCenterTextPlugin],
     data: {
       labels: ["Jour", "Soir", "Nuit"],
-      datasets: [{
-        data: buckets,
-        backgroundColor: [chartPalette.teal, chartPalette.blue, chartPalette.orange],
-        borderColor: "#ffffff",
-        borderWidth: 6,
-        borderRadius: 4,
-        spacing: 4,
-        hoverOffset: 4
-      }]
+      datasets: [
+        {
+          data: buckets,
+          backgroundColor: [
+            chartPalette.teal,
+            chartPalette.blue,
+            chartPalette.orange,
+          ],
+          borderColor: "#ffffff",
+          borderWidth: 6,
+          borderRadius: 4,
+          spacing: 4,
+          hoverOffset: 4,
+        },
+      ],
     },
     options: {
       responsive: true,
@@ -907,7 +1237,7 @@ function drawShiftDonutChart() {
       plugins: {
         doughnutCenterText: {
           value: totalHours ? formatCompactHours(totalHours) : "0h",
-          label: "Heures cumulees"
+          label: "Heures cumulees",
         },
         legend: {
           position: "bottom",
@@ -917,8 +1247,8 @@ function drawShiftDonutChart() {
             pointStyle: "circle",
             boxWidth: 10,
             padding: 18,
-            font: { family: "Manrope", size: 12, weight: "700" }
-          }
+            font: { family: "Manrope", size: 12, weight: "700" },
+          },
         },
         tooltip: {
           backgroundColor: "#182232",
@@ -931,11 +1261,11 @@ function drawShiftDonutChart() {
           callbacks: {
             label(context) {
               return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -955,7 +1285,10 @@ function drawTrendChart() {
     previousDate.setDate(previousDate.getDate() - 7);
     const previousKey = previousDate.toISOString().slice(0, 10);
     const previousHours = shifts
-      .filter((shift) => String(shift.punched_in_at || "").slice(0, 10) === previousKey)
+      .filter(
+        (shift) =>
+          String(shift.punched_in_at || "").slice(0, 10) === previousKey,
+      )
       .reduce((sum, shift) => sum + Number(shift.duration_hours || 0), 0);
     return { label, totalHours, previousHours };
   });
@@ -977,7 +1310,7 @@ function drawTrendChart() {
           pointRadius: 4,
           pointHoverRadius: 6,
           tension: 0.34,
-          fill: true
+          fill: true,
         },
         {
           label: "Semaine precedente",
@@ -990,9 +1323,9 @@ function drawTrendChart() {
           pointRadius: 3,
           pointHoverRadius: 5,
           tension: 0.34,
-          fill: false
-        }
-      ]
+          fill: false,
+        },
+      ],
     },
     options: {
       responsive: true,
@@ -1009,8 +1342,8 @@ function drawTrendChart() {
             pointStyle: "circle",
             boxWidth: 10,
             padding: 18,
-            font: { family: "Manrope", size: 12, weight: "700" }
-          }
+            font: { family: "Manrope", size: 12, weight: "700" },
+          },
         },
         tooltip: {
           backgroundColor: "#182232",
@@ -1023,14 +1356,17 @@ function drawTrendChart() {
           callbacks: {
             label(context) {
               return `Heures: ${formatHoursMinutes(context.raw || 0)}`;
-            }
-          }
-        }
+            },
+          },
+        },
       },
       scales: {
         x: {
           grid: { color: chartPalette.grid, drawBorder: false },
-          ticks: { color: chartPalette.muted, font: { family: "Manrope", size: 11, weight: "700" } }
+          ticks: {
+            color: chartPalette.muted,
+            font: { family: "Manrope", size: 11, weight: "700" },
+          },
         },
         y: {
           beginAtZero: true,
@@ -1040,11 +1376,11 @@ function drawTrendChart() {
             font: { family: "Manrope", size: 11, weight: "700" },
             callback(value) {
               return `${value}h`;
-            }
-          }
-        }
-      }
-    }
+            },
+          },
+        },
+      },
+    },
   });
 }
 
@@ -1068,11 +1404,16 @@ function updateAll() {
 async function loadAdminDashboard() {
   if (!state.isAdmin) return;
   try {
-    const response = await fetch("/api/admin-dashboard", { credentials: "include" });
+    const response = await fetch("/api/admin-dashboard", {
+      credentials: "include",
+    });
     if (!response.ok) return;
     const data = await response.json();
 
-    state.roleRates = { ...state.roleRates, ...(data.settings?.role_rates || {}) };
+    state.roleRates = {
+      ...state.roleRates,
+      ...(data.settings?.role_rates || {}),
+    };
     reminderState = data.settings?.reminder_state || {};
     shifts = data.shifts || [];
     employees = (data.employees || []).map(normaliseEmployeeRecord);
@@ -1096,8 +1437,10 @@ async function loadAdminDashboard() {
           hoursPaid: Number(payout.hours_paid || 0),
           hourlyRate: Number(payout.hourly_rate || 0),
           amountPaid: Number(payout.amount_paid || 0),
-          paidAtLabel: payout.paid_at ? new Date(payout.paid_at).toLocaleString("fr-CA") : ""
-        }
+          paidAtLabel: payout.paid_at
+            ? new Date(payout.paid_at).toLocaleString("fr-CA")
+            : "",
+        },
       };
     });
 
@@ -1109,28 +1452,65 @@ async function loadAdminDashboard() {
       quantity: Number(entry.quantity || 1),
       unitCost: Number(entry.unit_cost || entry.unitCost || entry.cost || 105),
       cost: Number(entry.cost || 105),
-      note: entry.note || "-"
+      note: entry.note || "-",
     }));
 
     await loadAuditLogs();
 
-    state.recordedPayouts = (data.payouts || []).reduce((sum, entry) => sum + Number(entry.amount_paid || 0), 0);
+    state.recordedPayouts = (data.payouts || []).reduce(
+      (sum, entry) => sum + Number(entry.amount_paid || 0),
+      0,
+    );
     const financeInputs = data.settings?.finance_inputs || {};
-    setValue(elements.serviceIncome, financeInputs.serviceIncome ? String(financeInputs.serviceIncome) : "");
-    setValue(elements.weeklyProfit, financeInputs.weeklyProfit ? String(financeInputs.weeklyProfit) : "");
-    setValue(elements.manualPayouts, financeInputs.manualPayouts ? String(financeInputs.manualPayouts) : "");
-    setValue(elements.miscExpenses, financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "");
+    setValue(
+      elements.serviceIncome,
+      financeInputs.serviceIncome ? String(financeInputs.serviceIncome) : "",
+    );
+    setValue(
+      elements.weeklyProfit,
+      financeInputs.weeklyProfit ? String(financeInputs.weeklyProfit) : "",
+    );
+    setValue(
+      elements.manualPayouts,
+      financeInputs.manualPayouts ? String(financeInputs.manualPayouts) : "",
+    );
+    setValue(
+      elements.miscExpenses,
+      financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "",
+    );
     setValue(elements.calcNote, financeInputs.calcNote || "");
-    setValue(elements.partCost, String(Number(data.settings?.part_settings?.fixedCost || 105)));
+    setValue(
+      elements.partCost,
+      String(Number(data.settings?.part_settings?.fixedCost || 105)),
+    );
     const analysisSettings = data.settings?.analysis_settings || {};
-    setValue(elements.simRevenue, analysisSettings.revenue ? String(analysisSettings.revenue) : "");
-    setValue(elements.simExpenses, analysisSettings.expenses ? String(analysisSettings.expenses) : "");
-    setValue(elements.simTargetProfit, analysisSettings.targetProfitPercent ? String(analysisSettings.targetProfitPercent) : "");
-    setValue(elements.simResalePrice, analysisSettings.resalePrice ? String(analysisSettings.resalePrice) : "");
-    setValue(elements.simWeeklyParts, analysisSettings.weeklyParts ? String(analysisSettings.weeklyParts) : "");
+    setValue(
+      elements.simRevenue,
+      analysisSettings.revenue ? String(analysisSettings.revenue) : "",
+    );
+    setValue(
+      elements.simExpenses,
+      analysisSettings.expenses ? String(analysisSettings.expenses) : "",
+    );
+    setValue(
+      elements.simTargetProfit,
+      analysisSettings.targetProfitPercent
+        ? String(analysisSettings.targetProfitPercent)
+        : "",
+    );
+    setValue(
+      elements.simResalePrice,
+      analysisSettings.resalePrice ? String(analysisSettings.resalePrice) : "",
+    );
+    setValue(
+      elements.simWeeklyParts,
+      analysisSettings.weeklyParts ? String(analysisSettings.weeklyParts) : "",
+    );
 
     if (state.currentUser) {
-      const matching = employees.find((employee) => employee.discordId === state.currentUser.discordId);
+      const matching = employees.find(
+        (employee) => employee.discordId === state.currentUser.discordId,
+      );
       if (matching) state.currentUser = matching;
     }
   } catch (error) {
@@ -1142,7 +1522,9 @@ async function loadAdminDashboard() {
 
 async function loadAuditLogs() {
   if (!state.isAdmin) return;
-  const response = await fetch("/api/admin-audit-logs", { credentials: "include" }).catch(() => null);
+  const response = await fetch("/api/admin-audit-logs", {
+    credentials: "include",
+  }).catch(() => null);
   if (!response?.ok) return;
   const data = await response.json().catch(() => null);
   auditLogs = data?.logs || [];
@@ -1162,7 +1544,9 @@ async function loadMeState() {
     if (!state.isAdmin) {
       employees = [current];
     } else {
-      const existing = employees.filter((employee) => employee.discordId !== current.discordId);
+      const existing = employees.filter(
+        (employee) => employee.discordId !== current.discordId,
+      );
       employees = [current, ...existing];
     }
 
@@ -1181,20 +1565,25 @@ async function loadMeState() {
 function syncCurrentUserFromSession(sessionUser) {
   state.isAdmin = Boolean(sessionUser.isAdmin);
   state.canManage = sessionUser.canManage !== false;
-  state.readOnly = Boolean(sessionUser.readOnly || (state.isAdmin && !state.canManage));
+  state.isSupervision = Boolean(sessionUser.isSupervision);
+  state.readOnly = Boolean(
+    sessionUser.readOnly || (state.isAdmin && !state.canManage),
+  );
   state.currentUser = normaliseEmployeeRecord({
     discord_id: sessionUser.discordId,
     discord_name: sessionUser.displayName || sessionUser.username,
     role_name: sessionUser.roleName || "Mecano",
     role_id: sessionUser.roleId || null,
-    hourly_rate: getRoleRate(sessionUser.roleName)
+    hourly_rate: getRoleRate(sessionUser.roleName),
   });
   state.loggedIn = true;
   employees = [state.currentUser];
   setStatusDot(true);
-  if (state.readOnly) {
+  if (state.isSupervision) {
     setTimeout(() => {
-      showToast("Bienvenue Gouvernement. Mode supervision active: lecture seule, aucune action disponible.");
+      showToast(
+        "Bienvenue Gouvernement. Mode supervision active: lecture seule, aucune action disponible.",
+      );
     }, 250);
   }
 }
@@ -1252,12 +1641,14 @@ async function saveFinanceSettings() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(getFinancePayload())
-  }).then(() => {
-    showToast("Profit enregistre.");
-  }).catch(() => {
-    showToast("Echec de l'enregistrement.", true);
-  });
+    body: JSON.stringify(getFinancePayload()),
+  })
+    .then(() => {
+      showToast("Profit enregistre.");
+    })
+    .catch(() => {
+      showToast("Echec de l'enregistrement.", true);
+    });
 }
 
 function queueFinanceSave() {
@@ -1271,14 +1662,14 @@ async function saveAnalysisSettings() {
     expenses: getNumericValue(elements.simExpenses),
     targetProfitPercent: getNumericValue(elements.simTargetProfit),
     resalePrice: getNumericValue(elements.simResalePrice),
-    weeklyParts: getNumericValue(elements.simWeeklyParts)
+    weeklyParts: getNumericValue(elements.simWeeklyParts),
   };
 
   const response = await fetch("/api/admin-analysis-settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   }).catch(() => null);
 
   if (!response?.ok) {
@@ -1293,7 +1684,11 @@ async function updateRoleRate(roleName, nextRate) {
   if (state.readOnly) return;
   if (!Number.isFinite(nextRate) || nextRate < 0) return;
   state.roleRates[roleName] = nextRate;
-  employees = employees.map((employee) => employee.roleName === roleName ? { ...employee, hourlyRate: nextRate } : employee);
+  employees = employees.map((employee) =>
+    employee.roleName === roleName
+      ? { ...employee, hourlyRate: nextRate }
+      : employee,
+  );
   if (state.currentUser?.roleName === roleName) {
     state.currentUser.hourlyRate = nextRate;
   }
@@ -1304,16 +1699,24 @@ async function updateRoleRate(roleName, nextRate) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ roleRates: state.roleRates })
-  }).then(() => {
-    showToast(`Salaire ${roleName} mis a jour.`);
-  }).catch(() => {
-    showToast("Impossible de sauvegarder le salaire du role.", true);
-  });
+    body: JSON.stringify({ roleRates: state.roleRates }),
+  })
+    .then(() => {
+      showToast(`Salaire ${roleName} mis a jour.`);
+    })
+    .catch(() => {
+      showToast("Impossible de sauvegarder le salaire du role.", true);
+    });
 }
 
 async function adjustEmployeeHours(employeeIndex, hoursValue) {
-  if (!state.isAdmin || state.readOnly || !Number.isFinite(hoursValue) || hoursValue < 0) return;
+  if (
+    !state.isAdmin ||
+    state.readOnly ||
+    !Number.isFinite(hoursValue) ||
+    hoursValue < 0
+  )
+    return;
   const employee = employees[employeeIndex];
   if (!employee?.id) return;
 
@@ -1321,7 +1724,7 @@ async function adjustEmployeeHours(employeeIndex, hoursValue) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ employeeId: employee.id, totalHours: hoursValue })
+    body: JSON.stringify({ employeeId: employee.id, totalHours: hoursValue }),
   }).catch(() => null);
 
   if (!response?.ok) {
@@ -1345,7 +1748,7 @@ async function sendReminder(employeeIndex) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ employeeId: employee.id })
+    body: JSON.stringify({ employeeId: employee.id }),
   }).catch(() => null);
 
   if (!response?.ok) {
@@ -1365,7 +1768,7 @@ async function forcePunchOut(employeeIndex) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ employeeId: employee.id })
+    body: JSON.stringify({ employeeId: employee.id }),
   }).catch(() => null);
 
   if (!response?.ok) {
@@ -1374,7 +1777,9 @@ async function forcePunchOut(employeeIndex) {
   }
 
   const data = await response.json().catch(() => ({}));
-  employee.hours += Number(data.durationHours || getLiveEmployeeHours(employee));
+  employee.hours += Number(
+    data.durationHours || getLiveEmployeeHours(employee),
+  );
   employee.activeDays += 1;
   employee.preferredShift = data.shiftPeriod || employee.preferredShift;
   employee.todayHours = 0;
@@ -1403,12 +1808,17 @@ async function punchIn() {
   state.currentUser.active = true;
   state.currentUser.todayHours = 0;
   state.currentUser.lastPayslip = null;
-  employees = employees.map((employee) => employee.discordId === state.currentUser.discordId
-    ? { ...employee, active: true, todayHours: 0, lastPayslip: null }
-    : employee);
+  employees = employees.map((employee) =>
+    employee.discordId === state.currentUser.discordId
+      ? { ...employee, active: true, todayHours: 0, lastPayslip: null }
+      : employee,
+  );
   activeShiftStartedAt = Date.now();
   updateAll();
-  const response = await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => null);
+  const response = await fetch("/api/punch-in", {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => null);
   if (!response?.ok) {
     state.punchedIn = false;
     state.currentUser.active = false;
@@ -1433,15 +1843,22 @@ async function punchOut() {
   state.currentUser.active = false;
   stopLiveTimer();
   updateAll();
-  const response = await fetch("/api/punch-out", { method: "POST", credentials: "include" }).catch(() => null);
+  const response = await fetch("/api/punch-out", {
+    method: "POST",
+    credentials: "include",
+  }).catch(() => null);
   if (response?.ok) {
     const data = await response.json();
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
-    state.currentUser.preferredShift = data.shiftPeriod || state.currentUser.preferredShift;
+    state.currentUser.preferredShift =
+      data.shiftPeriod || state.currentUser.preferredShift;
   } else {
     state.currentUser.hours += state.currentUser.todayHours;
-    showToast("Sortie de service sauvegardee localement, verifie le serveur.", true);
+    showToast(
+      "Sortie de service sauvegardee localement, verifie le serveur.",
+      true,
+    );
   }
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = null;
@@ -1459,11 +1876,17 @@ async function addExpense() {
     return;
   }
 
-  const quantity = Math.max(1, Math.round(Number(elements.partQuantity?.value || 1) || 1));
+  const quantity = Math.max(
+    1,
+    Math.round(Number(elements.partQuantity?.value || 1) || 1),
+  );
   const unitCost = Number(elements.partCost?.value || 105) || 105;
-  const category = elements.partCategory?.value.trim() || selectedPart.category || "Pieces";
+  const category =
+    elements.partCategory?.value.trim() || selectedPart.category || "Pieces";
   const note = elements.partNote?.value.trim() || "-";
-  const totalUnits = selectedPart.isAll ? garageParts.length * quantity : quantity;
+  const totalUnits = selectedPart.isAll
+    ? garageParts.length * quantity
+    : quantity;
   const totalCost = unitCost * totalUnits;
   let nextExpense = {
     name: selectedPart.name,
@@ -1472,14 +1895,16 @@ async function addExpense() {
     quantity: totalUnits,
     unitCost,
     cost: totalCost,
-    note: selectedPart.isAll ? `Lot complet: ${quantity} x ${garageParts.length} pieces | ${note}` : note
+    note: selectedPart.isAll
+      ? `Lot complet: ${quantity} x ${garageParts.length} pieces | ${note}`
+      : note,
   };
   if (state.isAdmin) {
     const response = await fetch("/api/admin-expense", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(nextExpense)
+      body: JSON.stringify(nextExpense),
     }).catch(() => null);
 
     if (response?.ok) {
@@ -1488,12 +1913,17 @@ async function addExpense() {
         nextExpense = {
           id: data.expense.id,
           name: data.expense.name,
-          itemCode: data.expense.item_code || data.expense.itemCode || selectedPart.code,
+          itemCode:
+            data.expense.item_code ||
+            data.expense.itemCode ||
+            selectedPart.code,
           category: data.expense.category,
           quantity: Number(data.expense.quantity || totalUnits),
-          unitCost: Number(data.expense.unit_cost || data.expense.unitCost || unitCost),
+          unitCost: Number(
+            data.expense.unit_cost || data.expense.unitCost || unitCost,
+          ),
           cost: Number(data.expense.cost || totalCost),
-          note: data.expense.note || "-"
+          note: data.expense.note || "-",
         };
       }
     }
@@ -1505,7 +1935,9 @@ async function addExpense() {
   setValue(elements.partCategory, "");
   setValue(elements.partNote, "");
   syncSelectedPartCategory();
-  showToast(`Commande ajoutee: ${selectedPart.isAll ? `${totalUnits} pieces au total` : `${quantity} x ${selectedPart.name}`}.`);
+  showToast(
+    `Commande ajoutee: ${selectedPart.isAll ? `${totalUnits} pieces au total` : `${quantity} x ${selectedPart.name}`}.`,
+  );
   updateAll();
 }
 
@@ -1529,12 +1961,14 @@ async function togglePartCostEdit() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ fixedCost: nextCost })
-  }).then(() => {
-    showToast("Cout fixe des pieces enregistre.");
-  }).catch(() => {
-    showToast("Impossible d'enregistrer le cout fixe.", true);
-  });
+    body: JSON.stringify({ fixedCost: nextCost }),
+  })
+    .then(() => {
+      showToast("Cout fixe des pieces enregistre.");
+    })
+    .catch(() => {
+      showToast("Impossible d'enregistrer le cout fixe.", true);
+    });
 }
 
 async function deleteExpense(expenseIndex) {
@@ -1553,7 +1987,7 @@ async function deleteExpense(expenseIndex) {
 
   const response = await fetch(`/api/admin-expense/${removed.id}`, {
     method: "DELETE",
-    credentials: "include"
+    credentials: "include",
   }).catch(() => null);
 
   if (!response?.ok) {
@@ -1573,7 +2007,10 @@ async function sendPayslipByDiscord(employee) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ discordId: employee.discordId, payslip: employee.lastPayslip })
+    body: JSON.stringify({
+      discordId: employee.discordId,
+      payslip: employee.lastPayslip,
+    }),
   }).catch(() => {});
 }
 
@@ -1583,7 +2020,9 @@ async function markEmployeePaid(employeeIndex) {
   if (!employee || employee.hours <= 0) return;
 
   const paidDate = new Date();
-  const fallbackAmount = Number((employee.hours * employee.hourlyRate).toFixed(2));
+  const fallbackAmount = Number(
+    (employee.hours * employee.hourlyRate).toFixed(2),
+  );
   let payoutId = null;
   let amountPaid = fallbackAmount;
   let hoursPaid = employee.hours;
@@ -1594,7 +2033,7 @@ async function markEmployeePaid(employeeIndex) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ employeeId: employee.id })
+      body: JSON.stringify({ employeeId: employee.id }),
     }).catch(() => null);
 
     if (response?.ok) {
@@ -1613,7 +2052,7 @@ async function markEmployeePaid(employeeIndex) {
     hoursPaid,
     hourlyRate,
     amountPaid,
-    paidAtLabel: paidDate.toLocaleString("fr-CA")
+    paidAtLabel: paidDate.toLocaleString("fr-CA"),
   };
 
   state.recordedPayouts += amountPaid;
@@ -1636,16 +2075,21 @@ async function markEmployeePaid(employeeIndex) {
 async function rebootData(scope = "all") {
   if (!state.isAdmin || state.readOnly) return;
   const labels = {
-    shifts: "les pointages/heures",
-    expenses: "les commandes de pieces",
-    payouts: "les paies/slips",
+    shifts: "les heures",
+    expenses: "les commandes",
+    payouts: "les paies",
     finance: "le profit",
-    all: "tout le systeme operationnel"
+    all: "tout le systeme",
   };
-  if (!window.confirm(`Zone danger: tu vas reset ${labels[scope] || scope}. Continuer ?`)) return;
-  const typed = window.prompt(`Tape RESET pour confirmer le reset de ${labels[scope] || scope}.`);
+  if (
+    !window.confirm(
+      `Tu vas reinitialiser ${labels[scope] || scope}. Continuer ?`,
+    )
+  )
+    return;
+  const typed = window.prompt(`Tape RESET pour confirmer.`);
   if (typed !== "RESET") {
-    showToast("Reset annule: confirmation incorrecte.", true);
+    showToast("Reset annule.", true);
     return;
   }
 
@@ -1653,7 +2097,7 @@ async function rebootData(scope = "all") {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ scope })
+    body: JSON.stringify({ scope }),
   }).catch(() => {});
 
   showToast(`Reset effectue: ${labels[scope] || scope}.`);
@@ -1671,8 +2115,11 @@ elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
+elements.partQuantity?.addEventListener("input", renderPartPreview);
 elements.rebootButtons.forEach((button) => {
-  button.addEventListener("click", () => rebootData(button.dataset.rebootScope || "all"));
+  button.addEventListener("click", () =>
+    rebootData(button.dataset.rebootScope || "all"),
+  );
 });
 
 elements.expenseBody?.addEventListener("click", (event) => {
@@ -1697,7 +2144,9 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   const saveButton = event.target.closest(".save-role-rate-button");
   if (!saveButton) return;
   const roleName = saveButton.dataset.roleName;
-  const input = elements.roleRatesBody.querySelector(`.role-rate-input[data-role-name="${roleName}"]`);
+  const input = elements.roleRatesBody.querySelector(
+    `.role-rate-input[data-role-name="${roleName}"]`,
+  );
   updateRoleRate(roleName, Number(input?.value));
   if (input) input.value = "";
 });
@@ -1710,7 +2159,7 @@ elements.statsBody?.addEventListener("click", (event) => {
   if (!employee) return;
   const nextValue = window.prompt(
     `Nouvelles heures totales pour ${employee.name}\nExemples: 2.5 = 2h30, 3 = 3h00`,
-    String(Number(employee.hours || 0).toFixed(2))
+    String(Number(employee.hours || 0).toFixed(2)),
   );
   if (nextValue === null) return;
   const normalizedValue = Number(String(nextValue).replace(",", "."));
@@ -1730,7 +2179,18 @@ elements.presenceBody?.addEventListener("click", (event) => {
   }
 });
 
-[elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.simRevenue, elements.simExpenses, elements.simTargetProfit, elements.simResalePrice, elements.simWeeklyParts].forEach((element) => {
+[
+  elements.serviceIncome,
+  elements.weeklyProfit,
+  elements.manualPayouts,
+  elements.miscExpenses,
+  elements.calcNote,
+  elements.simRevenue,
+  elements.simExpenses,
+  elements.simTargetProfit,
+  elements.simResalePrice,
+  elements.simWeeklyParts,
+].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 

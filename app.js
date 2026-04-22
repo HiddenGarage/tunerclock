@@ -246,6 +246,10 @@ function roundToStep(value, step = 25) {
   return Math.max(0, Math.round(Number(value || 0) / step) * step);
 }
 
+function numberOrDefault(value, fallback) {
+  return value === null || value === undefined || value === "" ? fallback : Number(value);
+}
+
 function getNumericValue(element) {
   return Number(element?.value || 0) || 0;
 }
@@ -271,7 +275,7 @@ function normaliseRole(roleValue) {
 }
 
 function getRoleRate(roleName) {
-  return Number(state.roleRates[normaliseRole(roleName)] || 0);
+  return numberOrDefault(state.roleRates[normaliseRole(roleName)], 0);
 }
 
 function populatePartOptions() {
@@ -361,7 +365,7 @@ function normaliseEmployeeRecord(record) {
     active: Boolean(record.is_active ?? record.active),
     activeShiftId: record.active_shift_id || record.activeShiftId || null,
     activeShiftStartedAt: record.active_shift_started_at || record.activeShiftStartedAt || null,
-    hourlyRate: Number(record.hourly_rate || record.hourlyRate || getRoleRate(roleName)),
+    hourlyRate: numberOrDefault(record.hourly_rate ?? record.hourlyRate, getRoleRate(roleName)),
     lastPayslip: record.lastPayslip || null
   };
 }
@@ -595,14 +599,14 @@ function renderSimulation() {
   const paidTotal = getTotalEmployeePayments();
   const currentPayroll = employees.reduce((sum, employee) => {
     const payableHours = Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0);
-    return sum + payableHours * Number(employee.hourlyRate || 0);
+    return sum + payableHours * numberOrDefault(employee.hourlyRate, 0);
   }, 0);
   const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
   const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
   const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
   const activeEmployees = employees.filter((employee) => employee.active).length;
   const totalHours = employees.reduce((sum, employee) => sum + Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0), 0);
-  const currentMecanoRate = getRoleRate("Mecano") || 25;
+  const currentMecanoRate = getRoleRate("Mecano");
   let adjustmentFactor = 1;
 
   if (revenue <= 0 || totalHours <= 0) {
@@ -1598,7 +1602,7 @@ async function markEmployeePaid(employeeIndex) {
       payoutId = data.payoutId || null;
       amountPaid = Number(data.amountPaid || fallbackAmount);
       hoursPaid = Number(data.hoursPaid || employee.hours);
-      hourlyRate = Number(data.hourlyRate || employee.hourlyRate);
+      hourlyRate = numberOrDefault(data.hourlyRate, employee.hourlyRate);
     }
   }
 

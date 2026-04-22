@@ -232,10 +232,9 @@ a {
   min-height: 48px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.88);
-  color: #9ca8b7;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
   padding: 12px 16px;
-  box-shadow: 0 12px 30px rgba(24, 37, 56, 0.05);
 }
 
 .status-pill,
@@ -247,38 +246,37 @@ a {
   padding: 8px 14px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #5f6d80;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text);
   font-size: 0.78rem;
   font-weight: 700;
-  box-shadow: 0 10px 24px rgba(28, 43, 66, 0.05);
 }
 
 .status-pill.success,
 .mini-pill.success {
   background: var(--teal-soft);
-  color: #11866d;
-  border-color: #d7f0e8;
+  color: #81c784;
+  border-color: rgba(76, 175, 80, 0.3);
 }
 
 .status-pill.danger,
 .mini-pill.danger {
   background: var(--red-soft);
-  color: #bf5050;
-  border-color: #f1d5d5;
+  color: #ff6b6b;
+  border-color: rgba(230, 57, 70, 0.3);
 }
 
 .status-pill.info,
 .mini-pill.info {
   background: var(--blue-soft);
-  color: #3661bf;
-  border-color: #dce7fb;
+  color: #81a4ff;
+  border-color: rgba(75, 124, 246, 0.3);
 }
 
 .mini-pill.warning {
   background: var(--orange-soft);
-  color: #b76a12;
-  border-color: #f4d7ae;
+  color: #ffb74d;
+  border-color: rgba(247, 127, 0, 0.3);
 }
 
 .primary-button,
@@ -308,21 +306,33 @@ a {
 
 .primary-button {
   color: #ffffff;
-  background: linear-gradient(135deg, #4b7cf6 0%, #3d69d6 100%);
-  box-shadow: 0 16px 34px rgba(75, 124, 246, 0.24);
+  background: var(--red);
+  box-shadow: 0 4px 15px rgba(230, 57, 70, 0.3);
+}
+
+.primary-button:hover {
+  background: var(--red-hover);
 }
 
 .secondary-button {
   color: var(--text);
-  background: #ffffff;
+  background: transparent;
   border-color: var(--line);
-  box-shadow: 0 12px 24px rgba(24, 37, 56, 0.05);
+}
+
+.secondary-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--muted);
 }
 
 .danger-button {
-  color: #ffffff;
-  background: linear-gradient(135deg, #e86b6b 0%, #d95050 100%);
-  box-shadow: 0 14px 30px rgba(217, 75, 75, 0.22);
+  color: var(--red);
+  background: transparent;
+  border: 1px solid var(--red);
+}
+
+.danger-button:hover {
+  background: var(--red-soft);
 }
 
 .topbar-button {

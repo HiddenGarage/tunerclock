@@ -26,6 +26,7 @@
         <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Profit</a>
         <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Commandes</a>
         <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Analyse</a>
+        <a href="#contrats" class="nav-item" data-route="contrats" data-admin-only="true">Contrats</a>
         <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Logs</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Reboot</a>
       </nav>
@@ -449,6 +450,68 @@
               </div>
             </div>
             <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-contrats" class="app-page contrats-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-2">
+            <div class="card-head">
+              <div>
+                <h3>Contrats et Partenariats</h3>
+                <p class="muted">Gere les accords avec les autres entreprises. Les couts fixes s'ajoutent a tes depenses globales.</p>
+              </div>
+              <span class="mini-pill success">Deals</span>
+            </div>
+            <div class="form-grid">
+              <div class="field">
+                <label class="input-label">Entreprise / Organisation</label>
+                <input id="contract-name" type="text" placeholder="Ex: Burgershot">
+              </div>
+              <div class="field">
+                <label class="input-label">Accord / Rabais</label>
+                <input id="contract-discount" type="text" placeholder="-20% employes">
+              </div>
+              <div class="field">
+                <label class="input-label">Cout assume ($)</label>
+                <input id="contract-cost" type="number" placeholder="0">
+              </div>
+              <div class="field">
+                <label class="input-label">Notes</label>
+                <input id="contract-note" type="text" placeholder="Details">
+              </div>
+            </div>
+            <div class="parts-actions">
+              <button id="add-contract-btn" class="primary-button">Creer le contrat</button>
+            </div>
+            <div class="table-wrap" style="margin-top: 1.5rem;">
+              <table>
+                <thead><tr><th>Entreprise</th><th>Accord</th><th>Cout fixe</th><th>Notes</th><th>Action</th></tr></thead>
+                <tbody id="contracts-body"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Protocole LSPD / BCSO</h3>
+                <p class="muted">Regles strictes du gouvernement.</p>
+              </div>
+              <span class="mini-pill danger">Police</span>
+            </div>
+            <div class="summary-band" style="display: block; padding: 1rem; margin-bottom: 1rem; background: rgba(217, 75, 75, 0.05); border: 1px solid rgba(217, 75, 75, 0.2); border-radius: 8px;">
+              <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;"><strong>✓ Reparations :</strong> Gratuites</p>
+              <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;"><strong>✓ Entretien :</strong> Fixe 1200$</p>
+              <p style="margin: 0; font-size: 0.9rem; color: #d94b4b;"><strong>✗ Modifications :</strong> INTERDITES. Ne jamais modifier un vehicule plaque police (ex: 911).</p>
+            </div>
+            <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+              <p style="font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-muted);">Si un agent insiste pour une modif illegale, prends son matricule et signale-le ici :</p>
+              <div class="field"><input id="police-matricule" type="text" placeholder="Matricule (ex: 12)" style="margin-bottom: 0.5rem;"></div>
+              <div class="field"><input id="police-reason" type="text" placeholder="Description de l'abus" style="margin-bottom: 0.5rem;"></div>
+              <button id="submit-police-report" class="danger-button" style="width: 100%;">Signaler a la direction</button>
+            </div>
           </article>
         </div>
       </section>

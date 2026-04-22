@@ -227,6 +227,9 @@ const elements = {
   contractsBody: document.getElementById("contracts-body"),
   addContractBtn: document.getElementById("add-contract-btn"),
   submitPoliceReport: document.getElementById("submit-police-report"),
+  recruitmentModal: document.getElementById("recruitment-modal"),
+  recruitmentContent: document.getElementById("recruitment-content"),
+  closeRecruitmentBtn: document.getElementById("close-recruitment-modal"),
   consumePartName: document.getElementById("consume-part-name"),
   consumePartQuantity: document.getElementById("consume-part-quantity"),
   consumePartNote: document.getElementById("consume-part-note"),
@@ -1079,7 +1082,7 @@ function renderRecruitmentsTable() {
   if (!recruitments.length) {
     setHtml(
       elements.recrutementsBody,
-      `<tr><td colspan="6">Aucune candidature en attente.</td></tr>`,
+      `<p class="muted">Aucune candidature en attente.</p>`,
     );
     return;
   }
@@ -1088,17 +1091,13 @@ function renderRecruitmentsTable() {
     recruitments
       .map(
         (rec) => `
-    <tr>
-      <td><strong>${escapeHtml(rec.discordName)}</strong><br><small>${new Date(rec.date).toLocaleDateString("fr-CA")}</small></td>
-      <td><div style="max-width:200px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q1)}</div></td>
-      <td><div style="max-width:280px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q2)}</div></td>
-      <td><div style="max-width:200px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q3)}<br><br><b>Boite a lunch:</b> ${escapeHtml(rec.q5)}</div></td>
-      <td><div style="max-width:250px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap; font-style:italic;">"${escapeHtml(rec.q4)}"</div></td>
-      <td>
-        <button class="primary-button table-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept" style="margin-bottom:6px;">Accepter</button><br>
-        <button class="danger-button table-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
-      </td>
-    </tr>
+    <div class="card" style="border: 1px solid var(--line); box-shadow: none; padding: 16px;">
+      <div style="margin-bottom: 16px;">
+        <h3 style="font-size: 1.1rem; margin: 0 0 4px 0;">${escapeHtml(rec.discordName)}</h3>
+        <p class="muted" style="font-size: 0.8rem; margin: 0;">${new Date(rec.date).toLocaleDateString("fr-CA")}</p>
+      </div>
+      <button class="secondary-button view-recruitment-btn" data-id="${rec.id}" style="width: 100%;">Voir Formulaire</button>
+    </div>
   `,
       )
       .join(""),
@@ -2385,6 +2384,42 @@ async function deleteContract(id) {
   }
 }
 
+function openRecruitmentModal(id) {
+  const rec = recruitments.find((r) => r.id === id);
+  if (!rec) return;
+
+  let contentHtml = `
+    <div style="margin-bottom: 1rem;">
+      <label class="input-label">Identite (Nom RP, Age IRL, Tel)</label>
+      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q1)}</div>
+    </div>
+    <div style="margin-bottom: 1rem;">
+      <label class="input-label">Experiences et Competences</label>
+      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q2)}</div>
+    </div>
+    <div style="margin-bottom: 1rem;">
+      <label class="input-label">Disponibilites</label>
+      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q3)}</div>
+    </div>
+    <div style="margin-bottom: 1rem;">
+      <label class="input-label">Motivation</label>
+      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap; font-style: italic;">"${escapeHtml(rec.q4)}"</div>
+    </div>
+    <div style="margin-bottom: 1.5rem;">
+      <label class="input-label">Boite a lunch</label>
+      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q5)}</div>
+    </div>
+    <div class="button-row" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
+      <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
+      <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter</button>
+    </div>
+  `;
+
+  setHtml(elements.recruitmentContent, contentHtml);
+  if (elements.recruitmentModal)
+    elements.recruitmentModal.style.display = "flex";
+}
+
 async function resolveRecruitment(id, action) {
   if (state.readOnly) return;
   const msg =
@@ -2401,6 +2436,8 @@ async function resolveRecruitment(id, action) {
     showToast(
       action === "accept" ? "Candidature acceptee !" : "Candidature refusee.",
     );
+    if (elements.recruitmentModal)
+      elements.recruitmentModal.style.display = "none";
     await loadAdminDashboard();
     updateAll();
   } else {
@@ -2484,9 +2521,19 @@ elements.contractsBody?.addEventListener("click", (event) => {
   if (deleteBtn) deleteContract(deleteBtn.dataset.id);
 });
 
-elements.recrutementsBody?.addEventListener("click", (event) => {
+elements.closeRecruitmentBtn?.addEventListener("click", () => {
+  if (elements.recruitmentModal)
+    elements.recruitmentModal.style.display = "none";
+});
+
+elements.recruitmentModal?.addEventListener("click", (event) => {
   const btn = event.target.closest(".resolve-recruitment-btn");
   if (btn) resolveRecruitment(btn.dataset.id, btn.dataset.action);
+});
+
+elements.recrutementsBody?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".view-recruitment-btn");
+  if (btn) openRecruitmentModal(btn.dataset.id);
 });
 
 elements.leaderboardBody?.addEventListener("click", (event) => {

@@ -760,14 +760,18 @@ function startDiscordBot() {
             process.env.DISCORD_GUILD_ID,
           );
           if (guild) {
-            const channelName = `cv-${interaction.user.username}`
+            const pseudo =
+              interaction.member?.displayName ||
+              interaction.user.globalName ||
+              interaction.user.username;
+            const channelName = `cv-${pseudo}`
               .toLowerCase()
               .replace(/[^a-z0-9-]/g, "");
             const newChannel = await guild.channels.create({
               name: channelName,
               type: ChannelType.GuildText,
               parent: "1487876458239103096",
-              topic: `Candidature de ${interaction.user.username} (${interaction.user.id})`,
+              topic: `Candidature de ${pseudo} (${interaction.user.id})`,
             });
 
             const embed = new EmbedBuilder()
@@ -2220,11 +2224,29 @@ app.post(
       recruitments = recruitments.filter((r) => r.id !== id);
       await upsertSetting(supabase, "recruitments_list", recruitments);
 
-      if (action === "accept")
+      if (action === "accept") {
         await sendDiscordDm(
           rec.discordId,
           "🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners. Contacte un membre de la direction au plus vite pour la suite !",
         );
+        try {
+          if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
+            const guild = discordClient.guilds.cache.get(
+              process.env.DISCORD_GUILD_ID,
+            );
+            if (guild) {
+              const member = await guild.members
+                .fetch(rec.discordId)
+                .catch(() => null);
+              if (member) {
+                await member.roles.add("1487852702519136496").catch(() => null);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Erreur attribution role apprenti:", err.message);
+        }
+      }
       if (action === "reject")
         await sendDiscordDm(
           rec.discordId,

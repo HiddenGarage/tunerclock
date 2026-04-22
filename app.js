@@ -85,6 +85,8 @@ const pageTitles = {
 const state = {
   loggedIn: false,
   isAdmin: false,
+  canManage: false,
+  readOnly: false,
   currentUser: null,
   punchedIn: false,
   recordedPayouts: 0,
@@ -125,6 +127,7 @@ const elements = {
   roleRatesBody: document.getElementById("role-rates-body"),
   expenseBody: document.getElementById("expense-body"),
   rebootAll: document.getElementById("reboot-all"),
+  rebootButtons: Array.from(document.querySelectorAll(".reboot-scope-button")),
   discordLogin: document.getElementById("discord-login"),
   logoutButton: document.getElementById("logout-button"),
   serviceIncome: document.getElementById("service-income"),
@@ -236,6 +239,10 @@ function destroyChart(key) {
 
 function formatMoney(value) {
   return `${Math.round(Number(value || 0))}$`;
+}
+
+function roundToStep(value, step = 25) {
+  return Math.max(0, Math.round(Number(value || 0) / step) * step);
 }
 
 function getNumericValue(element) {
@@ -370,6 +377,11 @@ function applyAccessControl() {
     item.classList.toggle("hidden", adminOnly && !state.isAdmin);
   });
   elements.logoutButton?.classList.toggle("hidden", !state.loggedIn);
+  document.body.classList.toggle("read-only-mode", state.readOnly);
+  document.querySelectorAll(".main-panel button, .main-panel input:not([readonly]), .main-panel select").forEach((element) => {
+    if (element.id === "logout-button") return;
+    element.disabled = state.readOnly;
+  });
 }
 
 function routeToCurrentPage() {
@@ -564,37 +576,41 @@ function renderStatsTables() {
 }
 
 function renderSimulation() {
-  const revenue = getNumericValue(elements.simRevenue) || getNumericValue(elements.serviceIncome);
-  const extraExpenses = getNumericValue(elements.simExpenses);
-  const profitTargetPercent = getNumericValue(elements.simTargetProfit);
-  const currentPayroll = getPayrollTotal();
-  const partBuyPrice = Number(elements.partCost?.value || 105) || 105;
-  const actualPartAverage = expenses.length
-    ? expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) / expenses.length
-    : partBuyPrice;
-  const healthyMarkup = 1.45;
-  const suggestedResalePrice = Math.ceil(actualPartAverage * healthyMarkup);
-  const resalePrice = getNumericValue(elements.simResalePrice) || suggestedResalePrice;
-  const weeklyParts = getNumericValue(elements.simWeeklyParts);
-  const profitPerPart = Math.max(0, resalePrice - actualPartAverage);
-  const projectedPartsProfit = profitPerPart * weeklyParts;
-  const targetProfit = revenue * (profitTargetPercent / 100);
-  const totalExpenses = getExpenseTotal() + extraExpenses;
-  const remainingProfit = revenue + projectedPartsProfit - totalExpenses - currentPayroll;
-  const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
-  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
-  const laborRevenuePerHour = totalHours > 0 ? revenue / totalHours : 0;
-  const roleMultipliers = { Patron: 2.4, Copatron: 1.8, Gerant: 1.4, Mecano: 1, Apprenti: 0.72 };
-  const weightedHours = employees.reduce((sum, employee) => {
-    const hours = Math.max(0, Number(employee.hours || 0));
-    return sum + hours * (roleMultipliers[employee.roleName] || 1);
+  const revenue = getNumericValue(elements.serviceIncome) + getNumericValue(elements.weeklyProfit);
+  const expenseTotal = getExpenseTotal();
+  const paidTotal = getTotalEmployeePayments();
+  const currentPayroll = employees.reduce((sum, employee) => {
+    const payableHours = Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0);
+    return sum + payableHours * Number(employee.hourlyRate || 0);
   }, 0);
-  const availablePayroll = Math.max(0, revenue + projectedPartsProfit - totalExpenses - targetProfit);
-  const recommendedMecanoRate = weightedHours > 0 ? Math.floor(availablePayroll / weightedHours) : 0;
-  const recommendedRates = Object.fromEntries(roleOrder.map((roleName) => [
-    roleName,
-    Math.max(0, Math.round(recommendedMecanoRate * (roleMultipliers[roleName] || 1)))
-  ]));
+  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
+  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
+  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
+  const activeEmployees = employees.filter((employee) => employee.active).length;
+  const totalHours = employees.reduce((sum, employee) => sum + Number(employee.hours || 0) + (employee.active ? getLiveEmployeeHours(employee) : 0), 0);
+  const currentMecanoRate = getRoleRate("Mecano") || 25;
+  let adjustmentFactor = 1;
+
+  if (revenue <= 0 || totalHours <= 0) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio < 8 && remainingProfit > 0) {
+    adjustmentFactor = 1.10;
+  } else if (payrollRatio < 15 && remainingProfit > 0) {
+    adjustmentFactor = 1.05;
+  } else if (payrollRatio <= 28) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 38) {
+    adjustmentFactor = 0.90;
+  } else {
+    adjustmentFactor = 0.80;
+  }
+
+  const recommendedRates = Object.fromEntries(roleOrder.map((roleName) => {
+    const currentRate = getRoleRate(roleName);
+    const nextRate = currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
+    return [roleName, nextRate];
+  }));
+  const recommendedMecanoRate = recommendedRates.Mecano || roundToStep(currentMecanoRate * adjustmentFactor, 25);
   const roleCounts = roleOrder
     .map((roleName) => {
       const count = employees.filter((employee) => employee.roleName === roleName).length;
@@ -603,34 +619,59 @@ function renderSimulation() {
     .filter(Boolean)
     .join(" | ") || "Aucun employe";
 
-  setText(elements.simPossiblePayroll, formatMoney(profitPerPart));
+  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
   setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
   setText(elements.simRemainingProfit, formatMoney(remainingProfit));
   setText(elements.simRecommendedHourly, recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h");
   setText(elements.simEmployeeCount, String(employees.length));
-  setValue(elements.simRoleMix, roleCounts);
-  setText(elements.simProfitTarget, formatMoney(targetProfit));
+  setText(elements.simRoleMix, roleCounts);
+  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
   setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
 
-  let recommendation = "Ajoute tes revenus pour obtenir un conseil.";
+  let headline = "Analyse en attente";
+  let status = "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
+  let action = "Aucune modification conseillee pour l'instant.";
   const rateAdvice = roleOrder
     .filter((roleName) => employees.some((employee) => employee.roleName === roleName))
     .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
-    .join(" | ");
+    .join("<br>");
 
-  if (revenue > 0 && recommendedMecanoRate > 0) {
-    recommendation = `Taux conseille selon tes stats: ${rateAdvice}. Base Mecano: ${recommendedMecanoRate}$/h.`;
-  } else if (revenue > 0 && payrollRatio > 55) {
-    recommendation = `Attention: les salaires utilisent ${payrollRatio.toFixed(0)}% des revenus. Garde plus de revenus avant paiement complet.`;
-  } else if (revenue > 0 && remainingProfit < targetProfit) {
-    recommendation = `Profit trop faible: vise au moins ${formatMoney(targetProfit)} restant avant gros paiement.`;
-  } else if (revenue > 0 && profitPerPart < 40) {
-    recommendation = `Marge piece faible. Prix revente conseille autour de ${formatMoney(suggestedResalePrice)} pour couvrir JG Mechanic et garder du profit.`;
-  } else if (revenue > 0) {
-    recommendation = `Rentabilite saine. Marge piece: ${formatMoney(profitPerPart)}. Profit pieces projete: ${formatMoney(projectedPartsProfit)}. Revenu moyen: ${formatMoney(laborRevenuePerHour)}/h.`;
+  if (revenue > 0 && totalHours > 0) {
+    if (payrollRatio < 8) {
+      headline = "Marge tres confortable";
+      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
+      action = "Conseil prudent: hausse maximale autour de 10%, pas plus, meme si les revenus sont tres hauts.";
+    } else if (payrollRatio < 15) {
+      headline = "Paie encore tres saine";
+      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
+      action = "Conseil prudent: garde les taux ou hausse legerement les roles actifs.";
+    } else if (payrollRatio <= 28) {
+      headline = "Equilibre correct";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 38) {
+      headline = "Paie un peu lourde";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
+      action = "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
+    } else {
+      headline = "Risque de payer trop cher";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
+      action = "Conseil prudent: reduis temporairement ou paie seulement une partie.";
+    }
   }
 
-  setText(elements.simRecommendation, recommendation);
+  setHtml(elements.simRecommendation, `
+    <div class="analysis-recommendation-head">
+      <span>${escapeHtml(headline)}</span>
+      <strong>${recommendedMecanoRate}$/h Mecano</strong>
+    </div>
+    <div class="analysis-recommendation-grid">
+      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
+      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
+      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
+      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
+    </div>
+  `);
 }
 
 function renderPresenceList() {
@@ -768,7 +809,7 @@ function renderAuditLogs() {
 
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
-  setText(elements.topbarRolePill, state.loggedIn ? roleText : "Connexion securisee");
+  setText(elements.topbarRolePill, state.readOnly ? "Bienvenue Gouvernement | Lecture seule" : (state.loggedIn ? roleText : "Connexion securisee"));
 
   if (!state.loggedIn || !state.currentUser) {
     setText(elements.shiftBadge, "Hors service");
@@ -780,6 +821,20 @@ function renderShiftState() {
     if (elements.punchOut) elements.punchOut.disabled = true;
     setText(elements.discordLogin, "Se connecter avec Discord");
     setText(elements.demoUserText, "Aucun employe connecte");
+    stopLiveTimer();
+    return;
+  }
+
+  if (state.readOnly) {
+    setText(elements.shiftBadge, "Supervision");
+    if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill success";
+    setText(elements.shiftMessage, "Bienvenue Gouvernement. Acces supervision en lecture seule: aucune action ne peut etre executee.");
+    setText(elements.todayHours, "Lecture seule");
+    setText(elements.todayPay, "Supervision");
+    if (elements.punchIn) elements.punchIn.disabled = true;
+    if (elements.punchOut) elements.punchOut.disabled = true;
+    setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
+    setText(elements.demoUserText, `${state.currentUser.name} | Gouvernement | Lecture seule`);
     stopLiveTimer();
     return;
   }
@@ -991,6 +1046,7 @@ function updateAll() {
   drawTrendChart();
   renderSimulation();
   startAdminLiveTimer();
+  applyAccessControl();
 }
 
 async function loadAdminDashboard() {
@@ -1107,6 +1163,8 @@ async function loadMeState() {
 
 function syncCurrentUserFromSession(sessionUser) {
   state.isAdmin = Boolean(sessionUser.isAdmin);
+  state.canManage = sessionUser.canManage !== false;
+  state.readOnly = Boolean(sessionUser.readOnly || (state.isAdmin && !state.canManage));
   state.currentUser = normaliseEmployeeRecord({
     discord_id: sessionUser.discordId,
     discord_name: sessionUser.displayName || sessionUser.username,
@@ -1117,6 +1175,11 @@ function syncCurrentUserFromSession(sessionUser) {
   state.loggedIn = true;
   employees = [state.currentUser];
   setStatusDot(true);
+  if (state.readOnly) {
+    setTimeout(() => {
+      showToast("Bienvenue Gouvernement. Mode supervision active: lecture seule, aucune action disponible.");
+    }, 250);
+  }
 }
 
 async function loadAuthSession() {
@@ -1132,6 +1195,8 @@ async function loadAuthSession() {
     } else {
       state.loggedIn = false;
       state.isAdmin = false;
+      state.canManage = false;
+      state.readOnly = false;
       state.currentUser = null;
       state.punchedIn = false;
       if (adminRefreshTimerId) {
@@ -1165,7 +1230,7 @@ function logout() {
 }
 
 async function saveFinanceSettings() {
-  if (!state.isAdmin) return;
+  if (!state.isAdmin || state.readOnly) return;
   await fetch("/api/admin-finance-settings", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1183,7 +1248,7 @@ function queueFinanceSave() {
 }
 
 async function saveAnalysisSettings() {
-  if (!state.isAdmin) return;
+  if (!state.isAdmin || state.readOnly) return;
   const payload = {
     revenue: getNumericValue(elements.simRevenue),
     expenses: getNumericValue(elements.simExpenses),
@@ -1208,6 +1273,7 @@ async function saveAnalysisSettings() {
 }
 
 async function updateRoleRate(roleName, nextRate) {
+  if (state.readOnly) return;
   if (!Number.isFinite(nextRate) || nextRate < 0) return;
   state.roleRates[roleName] = nextRate;
   employees = employees.map((employee) => employee.roleName === roleName ? { ...employee, hourlyRate: nextRate } : employee);
@@ -1230,7 +1296,7 @@ async function updateRoleRate(roleName, nextRate) {
 }
 
 async function adjustEmployeeHours(employeeIndex, hoursValue) {
-  if (!state.isAdmin || !Number.isFinite(hoursValue) || hoursValue < 0) return;
+  if (!state.isAdmin || state.readOnly || !Number.isFinite(hoursValue) || hoursValue < 0) return;
   const employee = employees[employeeIndex];
   if (!employee?.id) return;
 
@@ -1256,7 +1322,7 @@ async function adjustEmployeeHours(employeeIndex, hoursValue) {
 
 async function sendReminder(employeeIndex) {
   const employee = employees[employeeIndex];
-  if (!state.isAdmin || !employee?.id) return;
+  if (!state.isAdmin || state.readOnly || !employee?.id) return;
 
   const response = await fetch("/api/admin-send-reminder", {
     method: "POST",
@@ -1275,7 +1341,7 @@ async function sendReminder(employeeIndex) {
 
 async function forcePunchOut(employeeIndex) {
   const employee = employees[employeeIndex];
-  if (!state.isAdmin || !employee?.id) return;
+  if (!state.isAdmin || state.readOnly || !employee?.id) return;
   if (!window.confirm(`Forcer la sortie de ${employee.name} ?`)) return;
 
   const response = await fetch("/api/admin-force-punch-out", {
@@ -1369,6 +1435,7 @@ async function punchOut() {
 }
 
 async function addExpense() {
+  if (state.readOnly) return;
   const selectedPart = getSelectedPart();
   if (!selectedPart) {
     showToast("Selectionne une piece avant d'ajouter la commande.", true);
@@ -1426,6 +1493,7 @@ async function addExpense() {
 }
 
 async function togglePartCostEdit() {
+  if (state.readOnly) return;
   if (!elements.partCost || !elements.editPartCost) return;
   const currentlyReadonly = elements.partCost.hasAttribute("readonly");
   if (currentlyReadonly) {
@@ -1453,6 +1521,7 @@ async function togglePartCostEdit() {
 }
 
 async function deleteExpense(expenseIndex) {
+  if (state.readOnly) return;
   const expense = expenses[expenseIndex];
   if (!expense) return;
   if (!window.confirm(`Supprimer la commande "${expense.name}" ?`)) return;
@@ -1481,6 +1550,7 @@ async function deleteExpense(expenseIndex) {
 }
 
 async function sendPayslipByDiscord(employee) {
+  if (state.readOnly) return;
   if (!employee?.lastPayslip) return;
   await fetch("/api/send-payslip-dm", {
     method: "POST",
@@ -1491,6 +1561,7 @@ async function sendPayslipByDiscord(employee) {
 }
 
 async function markEmployeePaid(employeeIndex) {
+  if (state.readOnly) return;
   const employee = employees[employeeIndex];
   if (!employee || employee.hours <= 0) return;
 
@@ -1545,33 +1616,31 @@ async function markEmployeePaid(employeeIndex) {
   updateAll();
 }
 
-async function rebootAllData() {
-  if (!state.isAdmin) return;
-  if (!window.confirm("Confirmer le reboot complet ?")) return;
+async function rebootData(scope = "all") {
+  if (!state.isAdmin || state.readOnly) return;
+  const labels = {
+    shifts: "les pointages/heures",
+    expenses: "les commandes de pieces",
+    payouts: "les paies/slips",
+    finance: "les ajouts finance",
+    all: "tout le systeme operationnel"
+  };
+  if (!window.confirm(`Zone danger: tu vas reset ${labels[scope] || scope}. Continuer ?`)) return;
+  const typed = window.prompt(`Tape RESET pour confirmer le reset de ${labels[scope] || scope}.`);
+  if (typed !== "RESET") {
+    showToast("Reset annule: confirmation incorrecte.", true);
+    return;
+  }
 
   await fetch("/api/admin-reboot", {
     method: "POST",
-    credentials: "include"
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ scope })
   }).catch(() => {});
 
-  employees = employees.map((employee) => ({
-    ...employee,
-    hours: 0,
-    activeDays: 0,
-    todayHours: 0,
-    active: false,
-    lastPayslip: null
-  }));
-  expenses = [];
-  shifts = [];
-  auditLogs = [];
-  state.recordedPayouts = 0;
-  state.punchedIn = false;
-  activeShiftStartedAt = null;
-  [elements.serviceIncome, elements.weeklyProfit, elements.manualPayouts, elements.miscExpenses, elements.calcNote, elements.partName, elements.partCategory, elements.partNote].forEach((element) => setValue(element, ""));
-  setValue(elements.partQuantity, "1");
-  setValue(elements.partCost, "105");
-  showToast("Reboot complet effectue.");
+  showToast(`Reset effectue: ${labels[scope] || scope}.`);
+  await loadAdminDashboard();
   await loadAuditLogs();
   updateAll();
 }
@@ -1585,7 +1654,9 @@ elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
-elements.rebootAll?.addEventListener("click", rebootAllData);
+elements.rebootButtons.forEach((button) => {
+  button.addEventListener("click", () => rebootData(button.dataset.rebootScope || "all"));
+});
 
 elements.expenseBody?.addEventListener("click", (event) => {
   const deleteButton = event.target.closest(".delete-expense-button");

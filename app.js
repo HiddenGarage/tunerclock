@@ -730,18 +730,9 @@ function getPresenceStatus(hours) {
 }
 
 function getReminderInfo(employee) {
-  const entries = Object.values(reminderState || {});
-  const match = entries
-    .filter(
-      (entry) =>
-        entry?.employeeId === employee.id ||
-        entry?.discordId === employee.discordId,
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.respondedAt || b.sentAt || 0) -
-        new Date(a.respondedAt || a.sentAt || 0),
-    )[0];
+  if (!employee.activeShiftId)
+    return { label: "Aucun", className: "mini-pill" };
+  const match = reminderState[employee.activeShiftId];
 
   if (!match) return { label: "Aucun", className: "mini-pill" };
   if (match.response === "still_active")

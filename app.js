@@ -5,6 +5,7 @@ let auditLogs = [];
 let reminderState = {};
 let contracts = [];
 let inventoryStock = {};
+let recruitments = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let currentNoteId = null;
@@ -27,6 +28,7 @@ const routes = [
   "pointage",
   "presence",
   "stats",
+  "recrutements",
   "gestion",
   "salaire",
   "finance",
@@ -125,6 +127,7 @@ const pageTitles = {
   inventaire: "Gestion Stock",
   presence: "Sur le plancher",
   stats: "Équipe",
+  recrutements: "Recrutements",
   gestion: "Comptabilité",
   salaire: "Salaire",
   finance: "Trésorerie",
@@ -216,8 +219,10 @@ const elements = {
   saveAnalysis: document.getElementById("save-analysis"),
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
-  navItems: Array.from(document.querySelectorAll(".nav-item")),
+  navItems: Array.from(document.querySelectorAll(".nav-item, .nav-category")),
   pages: Array.from(document.querySelectorAll(".app-page")),
+  recrutementsBody: document.getElementById("recrutements-body"),
+  recrutementBadge: document.getElementById("recrutement-badge"),
   inventoryBody: document.getElementById("inventory-body"),
   contractsBody: document.getElementById("contracts-body"),
   addContractBtn: document.getElementById("add-contract-btn"),
@@ -513,9 +518,13 @@ function applyAccessControl() {
         "analyse",
         "logs",
         "reboot",
+        "recrutements",
         "salaire",
       ];
-      if (hiddenForGerant.includes(item.dataset.route)) {
+      if (
+        hiddenForGerant.includes(item.dataset.route) ||
+        item.dataset.hiddenGerant === "true"
+      ) {
         item.classList.toggle("hidden", true);
       }
     }
@@ -548,6 +557,7 @@ function routeToCurrentPage() {
       "presence",
       "stats",
       "gestion",
+      "recrutements",
       "pointage",
       "inventaire",
       "contrats",
@@ -1057,6 +1067,46 @@ function renderExpenseTable() {
   );
 }
 
+function renderRecruitmentsTable() {
+  if (elements.recrutementBadge) {
+    if (recruitments.length > 0) {
+      elements.recrutementBadge.textContent = recruitments.length;
+      elements.recrutementBadge.classList.remove("hidden");
+    } else {
+      elements.recrutementBadge.classList.add("hidden");
+    }
+  }
+
+  if (!elements.recrutementsBody) return;
+  if (!recruitments.length) {
+    setHtml(
+      elements.recrutementsBody,
+      `<tr><td colspan="6">Aucune candidature en attente.</td></tr>`,
+    );
+    return;
+  }
+  setHtml(
+    elements.recrutementsBody,
+    recruitments
+      .map(
+        (rec) => `
+    <tr>
+      <td><strong>${escapeHtml(rec.discordName)}</strong><br><small>${new Date(rec.date).toLocaleDateString("fr-CA")}</small></td>
+      <td><div style="max-width:200px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q1)}</div></td>
+      <td><div style="max-width:280px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q2)}</div></td>
+      <td><div style="max-width:200px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap;">${escapeHtml(rec.q3)}<br><br><b>Boite a lunch:</b> ${escapeHtml(rec.q5)}</div></td>
+      <td><div style="max-width:250px; max-height:80px; overflow-y:auto; font-size:0.85rem; white-space:pre-wrap; font-style:italic;">"${escapeHtml(rec.q4)}"</div></td>
+      <td>
+        <button class="primary-button table-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept" style="margin-bottom:6px;">Accepter</button><br>
+        <button class="danger-button table-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
+      </td>
+    </tr>
+  `,
+      )
+      .join(""),
+  );
+}
+
 function renderContractsTable() {
   if (!elements.contractsBody) return;
   if (!contracts.length) {
@@ -1499,6 +1549,7 @@ function updateAll() {
   renderExpenseTable();
   renderLeaderboard();
   renderAuditLogs();
+  renderRecruitmentsTable();
   renderInventory();
   renderContractsTable();
   renderShiftState();
@@ -1526,6 +1577,7 @@ async function loadAdminDashboard() {
     shifts = data.shifts || [];
     contracts = data.contracts || [];
     inventoryStock = data.inventoryStock || {};
+    recruitments = data.recruitments || [];
     employees = (data.employees || []).map(normaliseEmployeeRecord);
 
     const latestPayoutByEmployee = new Map();
@@ -2335,6 +2387,29 @@ async function deleteContract(id) {
   }
 }
 
+async function resolveRecruitment(id, action) {
+  if (state.readOnly) return;
+  const msg =
+    action === "accept"
+      ? "Accepter cette candidature ?"
+      : "Refuser cette candidature (et envoyer le message de refus) ?";
+  if (!window.confirm(msg)) return;
+
+  const response = await fetch(`/api/admin-recruitments/${id}/${action}`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (response.ok) {
+    showToast(
+      action === "accept" ? "Candidature acceptee !" : "Candidature refusee.",
+    );
+    await loadAdminDashboard();
+    updateAll();
+  } else {
+    showToast("Erreur de traitement.", true);
+  }
+}
+
 elements.addContractBtn?.addEventListener("click", async () => {
   if (!state.isAdmin || state.isSupervision) return;
   const name = document.getElementById("contract-name")?.value;
@@ -2409,6 +2484,11 @@ elements.expenseBody?.addEventListener("click", (event) => {
 elements.contractsBody?.addEventListener("click", (event) => {
   const deleteBtn = event.target.closest(".delete-contract-btn");
   if (deleteBtn) deleteContract(deleteBtn.dataset.id);
+});
+
+elements.recrutementsBody?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".resolve-recruitment-btn");
+  if (btn) resolveRecruitment(btn.dataset.id, btn.dataset.action);
 });
 
 elements.leaderboardBody?.addEventListener("click", (event) => {

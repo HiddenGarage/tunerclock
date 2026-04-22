@@ -77,10 +77,10 @@ a {
 }
 
 .brand-logo {
-  width: 76px;
-  height: 76px;
+  width: 110px;
+  height: 110px;
   object-fit: contain;
-  padding: 6px;
+  padding: 0;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);

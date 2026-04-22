@@ -5,6 +5,7 @@ let auditLogs = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let adminLiveTimerId = null;
+let adminRefreshTimerId = null;
 const chartState = {};
 const chartPalette = {
   text: "#1b2533",
@@ -68,7 +69,7 @@ const roleIdMap = {
   Apprenti: "1487852702519136496"
 };
 const pageTitles = {
-  tableau: "Tableau de bord professionnel du garage",
+  tableau: "Tableau de bord",
   pointage: "Punch personnel",
   presence: "Presence live",
   stats: "Statistiques",
@@ -492,6 +493,15 @@ function startAdminLiveTimer() {
   }, 1000);
 }
 
+function startAdminRefreshLoop() {
+  if (adminRefreshTimerId || !state.isAdmin) return;
+  adminRefreshTimerId = setInterval(async () => {
+    if (!state.isAdmin) return;
+    await loadAdminDashboard();
+    updateAll();
+  }, 30000);
+}
+
 function renderOverview() {
   const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
   const activeEmployees = employees.filter((employee) => employee.active);
@@ -574,6 +584,17 @@ function renderSimulation() {
   const totalHours = employees.reduce((sum, employee) => sum + employee.hours, 0);
   const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
   const laborRevenuePerHour = totalHours > 0 ? revenue / totalHours : 0;
+  const roleMultipliers = { Patron: 2.4, Copatron: 1.8, Gerant: 1.4, Mecano: 1, Apprenti: 0.72 };
+  const weightedHours = employees.reduce((sum, employee) => {
+    const hours = Math.max(0, Number(employee.hours || 0));
+    return sum + hours * (roleMultipliers[employee.roleName] || 1);
+  }, 0);
+  const availablePayroll = Math.max(0, revenue + projectedPartsProfit - totalExpenses - targetProfit);
+  const recommendedMecanoRate = weightedHours > 0 ? Math.floor(availablePayroll / weightedHours) : 0;
+  const recommendedRates = Object.fromEntries(roleOrder.map((roleName) => [
+    roleName,
+    Math.max(0, Math.round(recommendedMecanoRate * (roleMultipliers[roleName] || 1)))
+  ]));
   const roleCounts = roleOrder
     .map((roleName) => {
       const count = employees.filter((employee) => employee.roleName === roleName).length;
@@ -585,14 +606,21 @@ function renderSimulation() {
   setText(elements.simPossiblePayroll, formatMoney(profitPerPart));
   setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
   setText(elements.simRemainingProfit, formatMoney(remainingProfit));
-  setText(elements.simRecommendedHourly, formatMoney(suggestedResalePrice));
+  setText(elements.simRecommendedHourly, recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h");
   setText(elements.simEmployeeCount, String(employees.length));
   setValue(elements.simRoleMix, roleCounts);
   setText(elements.simProfitTarget, formatMoney(targetProfit));
   setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
 
   let recommendation = "Ajoute tes revenus pour obtenir un conseil.";
-  if (revenue > 0 && payrollRatio > 55) {
+  const rateAdvice = roleOrder
+    .filter((roleName) => employees.some((employee) => employee.roleName === roleName))
+    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
+    .join(" | ");
+
+  if (revenue > 0 && recommendedMecanoRate > 0) {
+    recommendation = `Taux conseille selon tes stats: ${rateAdvice}. Base Mecano: ${recommendedMecanoRate}$/h.`;
+  } else if (revenue > 0 && payrollRatio > 55) {
     recommendation = `Attention: les salaires utilisent ${payrollRatio.toFixed(0)}% des revenus. Garde plus de revenus avant paiement complet.`;
   } else if (revenue > 0 && remainingProfit < targetProfit) {
     recommendation = `Profit trop faible: vise au moins ${formatMoney(targetProfit)} restant avant gros paiement.`;
@@ -641,11 +669,11 @@ function renderPresenceList() {
 function renderExpenseTable() {
   if (!elements.expenseBody) return;
   if (!expenses.length) {
-    setHtml(elements.expenseBody, `<tr><td colspan="5">Aucune commande enregistree.</td></tr>`);
+    setHtml(elements.expenseBody, `<tr><td colspan="6">Aucune commande enregistree.</td></tr>`);
     return;
   }
 
-  setHtml(elements.expenseBody, expenses.map((expense) => `
+  setHtml(elements.expenseBody, expenses.map((expense, expenseIndex) => `
     <tr>
       <td>
         <span class="part-table-cell">
@@ -657,6 +685,9 @@ function renderExpenseTable() {
       <td>${Number(expense.quantity || 1)}</td>
       <td>${formatMoney(expense.cost)}</td>
       <td>${escapeHtml(expense.note || "-")}</td>
+      <td>
+        <button class="danger-button table-button delete-expense-button" data-expense-index="${expenseIndex}">Supprimer</button>
+      </td>
     </tr>
   `).join(""));
 }
@@ -702,6 +733,7 @@ function formatAuditAction(action) {
     shift_force_closed: "Sortie forcee",
     reminder_sent: "Rappel envoye",
     part_order_added: "Commande piece ajoutee",
+    part_order_deleted: "Commande piece supprimee",
     employee_paid: "Employe paye",
     system_reboot: "Reboot complet"
   };
@@ -981,7 +1013,7 @@ async function loadAdminDashboard() {
 
     employees = employees.map((employee) => {
       const payout = latestPayoutByEmployee.get(employee.id);
-      if (!payout) return employee;
+      if (!payout || employee.active) return { ...employee, lastPayslip: null };
       return {
         ...employee,
         lastPayslip: {
@@ -1096,11 +1128,16 @@ async function loadAuthSession() {
       syncCurrentUserFromSession(data.user);
       await loadMeState();
       await loadAdminDashboard();
+      startAdminRefreshLoop();
     } else {
       state.loggedIn = false;
       state.isAdmin = false;
       state.currentUser = null;
       state.punchedIn = false;
+      if (adminRefreshTimerId) {
+        clearInterval(adminRefreshTimerId);
+        adminRefreshTimerId = null;
+      }
       employees = [];
       expenses = [];
       shifts = [];
@@ -1120,6 +1157,10 @@ function loginWithDiscord() {
 }
 
 function logout() {
+  if (adminRefreshTimerId) {
+    clearInterval(adminRefreshTimerId);
+    adminRefreshTimerId = null;
+  }
   window.location.href = "/auth/logout";
 }
 
@@ -1278,6 +1319,10 @@ async function punchIn() {
   state.punchedIn = true;
   state.currentUser.active = true;
   state.currentUser.todayHours = 0;
+  state.currentUser.lastPayslip = null;
+  employees = employees.map((employee) => employee.discordId === state.currentUser.discordId
+    ? { ...employee, active: true, todayHours: 0, lastPayslip: null }
+    : employee);
   activeShiftStartedAt = Date.now();
   updateAll();
   const response = await fetch("/api/punch-in", { method: "POST", credentials: "include" }).catch(() => null);
@@ -1407,6 +1452,34 @@ async function togglePartCostEdit() {
   });
 }
 
+async function deleteExpense(expenseIndex) {
+  const expense = expenses[expenseIndex];
+  if (!expense) return;
+  if (!window.confirm(`Supprimer la commande "${expense.name}" ?`)) return;
+
+  const removed = expenses.splice(expenseIndex, 1)[0];
+  updateAll();
+
+  if (!state.isAdmin || !removed.id) {
+    showToast("Commande supprimee localement.");
+    return;
+  }
+
+  const response = await fetch(`/api/admin-expense/${removed.id}`, {
+    method: "DELETE",
+    credentials: "include"
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    expenses.splice(expenseIndex, 0, removed);
+    updateAll();
+    showToast("Impossible de supprimer la commande.", true);
+    return;
+  }
+
+  showToast("Commande supprimee.");
+}
+
 async function sendPayslipByDiscord(employee) {
   if (!employee?.lastPayslip) return;
   await fetch("/api/send-payslip-dm", {
@@ -1513,6 +1586,12 @@ elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.rebootAll?.addEventListener("click", rebootAllData);
+
+elements.expenseBody?.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest(".delete-expense-button");
+  if (!deleteButton) return;
+  deleteExpense(Number(deleteButton.dataset.expenseIndex));
+});
 
 elements.leaderboardBody?.addEventListener("click", (event) => {
   const dmButton = event.target.closest(".dm-payslip-button");

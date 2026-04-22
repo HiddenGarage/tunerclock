@@ -14,6 +14,10 @@ const {
   ActivityType,
   EmbedBuilder,
   Partials,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ChannelType,
 } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const {
@@ -39,6 +43,8 @@ const KEEPALIVE_URL =
   process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "";
 const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID =
   process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1495989501166747669";
+const DISCORD_RECRUITMENT_CHANNEL_ID =
+  process.env.DISCORD_RECRUITMENT_CHANNEL_ID || "1496506153922859079";
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -407,6 +413,53 @@ async function publishEmployeeGuideEmbed() {
   }
 }
 
+async function publishRecruitmentEmbed() {
+  if (!discordClient?.isReady?.() || !DISCORD_RECRUITMENT_CHANNEL_ID) return;
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const state = settings.discord_recruitment_guide || {};
+    const channel = await discordClient.channels
+      .fetch(DISCORD_RECRUITMENT_CHANNEL_ID)
+      .catch(() => null);
+    if (!channel?.isTextBased?.()) return;
+
+    const embed = new EmbedBuilder()
+      .setColor(0xe63946)
+      .setTitle("Rejoins l'equipe Santos Tuners Inc.")
+      .setDescription(
+        "Nous sommes a la recherche de nouveaux talents passionnes par la mecanique !\n\nClique sur le bouton ci-dessous pour remplir le formulaire de candidature. Sois honnete et detaille tes reponses.\n\n*La direction etudiera ton profil et te contactera par message prive.*",
+      )
+      .setImage("https://i.imgur.com/B1s6Kpj.png") // Image generique de garage (optionnelle)
+      .setFooter({ text: "Recrutement | Santos Tuners" })
+      .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("tc_apply")
+        .setLabel("Deposer une candidature")
+        .setStyle(ButtonStyle.Success)
+        .setEmoji("📝"),
+    );
+
+    const payload = { embeds: [embed], components: [row] };
+    let message = state.messageId
+      ? await channel.messages.fetch(state.messageId).catch(() => null)
+      : null;
+
+    if (message) {
+      await message.edit(payload);
+    } else {
+      message = await channel.send(payload);
+      await upsertSetting(supabase, "discord_recruitment_guide", {
+        channelId: DISCORD_RECRUITMENT_CHANNEL_ID,
+        messageId: message.id,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  } catch (error) {}
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -436,6 +489,7 @@ function startDiscordBot() {
       });
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
+      publishRecruitmentEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -513,6 +567,53 @@ function startDiscordBot() {
       }
 
       if (interaction.isButton()) {
+        if (interaction.customId === "tc_apply") {
+          const modal = new ModalBuilder()
+            .setCustomId("tc_apply_modal")
+            .setTitle("Candidature - Santos Tuners");
+
+          const q1 = new TextInputBuilder()
+            .setCustomId("q1")
+            .setLabel("Nom RP, Âge IRL et Numéro RP")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          const q2 = new TextInputBuilder()
+            .setCustomId("q2")
+            .setLabel("Expériences et Compétences")
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder(
+              "Ancien garage, mécanique générale, travail d'équipe... (Même débutant c'est correct)",
+            )
+            .setRequired(true);
+          const q3 = new TextInputBuilder()
+            .setCustomId("q3")
+            .setLabel("Disponibilités (Jours/Heures)")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          const q4 = new TextInputBuilder()
+            .setCustomId("q4")
+            .setLabel("Motivation (Pourquoi nous ?)")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+          const q5 = new TextInputBuilder()
+            .setCustomId("q5")
+            .setLabel("Boîte à lunch pour la plage ?")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Tu mets quoi dedans ?")
+            .setRequired(true);
+
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(q1),
+            new ActionRowBuilder().addComponents(q2),
+            new ActionRowBuilder().addComponents(q3),
+            new ActionRowBuilder().addComponents(q4),
+            new ActionRowBuilder().addComponents(q5),
+          );
+
+          await interaction.showModal(modal);
+          return;
+        }
+
         const [action, employeeId] = String(interaction.customId || "").split(
           ":",
         );
@@ -625,6 +726,80 @@ function startDiscordBot() {
         });
         await interaction.editReply(
           `Punch out effectue. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`,
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId === "tc_apply_modal"
+      ) {
+        await interaction.deferReply({ ephemeral: true });
+        const q1 = interaction.fields.getTextInputValue("q1");
+        const q2 = interaction.fields.getTextInputValue("q2");
+        const q3 = interaction.fields.getTextInputValue("q3");
+        const q4 = interaction.fields.getTextInputValue("q4");
+        const q5 = interaction.fields.getTextInputValue("q5");
+
+        const supabase = getSupabase();
+        const settings = await getSettingsMap(supabase);
+        const recruitments = settings.recruitments_list || [];
+        recruitments.push({
+          id: Date.now().toString(),
+          discordId: interaction.user.id,
+          discordName: interaction.user.username,
+          q1,
+          q2,
+          q3,
+          q4,
+          q5,
+          date: new Date().toISOString(),
+        });
+        await upsertSetting(supabase, "recruitments_list", recruitments);
+
+        // --- Création du salon Discord pour la candidature ---
+        try {
+          const guild = discordClient.guilds.cache.get(
+            process.env.DISCORD_GUILD_ID,
+          );
+          if (guild) {
+            const channelName = `cv-${interaction.user.username}`
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, "");
+            const newChannel = await guild.channels.create({
+              name: channelName,
+              type: ChannelType.GuildText,
+              parent: "1487876458239103096",
+              topic: `Candidature de ${interaction.user.username} (${interaction.user.id})`,
+            });
+
+            const embed = new EmbedBuilder()
+              .setColor(0xe63946)
+              .setTitle("📄 Nouvelle Candidature")
+              .addFields(
+                {
+                  name: "Candidat",
+                  value: `<@${interaction.user.id}>`,
+                  inline: false,
+                },
+                { name: "Nom RP, Âge IRL et Numéro RP", value: q1 || "-" },
+                { name: "Expériences et Compétences", value: q2 || "-" },
+                { name: "Disponibilités", value: q3 || "-" },
+                { name: "Motivation", value: q4 || "-" },
+                { name: "Boîte à lunch", value: q5 || "-" },
+              )
+              .setTimestamp();
+
+            await newChannel.send({
+              content: `Notification de recrutement pour <@${interaction.user.id}> :`,
+              embeds: [embed],
+            });
+          }
+        } catch (err) {
+          console.error("Impossible de creer le salon de recrutement:", err);
+        }
+
+        await interaction.editReply(
+          "✅ Ta candidature a bien ete envoyee a la direction ! Nous allons l'etudier et te recontacter prochainement.",
         );
       }
     } catch (error) {
@@ -1662,6 +1837,7 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
       settings,
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
+      recruitments: settings.recruitments_list || [],
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2033,6 +2209,42 @@ app.delete("/api/admin-contracts/:id", requireAuth, async (req, res) => {
     res.status(500).send(error.message);
   }
 });
+
+app.post(
+  "/api/admin-recruitments/:id/:action",
+  requireAdminAccess,
+  async (req, res) => {
+    try {
+      if (req.session.isSupervision)
+        return res.status(403).send("Lecture seule.");
+      const { id, action } = req.params;
+      const supabase = getSupabase();
+      const settings = await getSettingsMap(supabase);
+      let recruitments = settings.recruitments_list || [];
+
+      const rec = recruitments.find((r) => r.id === id);
+      if (!rec) return res.status(404).send("Candidature introuvable.");
+
+      recruitments = recruitments.filter((r) => r.id !== id);
+      await upsertSetting(supabase, "recruitments_list", recruitments);
+
+      if (action === "accept")
+        await sendDiscordDm(
+          rec.discordId,
+          "🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners. Contacte un membre de la direction au plus vite pour la suite !",
+        );
+      if (action === "reject")
+        await sendDiscordDm(
+          rec.discordId,
+          "❌ Bonjour, suite a l'etude de ton profil, nous n'avons malheureusement pas retenu ta candidature chez Santos Tuners pour le moment. Bon courage pour la suite !",
+        );
+
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).send(error.message);
+    }
+  },
+);
 
 app.post("/api/report-police", requireAuth, async (req, res) => {
   try {

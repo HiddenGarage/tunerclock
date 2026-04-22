@@ -430,7 +430,7 @@ async function publishRecruitmentEmbed() {
       .setDescription(
         "Nous sommes a la recherche de nouveaux talents passionnes par la mecanique !\n\nClique sur le bouton ci-dessous pour remplir le formulaire de candidature. Sois honnete et detaille tes reponses.\n\n*La direction etudiera ton profil et te contactera par message prive.*",
       )
-      .setImage("https://i.imgur.com/B1s6Kpj.png") // Image generique de garage (optionnelle)
+      .setImage("https://r2.fivemanage.com/eTqhuQe6RYlbhSLrET7bS/4.png") // Image generique de garage (optionnelle)
       .setFooter({ text: "Recrutement | Santos Tuners" })
       .setTimestamp();
 
@@ -574,8 +574,9 @@ function startDiscordBot() {
 
           const q1 = new TextInputBuilder()
             .setCustomId("q1")
-            .setLabel("Nom RP, Âge IRL et Numéro RP")
-            .setStyle(TextInputStyle.Short)
+            .setLabel("Identite (Nom RP, Age IRL, Tel)")
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder("- Nom RP :\n- Age IRL :\n- Numero :")
             .setRequired(true);
           const q2 = new TextInputBuilder()
             .setCustomId("q2")
@@ -781,7 +782,7 @@ function startDiscordBot() {
                   value: `<@${interaction.user.id}>`,
                   inline: false,
                 },
-                { name: "Nom RP, Âge IRL et Numéro RP", value: q1 || "-" },
+                { name: "Informations Personnelles", value: q1 || "-" },
                 { name: "Expériences et Compétences", value: q2 || "-" },
                 { name: "Disponibilités", value: q3 || "-" },
                 { name: "Motivation", value: q4 || "-" },

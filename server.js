@@ -825,6 +825,9 @@ function buildPayslipText(payload) {
     `Discord ID: ${payload.discordId || "-"}`,
     `Heures payees: ${Number(payload.hoursPaid || 0).toFixed(2)} h`,
     `Taux horaire: ${formatRpMoney(payload.hourlyRate)}`,
+    ...(payload.prime > 0
+      ? [`Prime / Bonus: ${formatRpMoney(payload.prime)}`]
+      : []),
     `Montant verse: ${formatRpMoney(payload.amountPaid)}`,
     `Date: ${payload.paidAtLabel || ""}`,
     `Verse par: ${payload.paidBy || "Gestion"}`,
@@ -1266,9 +1269,13 @@ function buildPayslipPdf(res, payload) {
   const rows = [
     ["Heures payees", `${Number(payload.hoursPaid || 0).toFixed(2)} h`],
     ["Taux horaire", formatRpMoney(payload.hourlyRate)],
-    ["Montant verse", formatRpMoney(payload.amountPaid)],
-    ["Verse par", payload.paidBy || "Gestion"],
   ];
+
+  if (payload.prime > 0) {
+    rows.push(["Prime / Bonus", formatRpMoney(payload.prime)]);
+  }
+  rows.push(["Montant verse", formatRpMoney(payload.amountPaid)]);
+  rows.push(["Verse par", payload.paidBy || "Gestion"]);
 
   let y = 210;
   rows.forEach(([label, value]) => {
@@ -2231,12 +2238,13 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
+    const prime = Number(req.body?.prime || 0) || 0;
     const hourlyRate = numberOrDefault(
       employee.hourly_rate,
       DEFAULT_HOURLY_RATE,
     );
     const hoursPaid = Number(employee.total_hours || 0);
-    const amountPaid = Number((hoursPaid * hourlyRate).toFixed(2));
+    const amountPaid = Number((hoursPaid * hourlyRate + prime).toFixed(2));
 
     const { data: payout, error: payoutError } = await supabase
       .from("payouts")
@@ -2276,6 +2284,7 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
         payoutId: payout.id,
         hoursPaid,
         hourlyRate,
+        prime,
         amountPaid,
       },
     });
@@ -2285,6 +2294,7 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
       payoutId: payout.id,
       amountPaid,
       hoursPaid,
+      prime,
       hourlyRate,
     });
   } catch (error) {
@@ -2315,11 +2325,17 @@ app.get("/api/payouts/:payoutId/pdf", requireAdmin, async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
+    const calculatedPrime = Math.max(
+      0,
+      payout.amount_paid - payout.hours_paid * payout.hourly_rate,
+    );
+
     buildPayslipPdf(res, {
       employeeName: employee.discord_name,
       discordId: employee.discord_id,
       hoursPaid: payout.hours_paid,
       hourlyRate: payout.hourly_rate,
+      prime: calculatedPrime,
       amountPaid: payout.amount_paid,
       paidAtLabel: new Date(payout.paid_at).toLocaleString("fr-CA"),
       paidBy: req.session.displayName || req.session.username,
@@ -2372,6 +2388,18 @@ app.post("/api/send-payslip-dm", requireAdmin, async (req, res) => {
           value: formatRpMoney(payslip.hourlyRate),
           inline: true,
         },
+      );
+
+    if (payslip.prime > 0) {
+      embed.addFields({
+        name: "Prime / Bonus",
+        value: formatRpMoney(payslip.prime),
+        inline: true,
+      });
+    }
+
+    embed
+      .addFields(
         {
           name: "Montant verse",
           value: formatRpMoney(payslip.amountPaid),

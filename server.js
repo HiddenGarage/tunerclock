@@ -17,6 +17,7 @@ const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
 const KEEPALIVE_ENABLED = String(process.env.KEEPALIVE_ENABLED || "false").toLowerCase() === "true";
 const KEEPALIVE_INTERVAL_MINUTES = Math.max(5, Number(process.env.KEEPALIVE_INTERVAL_MINUTES || 10));
 const KEEPALIVE_URL = process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "";
+const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID = process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1496343277220397116";
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -208,6 +209,74 @@ async function syncDiscordCommands() {
   }
 }
 
+function buildEmployeeGuideEmbed() {
+  return new EmbedBuilder()
+    .setColor(0x30c4a3)
+    .setTitle("TunerClock | Guide employe")
+    .setDescription("TunerClock sert a suivre les heures, la paie et la presence des employes Santos Tuners.")
+    .addFields(
+      {
+        name: "/in",
+        value: "Entre en service. Utilise cette commande quand tu commences a travailler au garage."
+      },
+      {
+        name: "/out",
+        value: "Sort du service. Utilise cette commande quand tu termines ton quart pour sauvegarder tes heures."
+      },
+      {
+        name: "/paye",
+        value: "Affiche tes heures actuelles, ton taux horaire et l'argent gagne jusqu'a maintenant."
+      },
+      {
+        name: "Rappel automatique",
+        value: "Si tu restes en service trop longtemps, le bot peut t'envoyer un MP avec deux boutons: confirmer que tu travailles encore ou punch out."
+      },
+      {
+        name: "Important",
+        value: "Si tu oublies de faire /out, un responsable peut corriger ou fermer ton service depuis le panel."
+      }
+    )
+    .setFooter({ text: "Santos Tuners Inc | TunerClock" })
+    .setTimestamp();
+}
+
+async function publishEmployeeGuideEmbed() {
+  if (!discordClient?.isReady?.() || !DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID) return;
+
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const guideState = settings.discord_employee_guide || {};
+    const channel = await discordClient.channels.fetch(DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID).catch(() => null);
+
+    if (!channel?.isTextBased?.()) {
+      console.error("Salon guide employe introuvable ou non textuel.");
+      return;
+    }
+
+    const payload = { embeds: [buildEmployeeGuideEmbed()] };
+    let message = null;
+
+    if (guideState.messageId) {
+      message = await channel.messages.fetch(guideState.messageId).catch(() => null);
+    }
+
+    if (message) {
+      await message.edit(payload);
+    } else {
+      message = await channel.send(payload);
+    }
+
+    await upsertSetting(supabase, "discord_employee_guide", {
+      channelId: DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID,
+      messageId: message.id,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Publication guide employe impossible:", error.message);
+  }
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -234,6 +303,7 @@ function startDiscordBot() {
         status: "online"
       });
       syncDiscordCommands();
+      publishEmployeeGuideEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);

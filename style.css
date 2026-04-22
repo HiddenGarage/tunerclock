@@ -357,8 +357,8 @@ a {
 
 .card {
   position: relative;
-  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
-  border: 1px solid rgba(226, 233, 244, 0.95);
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   padding: 22px;
   box-shadow: var(--shadow);
@@ -366,16 +366,7 @@ a {
 }
 
 .card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.55),
-    rgba(255, 255, 255, 0)
-  );
-  opacity: 0.75;
+  display: none;
 }
 
 .card > * {
@@ -453,12 +444,8 @@ a {
 
 .summary-item,
 .pointage-meter {
-  background: linear-gradient(
-    180deg,
-    rgba(247, 250, 255, 0.98) 0%,
-    rgba(242, 247, 255, 0.98) 100%
-  );
-  border: 1px solid #e7edf8;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 16px;
 }

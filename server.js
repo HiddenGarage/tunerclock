@@ -150,14 +150,14 @@ app.get("/api/bot-status", (req, res) => {
 app.get("/api/health", (req, res) => {
   res.json({
     ok: true,
-    service: "TunerClock",
+    service: "TunersHub",
     time: new Date().toISOString(),
   });
 });
 
 function getSession(req) {
   const cookies = parseCookies(req.headers.cookie || "");
-  return decodeSession(cookies.tunerclock_session, required("SESSION_SECRET"));
+  return decodeSession(cookies.tunershub_session, required("SESSION_SECRET"));
 }
 
 function requireAuth(req, res, next) {
@@ -307,8 +307,8 @@ function getLogoPath() {
 async function syncDiscordCommands() {
   if (!discordClient?.application) return;
   const commands = [
-    { name: "in", description: "Entrer en service dans TunerClock" },
-    { name: "out", description: "Sortir du service dans TunerClock" },
+    { name: "in", description: "Punch In" },
+    { name: "out", description: "Punch Out" },
     {
       name: "paye",
       description: "Voir tes heures actuelles et ton argent gagne",
@@ -332,13 +332,11 @@ async function syncDiscordCommands() {
 function buildEmployeeGuideEmbed() {
   return new EmbedBuilder()
     .setColor(0x30c4a3)
-    .setTitle("TunerClock | Guide employe")
+    .setTitle("TunersHub | Guide employe")
     .setDescription(
-      "TunerClock sert a suivre les heures, la paie et la presence des employes Santos Tuners.",
-    )
+      "TunersHub ser
     .addFields(
-      {
-        name: "/in",
+      { "/in",
         value:
           "Entre en service. Utilise cette commande quand tu commences a travailler au garage.",
       },
@@ -368,12 +366,11 @@ function buildEmployeeGuideEmbed() {
           "Si tu oublies de faire /out, un responsable peut corriger ou fermer ton service depuis le panel.",
       },
     )
-    .setFooter({ text: "Santos Tuners Inc | TunerClock" })
+    .setFooter({ text: "Santos Tuners Inc | TunersHub" })
     .setTimestamp();
 }
 
-async function publishEmployeeGuideEmbed() {
-  if (!discordClient?.isReady?.() || !DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID) return;
+async function publishEmployeeGuideEmbed() {(OYEE_GUIDE_CHANNEL_ID) return;
 
   try {
     const supabase = getSupabase();
@@ -483,13 +480,12 @@ function startDiscordBot() {
     try {
       discordClient.user.setPresence({
         activities: [
-          { name: "TunerClock Garage", type: ActivityType.Watching },
+          { name: "TunersHub", type: ActivityType.Watching },
         ],
         status: "online",
       });
       syncDiscordCommands();
-      publishEmployeeGuideEmbed();
-      publishRecruitmentEmbed();
+      publishEmployeeGuiEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -637,13 +633,12 @@ function startDiscordBot() {
           .single();
 
         if (employeeError || !employee) {
-          await interaction.editReply("Employe introuvable dans TunerClock.");
+          await interaction.editReply("Employe introuvable dans TunersHub.");
           return;
         }
 
         if (action === "tc_boss_out" || action === "tc_boss_active") {
-          const bosses = ["893278269170933810", "417605116070461442"];
-          if (!bosses.includes(interaction.user.id)) {
+          const bosses = ["89327826917093
             await interaction.editReply(
               "Seul le patron peut utiliser ce bouton.",
             );
@@ -807,21 +802,19 @@ function startDiscordBot() {
       console.error("Interaction Discord impossible:", error.message);
       if (interaction.deferred || interaction.replied) {
         await interaction
-          .editReply(`Erreur TunerClock: ${error.message}`)
+          .editReply(`Erreur TunersHub: ${error.message}`)
           .catch(() => {});
       } else {
         await interaction
           .reply({
-            content: `Erreur TunerClock: ${error.message}`,
+            content: `Erreur TunersHub: ${error.message}`,
             ephemeral: true,
           })
-          .catch(() => {});
       }
     }
   });
 
-  discordClient.login(process.env.DISCORD_BOT_TOKEN).catch((error) => {
-    discordBotRuntime.online = false;
+  discordClient.login(process.env.)e;
     discordBotRuntime.error = error.message;
     console.error("Connexion bot Discord impossible:", error.message);
   });
@@ -929,7 +922,7 @@ async function sendDiscordDmPayload(discordId, payload) {
     return { ok: true };
   }
 
-  return sendDiscordDm(discordId, payload.content || "Message TunerClock.");
+  return sendDiscordDm(discordId, payload.content || "Message TunersHub.");
 }
 
 async function sendFunnyForceOutMessage(discordId) {
@@ -937,8 +930,7 @@ async function sendFunnyForceOutMessage(discordId) {
   const channelId = "1487846337931120762";
   const channel = await discordClient.channels
     .fetch(channelId)
-    .catch(() => null);
-  if (!channel?.isTextBased?.()) return;
+
 
   const messages = [
     `Hey <@${discordId}>, t’as tu l'intention de dormir au garage à soir ou c'est juste que t'as oublier de puncher ?`,
@@ -954,7 +946,7 @@ async function sendFunnyForceOutMessage(discordId) {
 function buildReminderPayload(employee, durationHours) {
   const embed = new EmbedBuilder()
     .setColor(0x30c4a3)
-    .setTitle("Verification de presence TunerClock")
+    .setTitle("Verification de presence TunersHub")
     .setDescription(
       "Tu es encore en service. Est-ce que tu as oublie de punch out ?",
     )
@@ -964,8 +956,7 @@ function buildReminderPayload(employee, durationHours) {
         value: employee.discord_name || "Employe",
         inline: true,
       },
-      {
-        name: "Duree actuelle",
+      { 
         value: `${Number(durationHours || 0).toFixed(2)} h`,
         inline: true,
       },
@@ -994,7 +985,7 @@ function buildReminderPayload(employee, durationHours) {
 
 function buildPayslipText(payload) {
   return [
-    "TunerClock | Slip de paie officiel",
+    "TunersHub | Slip de paie officiel",
     "Santos Tuners Inc",
     "",
     `Employe: ${payload.employeeName}`,
@@ -1005,8 +996,7 @@ function buildPayslipText(payload) {
       ? [`Prime / Bonus: ${formatRpMoney(payload.prime)}`]
       : []),
     `Montant verse: ${formatRpMoney(payload.amountPaid)}`,
-    `Date: ${payload.paidAtLabel || ""}`,
-    `Verse par: ${payload.paidBy || "Gestion"}`,
+    `Date: par: ${payload.paidBy || "Gestion"}`,
     "",
     PAYSLIP_SIGNATURE,
   ].join("\n");
@@ -1426,7 +1416,7 @@ function buildPayslipPdf(res, payload) {
     .fillColor("#ffffff")
     .font("Helvetica-Bold")
     .fontSize(26)
-    .text("TunerClock", 48, 34);
+    .text("TunersHub", 48, 34);
   doc.font("Helvetica").fontSize(12).text("Slip de paie officiel", 48, 68);
 
   doc.moveDown(5);
@@ -1437,8 +1427,7 @@ function buildPayslipPdf(res, payload) {
     .text(payload.employeeName);
   doc
     .font("Helvetica")
-    .fontSize(11)
-    .fillColor("#6b7785")
+    .fontSize(11
     .text(`Discord ID: ${payload.discordId || "-"}`);
   doc.text(`Date de paiement: ${payload.paidAtLabel}`);
 
@@ -1470,7 +1459,7 @@ function buildPayslipPdf(res, payload) {
   });
 
   doc.fillColor("#6b7785").font("Helvetica").fontSize(10);
-  doc.text("Document genere automatiquement par TunerClock.", 48, 520);
+  doc.text("Document genere automatiquement par TunersHub.", 48, 520);
   doc.fillColor("#17212d").font("Helvetica-Bold").fontSize(11);
   doc.text(PAYSLIP_SIGNATURE, 48, 548);
   doc.end();
@@ -1483,7 +1472,6 @@ app.get("/auth/discord/login", (req, res) => {
   url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
   url.searchParams.set("scope", "identify");
   url.searchParams.set("prompt", "consent");
-  res.redirect(url.toString());
 });
 
 app.get("/auth/discord/callback", async (req, res) => {
@@ -1586,7 +1574,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     res.setHeader(
       "Set-Cookie",
       buildCookie(
-        "tunerclock_session",
+      "tunershub_session",
         encodeSession(session, required("SESSION_SECRET")),
       ),
     );
@@ -1600,10 +1588,9 @@ app.get("/auth/me", (req, res) => {
   res.json({ user: getSession(req) || null });
 });
 
-app.get("/auth/logout", (req, res) => {
-  res.setHeader(
+p.get("/authder(
     "Set-Cookie",
-    "tunerclock_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+    "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
   );
   res.redirect("/");
 });
@@ -1617,8 +1604,7 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
       null;
 
     let activeShift = null;
-    if (employee?.id) {
-      const { data } = await supabase
+    if (eml{d
         .from("shifts")
         .select("*")
         .eq("employee_id", employee.id)
@@ -2026,7 +2012,7 @@ app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
     await sendDiscordDm(
       employee.discord_id,
       [
-        "TunerClock | Sortie de service forcee",
+        "TunersHub | Sortie de service forcee",
         `Ton shift a ete ferme par ${req.session.displayName || req.session.username || "un admin"}.`,
         `Entree: ${result.punchedInAt.toLocaleString("fr-CA")}`,
         `Sortie: ${result.punchedOutAt.toLocaleString("fr-CA")}`,
@@ -2042,8 +2028,7 @@ app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
         durationHours: result.durationHours,
         shiftPeriod: result.shiftPeriod,
         punchedInAt: result.punchedInAt.toISOString(),
-        punchedOutAt: result.punchedOutAt.toISOString(),
-      },
+        punchsc
     });
 
     await sendFunnyForceOutMessage(employee.discord_id);
@@ -2751,5 +2736,5 @@ startReminderMonitor();
 startKeepAliveMonitor();
 
 app.listen(PORT, () => {
-  console.log(`TunerClock running on port ${PORT}`);
+  console.log(`TunersHub running on port ${PORT}`);
 });

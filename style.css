@@ -375,18 +375,7 @@ a {
 }
 
 .gradient-card {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(75, 124, 246, 0.16),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(48, 196, 163, 0.12),
-      transparent 30%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  background: var(--panel);
 }
 
 .card-head {
@@ -471,18 +460,7 @@ a {
 }
 
 .chart-card {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(75, 124, 246, 0.08),
-      transparent 26%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(48, 196, 163, 0.08),
-      transparent 24%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  background: var(--panel);
   contain: layout paint;
   overflow: hidden;
 }
@@ -515,18 +493,7 @@ a {
 
 .pointage-shell {
   min-height: 360px;
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(75, 124, 246, 0.12),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at bottom left,
-      rgba(48, 196, 163, 0.12),
-      transparent 30%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  background: var(--panel);
 }
 
 .pointage-head {
@@ -568,13 +535,13 @@ a {
 .pointage-main-meter {
   min-height: 190px;
   align-content: center;
-  background: linear-gradient(180deg, #eff8ff 0%, #f8fbff 100%);
-  border-color: #e1eaf8;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 4px solid var(--teal);
 }
 
 .blue-meter {
-  background: linear-gradient(180deg, #edf7f5 0%, #f9fcfb 100%);
-  border-color: #dceee8;
+  background: rgba(0, 0, 0, 0.2);
+  border-left-color: var(--red);
 }
 
 .pointage-main-meter strong {
@@ -629,11 +596,7 @@ a {
 .analysis-recommendation {
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.96),
-    rgba(246, 249, 254, 0.96)
-  );
+  background: rgba(0, 0, 0, 0.2);
   padding: 16px;
 }
 
@@ -666,13 +629,7 @@ a {
 
 .analysis-recommendation {
   margin-top: 16px;
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(48, 196, 163, 0.14),
-      transparent 30%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #f5fbf9 100%);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .analysis-recommendation-head {
@@ -942,14 +899,8 @@ td {
 }
 
 .reboot-card {
-  background:
-    radial-gradient(
-      circle at top right,
-      rgba(226, 92, 92, 0.1),
-      transparent 24%
-    ),
-    linear-gradient(180deg, #fff9f9 0%, #ffffff 100%);
-  border-color: #f1dbdb;
+  background: var(--panel);
+  border-color: var(--line);
 }
 
 .reboot-grid {

@@ -334,7 +334,7 @@ function buildEmployeeGuideEmbed() {
     .setColor(0x30c4a3)
     .setTitle("TunersHub | Guide employe")
     .setDescription(
-      "TunersHub sert a suivre les heures, la paie et la presence des employes Santos Tuners."
+      "TunersHub sert a suivre les heures, la paie et la presence des employes Santos Tuners.",
     )
     .addFields(
       {
@@ -482,9 +482,7 @@ function startDiscordBot() {
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
     try {
       discordClient.user.setPresence({
-        activities: [
-          { name: "TunersHub", type: ActivityType.Watching },
-        ],
+        activities: [{ name: "TunersHub", type: ActivityType.Watching }],
         status: "online",
       });
       syncDiscordCommands();
@@ -809,11 +807,10 @@ function startDiscordBot() {
           .editReply(`Erreur TunersHub: ${error.message}`)
           .catch(() => {});
       } else {
-        await interaction
-          .reply({
-            content: `Erreur TunersHub: ${error.message}`,
-            ephemeral: true,
-          });
+        await interaction.reply({
+          content: `Erreur TunersHub: ${error.message}`,
+          ephemeral: true,
+        });
       }
     }
   });
@@ -933,9 +930,7 @@ async function sendDiscordDmPayload(discordId, payload) {
 async function sendFunnyForceOutMessage(discordId) {
   if (!discordClient?.isReady?.()) return;
   const channelId = "1487846337931120762";
-  const channel = await discordClient.channels
-    .fetch(channelId)
-
+  const channel = await discordClient.channels.fetch(channelId);
 
   const messages = [
     `Hey <@${discordId}>, t’as tu l'intention de dormir au garage à soir ou c'est juste que t'as oublier de puncher ?`,
@@ -961,7 +956,7 @@ function buildReminderPayload(employee, durationHours) {
         value: employee.discord_name || "Employe",
         inline: true,
       },
-      { 
+      {
         name: "Duree actuelle",
         value: `${Number(durationHours || 0).toFixed(2)} h`,
         inline: true,
@@ -1581,7 +1576,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     res.setHeader(
       "Set-Cookie",
       buildCookie(
-      "tunershub_session",
+        "tunershub_session",
         encodeSession(session, required("SESSION_SECRET")),
       ),
     );
@@ -1595,7 +1590,8 @@ app.get("/auth/me", (req, res) => {
   res.json({ user: getSession(req) || null });
 });
 
-p.get("/authder(
+app.get("/auth/logout", (req, res) => {
+  res.setHeader(
     "Set-Cookie",
     "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
   );
@@ -2037,7 +2033,7 @@ app.post("/api/admin-force-punch-out", requireAdmin, async (req, res) => {
         shiftPeriod: result.shiftPeriod,
         punchedInAt: result.punchedInAt.toISOString(),
         punchedOutAt: result.punchedOutAt.toISOString(),
-      }
+      },
     });
 
     await sendFunnyForceOutMessage(employee.discord_id);

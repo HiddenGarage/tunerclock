@@ -222,7 +222,15 @@ function requireAdmin(req, res, next) {
 }
 
 function getShiftPeriod(dateLike) {
-  const hour = new Date(dateLike).getHours();
+  const date = new Date(dateLike);
+  // Force le calcul de l'heure sur le fuseau de Montréal pour éviter les décalages sur le serveur (UTC)
+  const formatter = new Intl.DateTimeFormat("fr-CA", {
+    hour: "numeric",
+    hour12: false,
+    timeZone: "America/Montreal",
+  });
+  const hour = parseInt(formatter.format(date), 10);
+
   if (hour >= 6 && hour < 18) return "Jour";
   if (hour >= 18 && hour < 23) return "Soir";
   return "Nuit";
@@ -1561,7 +1569,8 @@ async function buildEmployeeSnapshots(supabase) {
     const shiftBuckets = { Jour: 0, Soir: 0, Nuit: 0 };
 
     closedShifts.forEach((shift) => {
-      const period = shift.shift_period || getShiftPeriod(shift.punched_in_at);
+      // On force le recalcul du fuseau horaire pour corriger l'affichage des anciens shifts
+      const period = getShiftPeriod(shift.punched_in_at);
       shiftBuckets[period] =
         (shiftBuckets[period] || 0) + Number(shift.duration_hours || 0);
     });

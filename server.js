@@ -135,9 +135,63 @@ const GARAGE_PART_CODES = [
   "manual_gearbox",
 ];
 
+const SYSTEM_WEBHOOK_URL =
+  "https://discord.com/api/webhooks/1496817457606692984/SP_cL16HnatRAGv2K_g6MZ2l4sR1lkUSsntyraFAPnVD43S1sQfsEuARq6XqdDbp65uL";
+const errorCooldowns = new Map();
+
+async function logSystemEvent(
+  title,
+  description,
+  color = 0x30c4a3,
+  isError = false,
+) {
+  if (!SYSTEM_WEBHOOK_URL) return;
+  if (isError) {
+    const errorSignature = title + String(description).substring(0, 100);
+    const lastSent = errorCooldowns.get(errorSignature);
+    // Anti-spam: Ignore la même erreur si elle est survenue dans la dernière heure
+    if (lastSent && Date.now() - lastSent < 60 * 60 * 1000) {
+      return;
+    }
+    errorCooldowns.set(errorSignature, Date.now());
+  }
+  const payload = {
+    embeds: [
+      {
+        title,
+        description: String(description).substring(0, 4000),
+        color,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+  await fetch(SYSTEM_WEBHOOK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
+
+// Middleware global pour traquer si l'API prend plus de 5 secondes à répondre
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (duration > 5000 && !req.url.includes("/api/health")) {
+      logSystemEvent(
+        "🟠 Lenteur API détectée",
+        `La requête \`${req.method} ${req.url}\` a pris **${duration}ms** pour répondre.`,
+        0xf4a249,
+        true,
+      );
+    }
+  });
+  next();
+});
 
 app.get("/api/bot-status", (req, res) => {
   res.json({
@@ -483,6 +537,11 @@ function startDiscordBot() {
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
+    logSystemEvent(
+      "🟢 Bot Discord Connecté",
+      `Connecté en tant que ${discordBotRuntime.tag}`,
+      0x30c4a3,
+    );
     try {
       discordClient.user.setPresence({
         activities: [{ name: "TunersHub", type: ActivityType.Watching }],
@@ -501,15 +560,28 @@ function startDiscordBot() {
     discordBotRuntime.online = false;
     discordBotRuntime.error = error.message;
     console.error("Erreur bot Discord:", error.message);
+    logSystemEvent("🟡 Erreur Bot Discord", error.message, 0xf4a249, true);
   });
 
   discordClient.on("shardDisconnect", () => {
     discordBotRuntime.online = false;
+    logSystemEvent(
+      "🟡 Déconnexion Bot Discord",
+      "Le bot a perdu la connexion avec Discord (shardDisconnect).",
+      0xf4a249,
+      true,
+    );
   });
 
   discordClient.on("invalidated", () => {
     discordBotRuntime.online = false;
     discordBotRuntime.error = "Session invalidee";
+    logSystemEvent(
+      "🔴 Session Discord Invalidée",
+      "La session du bot a été invalidée par Discord.",
+      0xd94b4b,
+      true,
+    );
   });
 
   discordClient.on("interactionCreate", async (interaction) => {
@@ -1248,40 +1320,46 @@ async function scanLongActiveShifts() {
               .eq("id", shift.employee_id)
               .single();
             if (employee) {
-              const embed = new EmbedBuilder()
-                .setColor(0xd94b4b)
-                .setTitle("⚠️ Alerte : Employe inactif")
-                .setDescription(
-                  `L'employe **${employee.discord_name}** n'a pas repondu a son rappel de presence depuis plus de 20 minutes.`,
-                )
-                .addFields(
-                  {
-                    name: "Employe",
-                    value: employee.discord_name,
-                    inline: true,
-                  },
-                  {
-                    name: "Duree actuelle",
-                    value: `${Number(durationHours).toFixed(2)} h`,
-                    inline: true,
-                  },
-                )
-                .setTimestamp();
-              const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`tc_boss_out:${employee.id}`)
-                  .setLabel("Forcer Sortie")
-                  .setStyle(ButtonStyle.Danger),
-                new ButtonBuilder()
-                  .setCustomId(`tc_boss_active:${employee.id}`)
-                  .setLabel("Confirmer Actif")
-                  .setStyle(ButtonStyle.Success),
-              );
-              for (const bossId of BOSS_DISCORD_IDS) {
-                await sendDiscordDmPayload(bossId, {
-                  embeds: [embed],
-                  components: [row],
+              try {
+                const result = await closeActiveShiftForEmployee(
+                  supabase,
+                  employee,
+                  "Systeme (Inactif)",
+                );
+                await updateReminderState(supabase, shift.id, {
+                  response: "auto_punched_out",
+                  responseLabel: "Sortie auto (Inactif)",
+                  respondedAt: new Date().toISOString(),
+                  escalated: true,
                 });
+
+                await sendFunnyForceOutMessage(employee.discord_id);
+
+                const embed = new EmbedBuilder()
+                  .setColor(0xd94b4b)
+                  .setTitle("⚠️ Sortie Automatique")
+                  .setDescription(
+                    `L'employé **${employee.discord_name}** n'a pas répondu à son rappel de présence après 20 minutes.\nIl a été **automatiquement dépointé** par le système.`,
+                  )
+                  .addFields(
+                    {
+                      name: "Employé",
+                      value: employee.discord_name,
+                      inline: true,
+                    },
+                    {
+                      name: "Durée enregistrée",
+                      value: `${Number(result.durationHours || durationHours).toFixed(2)} h`,
+                      inline: true,
+                    },
+                  )
+                  .setTimestamp();
+
+                for (const bossId of BOSS_DISCORD_IDS) {
+                  await sendDiscordDmPayload(bossId, { embeds: [embed] });
+                }
+              } catch (e) {
+                console.error("Erreur auto punch out:", e.message);
               }
               reminderState[shift.id].escalated = true;
               stateChanged = true;
@@ -2779,4 +2857,29 @@ startKeepAliveMonitor();
 
 app.listen(PORT, () => {
   console.log(`TunersHub running on port ${PORT}`);
+  logSystemEvent(
+    "🟢 Serveur Démarré",
+    `Le site TunersHub vient de se réveiller et écoute sur le port ${PORT}.`,
+    0x30c4a3,
+  );
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  logSystemEvent(
+    "🔴 Erreur Fatale (Crash)",
+    `\`\`\`js\n${err.message}\n${err.stack?.substring(0, 800)}\`\`\``,
+    0xd94b4b,
+    true,
+  );
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+  logSystemEvent(
+    "🔴 Promesse Rejetée",
+    `\`\`\`js\n${String(reason).substring(0, 800)}\`\`\``,
+    0xd94b4b,
+    true,
+  );
 });

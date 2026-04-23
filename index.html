@@ -51,9 +51,6 @@
           <h2 id="page-title">Tableau de bord</h2>
         </div>
         <div class="topbar-tools">
-          <div class="search-box">
-            <input type="text" value="TunersHub Enterprise OS" aria-label="Recherche rapide" readonly>
-          </div>
           <button id="logout-button" class="secondary-button topbar-button hidden">Se deconnecter</button>
           <div class="status-pill" id="bot-status-pill">Bot hors ligne</div>
           <div class="status-pill" id="topbar-role-pill">Connexion securisee</div>
@@ -185,7 +182,6 @@
                 <h3>Statistiques employes</h3>
                 <p class="muted">Vue des heures, jours actifs, quarts forts et paie estimee.</p>
               </div>
-              <span class="mini-pill success">Confidentiel</span>
             </div>
             <div class="table-wrap">
               <table>
@@ -260,7 +256,6 @@
                 <h3>Presence live</h3>
                 <p class="muted">Controle des employes actuellement en service, rappels Discord et fermeture forcee des shifts oublies.</p>
               </div>
-              <span class="mini-pill danger">Anti oubli</span>
             </div>
             <div class="table-wrap">
               <table>
@@ -320,26 +315,14 @@
               </div>
               <span class="mini-pill">Profit</span>
             </div>
-            <div class="form-grid finance-form-grid">
-              <div class="field">
-                <label for="service-income" class="input-label">Revenus garage / ventes</label>
-                <input id="service-income" type="number" min="0" step="1" placeholder="0">
-              </div>
+            <div class="form-grid finance-form-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
               <div class="field">
                 <label for="weekly-profit" class="input-label">Profit de la semaine</label>
                 <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
               </div>
               <div class="field">
-                <label for="manual-payouts" class="input-label">Paiements hors systeme</label>
-                <input id="manual-payouts" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
                 <label for="misc-expenses" class="input-label">Autres depenses garage</label>
                 <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
-                <label for="calc-note" class="input-label">Note interne</label>
-                <input id="calc-note" type="text" placeholder="Note optionnelle">
               </div>
             </div>
             <div class="parts-actions">
@@ -415,7 +398,7 @@
                 <h3>Analyse automatique</h3>
                 <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses.</p>
               </div>
-              <span class="mini-pill success">Automatique</span>
+              <button id="refresh-analysis-btn" class="secondary-button" style="padding: 6px 12px; min-height: auto;">Rafraîchir</button>
             </div>
             <div class="analysis-auto-grid">
               <div class="analysis-auto-item">
@@ -569,7 +552,6 @@
                 <h3>Consommer une piece</h3>
                 <p class="muted">A utiliser lors d'une reparation ou modification.</p>
               </div>
-              <span class="mini-pill warning">Action</span>
             </div>
             <div class="form-grid" style="grid-template-columns: 1fr;">
               <div class="field"><label class="input-label">Piece utilisee</label><select id="consume-part-name"></select></div>
@@ -663,6 +645,21 @@
         <button id="close-recruitment-modal" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
       </div>
       <div id="recruitment-content" style="overflow-y: auto; padding-right: 8px; flex-grow: 1;"></div>
+    </div>
+  </div>
+
+  <div id="audit-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div class="card-head">
+        <div>
+          <h3>Détails de l'action</h3>
+          <p class="muted">Valeurs avant/après et informations complémentaires.</p>
+        </div>
+      </div>
+      <div id="audit-modal-content" style="margin-top: 1rem; background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap; font-family: monospace; color: #a3b2c7;"></div>
+      <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+        <button id="close-audit-modal" class="secondary-button">Fermer</button>
+      </div>
     </div>
   </div>
 

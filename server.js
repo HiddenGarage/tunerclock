@@ -136,7 +136,7 @@ const GARAGE_PART_CODES = [
 ];
 
 const SYSTEM_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1496817457606692984/SP_cL16HnatRAGv2K_g6MZ2l4sR1lkUSsntyraFAPnVD43S1sQfsEuARq6XqdDbp65uL";
+  "https://discord.com/api/webhooks/1496910730417537316/YV3-cS7_kcckxMC7IhYnRK5bj02dqoSoonLJ7e3Y5gCvoZ5_61k15Oj9Tc6xUwdrPooU";
 const errorCooldowns = new Map();
 
 async function logSystemEvent(
@@ -368,6 +368,34 @@ async function syncDiscordCommands() {
       name: "paye",
       description: "Voir tes heures actuelles et ton argent gagne",
     },
+    {
+      name: "finance",
+      description: "Gérer la trésorerie (Direction uniquement)",
+      options: [
+        {
+          name: "action",
+          description: "Ajouter ou retirer",
+          type: 3,
+          required: true,
+          choices: [
+            { name: "Ajouter", value: "ajouter" },
+            { name: "Retirer", value: "retirer" },
+          ],
+        },
+        {
+          name: "montant",
+          description: "Montant de la transaction",
+          type: 10,
+          required: true,
+        },
+        {
+          name: "notes",
+          description: "Raison de la transaction (optionnel)",
+          type: 3,
+          required: false,
+        },
+      ],
+    },
   ];
 
   try {
@@ -517,6 +545,29 @@ async function publishRecruitmentEmbed() {
   } catch (error) {}
 }
 
+async function updateServiceRole(discordId, isActive) {
+  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return;
+  try {
+    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+    if (!guild) return;
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    if (!member) return;
+
+    const roleIn = "1496901938216828938";
+    const roleOut = "1496902369743605851";
+
+    if (isActive) {
+      await member.roles.add(roleIn).catch(() => {});
+      await member.roles.remove(roleOut).catch(() => {});
+    } else {
+      await member.roles.remove(roleIn).catch(() => {});
+      await member.roles.add(roleOut).catch(() => {});
+    }
+  } catch (e) {
+    console.error("Erreur roles service:", e.message);
+  }
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -635,6 +686,53 @@ function startDiscordBot() {
                 : "Aucun service actif en ce moment.",
             ].join("\n"),
           );
+          return;
+        }
+
+        if (interaction.commandName === "finance") {
+          const action = interaction.options.getString("action");
+          const montant = interaction.options.getNumber("montant");
+          const notes =
+            interaction.options.getString("notes") || "Ajustement via Discord";
+
+          const allowedRoles = ["Patron", "Copatron"];
+          if (!allowedRoles.includes(roleDefinition.name)) {
+            await interaction.reply({
+              content: "Commande réservée à la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const settings = await getSettingsMap(supabase);
+            const finance = settings.finance_inputs || {
+              serviceIncome: 0,
+              weeklyProfit: 0,
+              manualPayouts: 0,
+              miscExpenses: 0,
+              calcNote: "",
+            };
+
+            const change = action === "ajouter" ? montant : -montant;
+            finance.serviceIncome = Number(finance.serviceIncome || 0) + change;
+            await upsertSetting(supabase, "finance_inputs", finance);
+            await supabase.from("weekly_profit_entries").insert({
+              label: notes,
+              amount: change,
+              created_by_discord_id: interaction.user.id,
+            });
+
+            await interaction.editReply(
+              `Transaction enregistrée : **${change > 0 ? "+" : ""}${change}$** dans la trésorerie.\n*Notes : ${notes}*`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Erreur lors de l'opération : ${err.message}`,
+            );
+          }
           return;
         }
       }
@@ -1027,14 +1125,6 @@ async function sendFunnyForceOutMessage(discordId) {
     `<@${discordId}>, t'es comme une toune de Céline Dion : tu finis pu ! J'tai punch out moi même.`,
     `Semble-t-il que <@${discordId}> essaie de battre le record d'overtime... Pas aujourd'hui mon homme/ma grande, le bot t'a dompé !`,
     `<@${discordId}>, t'es tu en train de virer fou ou tu penses vraiment que la shop va tdonner une médaille si tu punch jamais out ? J't'ai flusher :).`,
-    // --- Nouvelles phrases ---
-    `Sois tu punch out toi même <@${discordId}> next time, soit qu'ont te charge un loyer...`,
-    `<@${discordId}>, t’es moins fiable qu’un jack de chez Canadian Tire en spécial. J'ai fermé ton temps, salut là !`,
-    `T'es aussi utile qu'un cendrier sur un motocross <@${discordId}>. Essaie de puncher par toi-même demain.`,
-    `C'est a cause du monde comme toi <@${discordId}> qui a des instructions sur les bouteilles de shampoing. C'est beau j'tai punch out.`,
-    `T'as-tu besoin d'une flèche néon ou d'une éducatrice spécialisée <@${discordId}> pour te montrer où est le bouton ? Punch out automatique fait. Décrisse.`,
-    `<@${discordId}>, t'es aussi mêlé qu'un jeu de cartes dans une sécheuse. J'ai punché pour toi.`,
-    `T'es aussi utile qu'un sac de sable dans l'désert <@${discordId}>. J'tai punch out.`
   ];
 
   const randomMsg = messages[Math.floor(Math.random() * messages.length)];
@@ -1157,6 +1247,8 @@ async function closeActiveShiftForEmployee(
     throw updateEmployeeError;
   }
 
+  await updateServiceRole(employee.discord_id, false);
+
   await sendActivityWebhook("punch_out", {
     displayName: employee.discord_name,
     username: employee.discord_name,
@@ -1231,6 +1323,8 @@ async function punchInDiscordUser(discordId, displayName, roleName = "Mecano") {
     status: "active",
   });
   if (shiftError) throw shiftError;
+
+  await updateServiceRole(discordId, true);
 
   await sendActivityWebhook("punch_in", {
     displayName,
@@ -1796,6 +1890,8 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
       }
     }
 
+    await updateServiceRole(req.session.discordId, true);
+
     await sendActivityWebhook("punch_in", {
       displayName: req.session.displayName || req.session.username,
       username: req.session.username,
@@ -2300,6 +2396,27 @@ app.delete("/api/admin-contracts/:id", requireAuth, async (req, res) => {
     let contracts = settings.contracts_list || [];
     contracts = contracts.filter((c) => c.id !== req.params.id);
     await upsertSetting(supabase, "contracts_list", contracts);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.delete("/api/admin-employees/:id", requireAdminAccess, async (req, res) => {
+  try {
+    if (req.session.isSupervision)
+      return res.status(403).send("Lecture seule.");
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("employees")
+      .delete()
+      .eq("id", req.params.id);
+    if (error) {
+      return res.status(500).send(error.message);
+    }
+    await writeAuditLog(supabase, req, "employee_fired", {
+      details: { employeeId: req.params.id },
+    });
     res.json({ ok: true });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2866,8 +2983,8 @@ startKeepAliveMonitor();
 app.listen(PORT, () => {
   console.log(`TunersHub running on port ${PORT}`);
   logSystemEvent(
-    "🟢 Serveur Démarré",
-    `Le site TunersHub vient de se réveiller et écoute sur le port ${PORT}.`,
+    "🟢 Système mis à jour / Redémarré",
+    `Une mise à jour a été détectée (ex: fichiers modifiés) et le site TunersHub a redémarré avec succès.`,
     0x30c4a3,
   );
 });

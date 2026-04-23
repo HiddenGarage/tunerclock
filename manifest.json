@@ -1,0 +1,21 @@
+{
+  "name": "TunersHub",
+  "short_name": "TunersHub",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1b1d",
+  "theme_color": "#1a1b1d",
+  "description": "Centre de gestion pour Santos Tuners Inc.",
+  "icons": [
+    {
+      "src": "logo/TurboPunch.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo/TurboPunch.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

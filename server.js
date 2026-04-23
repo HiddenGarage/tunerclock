@@ -101,9 +101,6 @@ const GARAGE_PART_CODES = [
   "brakepad_replacement",
   "suspension_parts",
   "turbocharger",
-  "ev_motor",
-  "ev_battery",
-  "ev_coolant",
   "lighting_controller",
   "cosmetic_part",
   "respray_kit",
@@ -992,53 +989,70 @@ function startDiscordBot() {
   });
 }
 
-async function sendActivityWebhook(type, payload) {
+async function sendActivityWebhook() {
   const webhookUrl =
-    process.env.DISCORD_ACTIVITY_WEBHOOK_URL ||
     "https://discord.com/api/webhooks/1495960759883141130/E5UCgZJA07T7UlRcKmW3uCJp1OJ9GyOIa42E-9mKK1CekjNB9Qe1tKjdnSgyFQOy1Z8e";
   if (!webhookUrl) return;
 
-  const isPunchIn = type === "punch_in";
-  const embed = {
-    title: isPunchIn ? "Employe entre en service" : "Employe sort de service",
-    color: isPunchIn ? 0x31c6a7 : 0xd94b4b,
-    fields: [
-      {
-        name: "Employe",
-        value: payload.displayName || payload.username || "Inconnu",
-        inline: true,
-      },
-      { name: "Role", value: payload.roleName || "Inconnu", inline: true },
-      { name: "Discord ID", value: payload.discordId || "-", inline: false },
-      {
-        name: isPunchIn ? "Entree en service" : "Sortie de service",
-        value: payload.timestampLabel || "-",
-        inline: true,
-      },
-    ],
-    timestamp: new Date().toISOString(),
-  };
+  try {
+    const supabase = getSupabase();
+    const { data: employees } = await supabase
+      .from("employees")
+      .select("*")
+      .order("discord_name", { ascending: true });
+    if (!employees) return;
 
-  if (!isPunchIn) {
-    embed.fields.push(
-      {
-        name: "Heure d'entree",
-        value: payload.punchedInLabel || "-",
-        inline: true,
-      },
-      {
-        name: "Heures travaillees",
-        value: `${Number(payload.durationHours || 0).toFixed(2)} h`,
-        inline: true,
-      },
-    );
+    const active = employees.filter((e) => e.is_active);
+    const inactive = employees.filter((e) => !e.is_active);
+
+    const activeList =
+      active.length > 0
+        ? active.map((e) => `🟢 **${e.discord_name}** - ${e.role}`).join("\n")
+        : "*Aucun employé en service.*";
+
+    const inactiveList =
+      inactive.length > 0
+        ? inactive.map((e) => `🔴 ${e.discord_name} - ${e.role}`).join("\n")
+        : "*Aucun employé hors service.*";
+
+    const embed = new EmbedBuilder()
+      .setColor(0x30c4a3)
+      .setTitle("⏱️ Statut en direct des Employés")
+      .setDescription("Mise à jour en temps réel des présences au garage.")
+      .addFields(
+        { name: "En service", value: activeList, inline: false },
+        { name: "Hors service", value: inactiveList, inline: false },
+      )
+      .setFooter({ text: "Santos Tuners Inc" })
+      .setTimestamp();
+
+    const payload = { embeds: [embed] };
+    const settings = await getSettingsMap(supabase);
+    let messageId = settings.live_status_message_id;
+
+    if (messageId) {
+      const res = await fetch(`${webhookUrl}/messages/${messageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) messageId = null;
+    }
+
+    if (!messageId) {
+      const res = await fetch(`${webhookUrl}?wait=true`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        await upsertSetting(supabase, "live_status_message_id", data.id);
+      }
+    }
+  } catch (e) {
+    console.error("Erreur de mise a jour de l'embed live:", e.message);
   }
-
-  await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embeds: [embed] }),
-  }).catch(() => {});
 }
 
 async function sendDiscordDm(discordId, message) {
@@ -2402,6 +2416,47 @@ app.delete("/api/admin-employees/:id", requireAdminAccess, async (req, res) => {
     if (req.session.isSupervision)
       return res.status(403).send("Lecture seule.");
     const supabase = getSupabase();
+
+    const { data: employee } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+
+    if (employee) {
+      const hoursPaid = Number(employee.total_hours || 0);
+      const hourlyRate = numberOrDefault(
+        employee.hourly_rate,
+        DEFAULT_HOURLY_RATE,
+      );
+      const baseAmount = hoursPaid * hourlyRate;
+      const vacationPay = baseAmount * 0.04;
+      const amountPaid = Number((baseAmount + vacationPay).toFixed(2));
+
+      const payslipText = buildPayslipText({
+        employeeName: employee.discord_name,
+        discordId: employee.discord_id,
+        hoursPaid,
+        hourlyRate,
+        prime: Number(vacationPay.toFixed(2)),
+        amountPaid,
+        paidAtLabel: new Date().toLocaleString("fr-CA"),
+        paidBy:
+          req.session.displayName ||
+          req.session.username ||
+          "Direction (Licenciement)",
+      }).replace("Prime / Bonus:", "Indemnité 4% (Vacances):");
+
+      const msgEmployee = `⚠️ **Avis de licenciement**\nTu as été congédié de Santos Tuners Inc. Voici ton relevé de solde tout compte incluant tes heures non payées et ton 4% de vacances.\n\n\`\`\`\n${payslipText}\n\`\`\``;
+      await sendDiscordDm(employee.discord_id, msgEmployee);
+
+      const bosses = ["893278269170933810", "417605116070461442"];
+      const msgBoss = `🛑 **Licenciement : ${employee.discord_name}**\nL'employé a été supprimé du panel. Son solde final (avec 4% vacance) lui a été envoyé par message privé.\n\n\`\`\`\n${payslipText}\n\`\`\``;
+      for (const bossId of bosses) {
+        await sendDiscordDm(bossId, msgBoss);
+      }
+    }
+
     const { error } = await supabase
       .from("employees")
       .delete()
@@ -2497,6 +2552,40 @@ app.post("/api/report-police", requireAuth, async (req, res) => {
       body: JSON.stringify({ embeds: [embed] }),
     }).catch(() => {});
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-adjust-stock", requireAdmin, async (req, res) => {
+  try {
+    const { itemCode, action, quantity, partName } = req.body;
+    const qty = Math.max(1, Number(quantity) || 1);
+    if (!itemCode) return res.status(400).send("Piece manquante.");
+
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const stock = settings.inventory_stock || {};
+
+    const stockBefore = stock[itemCode] || 0;
+    if (action === "add") stock[itemCode] = stockBefore + qty;
+    else stock[itemCode] = Math.max(0, stockBefore - qty);
+
+    await upsertSetting(supabase, "inventory_stock", stock);
+
+    await writeAuditLog(supabase, req, "part_consumed", {
+      details: {
+        itemCode,
+        partName: partName || itemCode,
+        action:
+          action === "add"
+            ? "Ajout manuel au stock"
+            : "Retrait manuel du stock",
+        quantity: qty,
+      },
+    });
+
+    res.json({ ok: true, stock });
   } catch (error) {
     res.status(500).send(error.message);
   }

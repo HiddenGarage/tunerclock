@@ -1968,6 +1968,8 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
       return res.status(500).send(updateEmployeeError.message);
     }
 
+    await updateServiceRole(req.session.discordId, false);
+
     await sendActivityWebhook("punch_out", {
       displayName: req.session.displayName || req.session.username,
       username: req.session.username,

@@ -1788,6 +1788,7 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
       null;
 
     let activeShift = null;
+    let recentShifts = [];
     if (employee) {
       const { data } = await supabase
         .from("shifts")
@@ -1798,12 +1799,22 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
         .limit(1)
         .maybeSingle();
       activeShift = data;
+
+      const { data: recent } = await supabase
+        .from("shifts")
+        .select("*")
+        .eq("employee_id", employee.id)
+        .eq("status", "closed")
+        .order("punched_in_at", { ascending: false })
+        .limit(5);
+      recentShifts = recent || [];
     }
 
     const settings = await getSettingsMap(supabase);
     res.json({
       employee,
       activeShift,
+      recentShifts,
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
     });

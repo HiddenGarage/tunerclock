@@ -239,6 +239,10 @@ const elements = {
   notesText: document.getElementById("employee-notes-text"),
   closeNotesBtn: document.getElementById("close-notes-modal"),
   saveNotesBtn: document.getElementById("save-notes-modal"),
+  refreshAnalysisBtn: document.getElementById("refresh-analysis-btn"),
+  auditModal: document.getElementById("audit-modal"),
+  auditModalContent: document.getElementById("audit-modal-content"),
+  closeAuditBtn: document.getElementById("close-audit-modal"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -629,7 +633,7 @@ function getExpenseTotal() {
 }
 
 function getManualPayoutAdjustments() {
-  return getNumericValue(elements.manualPayouts);
+  return 0;
 }
 
 function getTotalEmployeePayments() {
@@ -642,11 +646,11 @@ function getTotalCosts() {
 
 function getFinancePayload() {
   return {
-    serviceIncome: getNumericValue(elements.serviceIncome),
+    serviceIncome: 0,
     weeklyProfit: getNumericValue(elements.weeklyProfit),
-    manualPayouts: getManualPayoutAdjustments(),
+    manualPayouts: 0,
     miscExpenses: getNumericValue(elements.miscExpenses),
-    calcNote: elements.calcNote?.value || "",
+    calcNote: "",
   };
 }
 
@@ -695,11 +699,7 @@ async function refreshBotStatus() {
 
   const data = await response.json().catch(() => null);
   if (data?.online) {
-    setPillState(
-      elements.botStatusPill,
-      data.tag ? `Bot en ligne | ${data.tag}` : "Bot en ligne",
-      "success",
-    );
+    setPillState(elements.botStatusPill, "Bot en ligne", "success");
   } else if (data?.configured) {
     setPillState(
       elements.botStatusPill,
@@ -791,10 +791,9 @@ function renderOverview() {
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
-  const totalIncome = getNumericValue(elements.serviceIncome);
-  const weeklyProfit = getNumericValue(elements.weeklyProfit);
+  const totalIncome = getNumericValue(elements.weeklyProfit);
   const totalCosts = getTotalCosts();
-  const grossProfit = totalIncome - totalCosts + weeklyProfit;
+  const grossProfit = totalIncome - totalCosts;
   const margin = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
   const activeHours = activeEmployees.reduce(
     (sum, employee) => sum + employee.todayHours,
@@ -811,6 +810,17 @@ function renderOverview() {
   setText(elements.totalCosts, formatMoney(totalCosts));
   setText(elements.grossMargin, `${margin.toFixed(1)}%`);
   setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
+
+  if (elements.activeCount) {
+    const parentCard = elements.activeCount.parentElement;
+    if (activeEmployees.length > 0) {
+      parentCard.style.backgroundColor = "rgba(48, 196, 163, 0.15)";
+      parentCard.style.borderColor = "rgba(48, 196, 163, 0.5)";
+    } else {
+      parentCard.style.backgroundColor = "rgba(217, 75, 75, 0.15)";
+      parentCard.style.borderColor = "rgba(217, 75, 75, 0.5)";
+    }
+  }
 }
 
 function renderStatsTables() {
@@ -843,7 +853,10 @@ function renderStatsTables() {
         <td>${escapeHtml(employee.preferredShift)}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
-        <td><button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button></td>
+        <td>
+          <button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button>
+          <button class="danger-button table-button fire-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Congédier</button>
+        </td>
       </tr>
     `;
         })
@@ -869,9 +882,7 @@ function renderStatsTables() {
 }
 
 function renderSimulation() {
-  const revenue =
-    getNumericValue(elements.serviceIncome) +
-    getNumericValue(elements.weeklyProfit);
+  const revenue = getNumericValue(elements.weeklyProfit);
   const expenseTotal = getExpenseTotal();
   const paidTotal = getTotalEmployeePayments();
   const currentPayroll = employees.reduce((sum, employee) => {
@@ -1248,32 +1259,16 @@ function renderAuditLogs() {
   setHtml(
     elements.auditBody,
     auditLogs
-      .map((entry) => {
-        const details = entry.details || {};
-        const detailsText =
-          Object.entries(details)
-            .slice(0, 4)
-            .map(
-              ([key, value]) =>
-                `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`,
-            )
-            .map(([key, value]) => {
-              if (typeof value === "object" && value !== null) {
-                return `${key}: ${Object.entries(value)
-                  .map(([k, v]) => `${k}=${v}`)
-                  .join(", ")}`;
-              }
-              return `${key}: ${typeof value === "number" ? Number(value.toFixed?.(2) || value) : value}`;
-            })
-            .join(" | ") || "-";
-
+      .map((entry, index) => {
         return `
       <tr>
         <td>${formatLongDate(entry.created_at)}</td>
         <td>${formatAuditAction(entry.action)}</td>
         <td>${entry.actor_name || "-"}</td>
         <td>${entry.target_name || entry.target_discord_id || "-"}</td>
-        <td>${detailsText}</td>
+        <td>
+          <button class="secondary-button table-button view-audit-btn" data-index="${index}">Détails</button>
+        </td>
       </tr>
     `;
       })
@@ -1635,22 +1630,13 @@ async function loadAdminDashboard() {
     );
     const financeInputs = data.settings?.finance_inputs || {};
     setValue(
-      elements.serviceIncome,
-      financeInputs.serviceIncome ? String(financeInputs.serviceIncome) : "",
-    );
-    setValue(
       elements.weeklyProfit,
       financeInputs.weeklyProfit ? String(financeInputs.weeklyProfit) : "",
-    );
-    setValue(
-      elements.manualPayouts,
-      financeInputs.manualPayouts ? String(financeInputs.manualPayouts) : "",
     );
     setValue(
       elements.miscExpenses,
       financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "",
     );
-    setValue(elements.calcNote, financeInputs.calcNote || "");
     setValue(
       elements.partCost,
       String(Number(data.settings?.part_settings?.fixedCost || 105)),
@@ -2377,6 +2363,29 @@ async function saveNotes() {
   }
 }
 
+async function fireEmployee(id, name) {
+  if (!state.isAdmin || state.readOnly) return;
+  if (
+    !window.confirm(
+      `Es-tu sûr de vouloir congédier ${name} ? Toutes ses données seront supprimées définitivement.`,
+    )
+  )
+    return;
+
+  const response = await fetch(`/api/admin-employees/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  }).catch(() => null);
+
+  if (response?.ok) {
+    showToast(`${name} a été congédié.`);
+    await loadAdminDashboard();
+    updateAll();
+  } else {
+    showToast("Impossible de congédier l'employé.", true);
+  }
+}
+
 async function deleteContract(id) {
   if (state.readOnly || !window.confirm("Supprimer ce contrat ?")) return;
   const response = await fetch(`/api/admin-contracts/${id}`, {
@@ -2511,6 +2520,13 @@ elements.consumeBtn?.addEventListener("click", consumePart);
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
 });
+elements.closeAuditBtn?.addEventListener("click", () => {
+  if (elements.auditModal) elements.auditModal.style.display = "none";
+});
+elements.refreshAnalysisBtn?.addEventListener("click", () => {
+  updateAll();
+  showToast("Bilan rafraichi.");
+});
 elements.saveNotesBtn?.addEventListener("click", saveNotes);
 elements.rebootButtons.forEach((button) => {
   button.addEventListener("click", () =>
@@ -2568,6 +2584,9 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
+  const fireBtn = event.target.closest(".fire-btn");
+  if (fireBtn) return fireEmployee(fireBtn.dataset.id, fireBtn.dataset.name);
+
   const notesBtn = event.target.closest(".open-notes-btn");
   if (notesBtn)
     return openNotesModal(notesBtn.dataset.id, notesBtn.dataset.name);
@@ -2596,6 +2615,22 @@ elements.presenceBody?.addEventListener("click", (event) => {
   const forceButton = event.target.closest(".force-out-button");
   if (forceButton) {
     forcePunchOut(Number(forceButton.dataset.employeeIndex));
+  }
+});
+
+elements.auditBody?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".view-audit-btn");
+  if (btn) {
+    const index = Number(btn.dataset.index);
+    const log = auditLogs[index];
+    if (log) {
+      const details = log.details || {};
+      setHtml(
+        elements.auditModalContent,
+        escapeHtml(JSON.stringify(details, null, 2)),
+      );
+      if (elements.auditModal) elements.auditModal.style.display = "flex";
+    }
   }
 });
 

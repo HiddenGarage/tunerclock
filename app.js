@@ -58,9 +58,6 @@ const garageParts = [
   },
   { code: "suspension_parts", name: "Suspension Parts", category: "Entretien" },
   { code: "turbocharger", name: "Turbocharger", category: "Performance" },
-  { code: "ev_motor", name: "EV Motor", category: "Electrique" },
-  { code: "ev_battery", name: "EV Battery", category: "Electrique" },
-  { code: "ev_coolant", name: "EV Coolant", category: "Electrique" },
   {
     code: "lighting_controller",
     name: "Lighting Controller",
@@ -205,6 +202,11 @@ const elements = {
   consumePartQuantity: document.getElementById("consume-part-quantity"),
   consumePartNote: document.getElementById("consume-part-note"),
   consumeBtn: document.getElementById("consume-btn"),
+  adjustPartName: document.getElementById("adjust-part-name"),
+  btnPickAdjustPart: document.getElementById("btn-pick-adjust-part"),
+  adjustPartAction: document.getElementById("adjust-part-action"),
+  adjustPartQuantity: document.getElementById("adjust-part-quantity"),
+  adjustStockBtn: document.getElementById("adjust-stock-btn"),
   notesModal: document.getElementById("notes-modal"),
   notesModalTitle: document.getElementById("notes-modal-title"),
   notesText: document.getElementById("employee-notes-text"),
@@ -2363,6 +2365,42 @@ async function consumePart() {
   updateAll();
 }
 
+async function adjustStock() {
+  if (state.readOnly || !state.isAdmin) return;
+  const select = elements.adjustPartName;
+  if (!select || !select.value) {
+    showToast("Selectionne une piece a ajuster.", true);
+    return;
+  }
+
+  const itemCode = select.value;
+  const partObj = garageParts.find((p) => p.code === itemCode);
+  const partName = partObj ? partObj.name : itemCode;
+  const quantity = Math.max(1, Number(elements.adjustPartQuantity?.value || 1));
+  const action = elements.adjustPartAction?.value || "add";
+
+  const response = await fetch("/api/admin-adjust-stock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ itemCode, partName, quantity, action }),
+  }).catch(() => null);
+
+  if (!response?.ok) return showToast("Erreur lors de l'ajustement.", true);
+
+  const data = await response.json();
+  if (data.stock) inventoryStock = data.stock;
+  showToast(
+    `Stock ajusté (${action === "add" ? "+" : "-"}${quantity} ${partName}).`,
+  );
+  if (elements.adjustPartQuantity) elements.adjustPartQuantity.value = "1";
+  select.value = "";
+  if (elements.btnPickAdjustPart) {
+    elements.btnPickAdjustPart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
+  }
+  updateAll();
+}
+
 async function openNotesModal(id, name) {
   if (!state.isAdmin) return;
   currentNoteId = id;
@@ -2569,6 +2607,7 @@ elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.partQuantity?.addEventListener("input", renderPartPreview);
 elements.consumeBtn?.addEventListener("click", consumePart);
+elements.adjustStockBtn?.addEventListener("click", adjustStock);
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
 });
@@ -2602,6 +2641,14 @@ elements.btnPickConsumePart?.addEventListener("click", () => {
   if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
 });
 
+elements.btnPickAdjustPart?.addEventListener("click", () => {
+  activePartPickerTarget = "adjust";
+  if (elements.btnPickAll) elements.btnPickAll.style.display = "none";
+  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
+  renderPartPickerGrid("");
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
+});
+
 function selectPartFromPicker(code) {
   const part =
     code === "__all__"
@@ -2613,11 +2660,15 @@ function selectPartFromPicker(code) {
   const btn =
     activePartPickerTarget === "order"
       ? elements.btnPickPart
-      : elements.btnPickConsumePart;
+      : activePartPickerTarget === "adjust"
+        ? elements.btnPickAdjustPart
+        : elements.btnPickConsumePart;
   const input =
     activePartPickerTarget === "order"
       ? elements.partName
-      : elements.consumePartName;
+      : activePartPickerTarget === "adjust"
+        ? elements.adjustPartName
+        : elements.consumePartName;
 
   if (input) input.value = code;
   if (activePartPickerTarget === "order") syncSelectedPartCategory();

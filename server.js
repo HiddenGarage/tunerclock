@@ -1027,6 +1027,14 @@ async function sendFunnyForceOutMessage(discordId) {
     `<@${discordId}>, t'es comme une toune de Céline Dion : tu finis pu ! J'tai punch out moi même.`,
     `Semble-t-il que <@${discordId}> essaie de battre le record d'overtime... Pas aujourd'hui mon homme/ma grande, le bot t'a dompé !`,
     `<@${discordId}>, t'es tu en train de virer fou ou tu penses vraiment que la shop va tdonner une médaille si tu punch jamais out ? J't'ai flusher :).`,
+    // --- Nouvelles phrases ---
+    `Sois tu punch out toi même <@${discordId}> next time, soit qu'ont te charge un loyer...`,
+    `<@${discordId}>, t’es moins fiable qu’un jack de chez Canadian Tire en spécial. J'ai fermé ton temps, salut là !`,
+    `T'es aussi utile qu'un cendrier sur un motocross <@${discordId}>. Essaie de puncher par toi-même demain.`,
+    `C'est a cause du monde comme toi <@${discordId}> qui a des instructions sur les bouteilles de shampoing. C'est beau j'tai punch out.`,
+    `T'as-tu besoin d'une flèche néon ou d'une éducatrice spécialisée <@${discordId}> pour te montrer où est le bouton ? Punch out automatique fait. Décrisse.`,
+    `<@${discordId}>, t'es aussi mêlé qu'un jeu de cartes dans une sécheuse. J'ai punché pour toi.`,
+    `T'es aussi utile qu'un sac de sable dans l'désert <@${discordId}>. J'tai punch out.`
   ];
 
   const randomMsg = messages[Math.floor(Math.random() * messages.length)];

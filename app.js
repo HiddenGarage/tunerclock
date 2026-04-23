@@ -11,6 +11,7 @@ let liveTimerId = null;
 let currentNoteId = null;
 let adminLiveTimerId = null;
 let adminRefreshTimerId = null;
+let myRecentShifts = [];
 const chartState = {};
 const chartPalette = {
   text: "#e4e7eb",
@@ -219,6 +220,11 @@ const elements = {
   partPickerGrid: document.getElementById("part-picker-grid"),
   btnPickPart: document.getElementById("btn-pick-part"),
   btnPickConsumePart: document.getElementById("btn-pick-consume-part"),
+  btnPickAll: document.getElementById("btn-pick-all"),
+  pendingHours: document.getElementById("pending-hours"),
+  pendingPay: document.getElementById("pending-pay"),
+  personalHistoryBody: document.getElementById("personal-history-body"),
+  personalStatsSection: document.getElementById("personal-stats-section"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -445,31 +451,13 @@ let activePartPickerTarget = null;
 function renderPartPickerGrid(searchQuery = "") {
   if (!elements.partPickerGrid) return;
   const query = searchQuery.toLowerCase();
-
-  let html = "";
-
-  if (
-    activePartPickerTarget === "order" &&
-    "tout le catalogue".includes(query)
-  ) {
-    html += `
-      <div class="inventory-item-card picker-card" data-code="__all__" style="cursor: pointer; border-color: var(--teal);">
-        ${getPartIconMarkup("__all__", "Tout le catalogue")}
-        <div class="inventory-item-details" style="width: 100%;">
-          <strong>Tout le catalogue</strong>
-          <span>Lot complet</span>
-        </div>
-      </div>
-    `;
-  }
-
   const filtered = garageParts.filter(
     (p) =>
       p.name.toLowerCase().includes(query) ||
       p.category.toLowerCase().includes(query),
   );
 
-  html += filtered
+  const html = filtered
     .map(
       (part) => `
     <div class="inventory-item-card picker-card" data-code="${part.code}" style="cursor: pointer;">
@@ -1282,6 +1270,51 @@ function renderAuditLogs() {
   );
 }
 
+function renderPersonalDashboard() {
+  if (!state.loggedIn || !state.currentUser) {
+    if (elements.personalStatsSection)
+      elements.personalStatsSection.style.display = "none";
+    return;
+  }
+
+  if (elements.personalStatsSection)
+    elements.personalStatsSection.style.display = "";
+
+  const unpaidHours = state.currentUser.hours || 0;
+  const hourlyRate = state.currentUser.hourlyRate || 0;
+  const pendingPay = unpaidHours * hourlyRate;
+
+  setText(elements.pendingHours, formatHoursMinutes(unpaidHours));
+  setText(elements.pendingPay, formatMoney(pendingPay));
+
+  if (!elements.personalHistoryBody) return;
+  if (!myRecentShifts || myRecentShifts.length === 0) {
+    setHtml(
+      elements.personalHistoryBody,
+      `<tr><td colspan="4" class="muted" style="text-align: center;">Aucun historique récent.</td></tr>`,
+    );
+    return;
+  }
+
+  setHtml(
+    elements.personalHistoryBody,
+    myRecentShifts
+      .map((shift) => {
+        const start = new Date(shift.punched_in_at);
+        const end = new Date(shift.punched_out_at);
+        return `
+      <tr>
+        <td>${start.toLocaleDateString("fr-CA", { weekday: "short", day: "numeric", month: "short" })}</td>
+        <td>${start.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</td>
+        <td>${end.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</td>
+        <td><span class="mini-pill success">${formatHoursMinutes(shift.duration_hours)}</span></td>
+      </tr>
+    `;
+      })
+      .join(""),
+  );
+}
+
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
   setText(
@@ -1561,6 +1594,7 @@ function updateAll() {
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
+  renderPersonalDashboard();
   renderSimulation();
   startAdminLiveTimer();
   applyAccessControl();
@@ -1728,6 +1762,9 @@ async function loadMeState() {
     if (data.inventoryStock) {
       inventoryStock = data.inventoryStock;
     }
+    if (data.recentShifts) {
+      myRecentShifts = data.recentShifts;
+    }
   } catch (error) {
     console.error(error);
   }
@@ -1783,6 +1820,7 @@ async function loadAuthSession() {
       employees = [];
       expenses = [];
       shifts = [];
+      myRecentShifts = [];
       state.recordedPayouts = 0;
       setStatusDot(false);
     }
@@ -2024,6 +2062,7 @@ async function punchOut() {
     state.currentUser.activeDays += 1;
     state.currentUser.preferredShift =
       data.shiftPeriod || state.currentUser.preferredShift;
+    await loadMeState();
   } else {
     state.currentUser.hours += state.currentUser.todayHours;
     showToast(
@@ -2549,6 +2588,7 @@ elements.rebootButtons.forEach((button) => {
 
 elements.btnPickPart?.addEventListener("click", () => {
   activePartPickerTarget = "order";
+  if (elements.btnPickAll) elements.btnPickAll.style.display = "flex";
   if (elements.partPickerSearch) elements.partPickerSearch.value = "";
   renderPartPickerGrid("");
   if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
@@ -2556,27 +2596,19 @@ elements.btnPickPart?.addEventListener("click", () => {
 
 elements.btnPickConsumePart?.addEventListener("click", () => {
   activePartPickerTarget = "consume";
+  if (elements.btnPickAll) elements.btnPickAll.style.display = "none";
   if (elements.partPickerSearch) elements.partPickerSearch.value = "";
   renderPartPickerGrid("");
   if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
 });
 
-elements.closePartPicker?.addEventListener("click", () => {
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
-});
-
-elements.partPickerSearch?.addEventListener("input", (e) => {
-  renderPartPickerGrid(e.target.value);
-});
-
-elements.partPickerGrid?.addEventListener("click", (e) => {
-  const card = e.target.closest(".picker-card");
-  if (!card) return;
-  const code = card.dataset.code;
+function selectPartFromPicker(code) {
   const part =
     code === "__all__"
       ? { code: "__all__", name: "Tout le catalogue", isAll: true }
       : garageParts.find((p) => p.code === code);
+
+  if (!part) return;
 
   const btn =
     activePartPickerTarget === "order"
@@ -2594,6 +2626,24 @@ elements.partPickerGrid?.addEventListener("click", (e) => {
     btn.innerHTML = `${iconHtml.replace('class="part-icon"', 'class="part-icon btn-inline-icon"')} <span style="margin-left: 10px;">${escapeHtml(part.name)}</span>`;
   }
   if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
+}
+
+elements.closePartPicker?.addEventListener("click", () => {
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
+});
+
+elements.btnPickAll?.addEventListener("click", () => {
+  selectPartFromPicker("__all__");
+});
+
+elements.partPickerSearch?.addEventListener("input", (e) => {
+  renderPartPickerGrid(e.target.value);
+});
+
+elements.partPickerGrid?.addEventListener("click", (e) => {
+  const card = e.target.closest(".picker-card");
+  if (!card) return;
+  selectPartFromPicker(card.dataset.code);
 });
 
 elements.expenseBody?.addEventListener("click", (event) => {

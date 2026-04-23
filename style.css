@@ -1157,3 +1157,77 @@ select option {
   background-color: #1d2430;
   color: #ffffff;
 }
+
+.inventory-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.inventory-item-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition:
+    transform 0.2s,
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.inventory-item-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+  transform: translateY(-2px);
+}
+
+.inventory-item-card .part-icon {
+  width: 64px;
+  height: 64px;
+  padding: 8px;
+  margin-bottom: 12px;
+  background: rgba(14, 22, 33, 0.4);
+  border-radius: 8px;
+}
+
+.inventory-item-details strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-item-details span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 12px;
+}
+
+.btn-inline-icon {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 2px !important;
+  margin-bottom: 0 !important;
+  background: transparent !important;
+}
+
+.part-picker-btn-icon {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: var(--muted);
+}

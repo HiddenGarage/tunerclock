@@ -189,6 +189,7 @@ const elements = {
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item, .nav-category")),
   pages: Array.from(document.querySelectorAll(".app-page")),
+  mobileNavItems: Array.from(document.querySelectorAll(".mobile-nav-item")),
   recrutementsBody: document.getElementById("recrutements-body"),
   recrutementBadge: document.getElementById("recrutement-badge"),
   inventoryBody: document.getElementById("inventory-body"),
@@ -514,6 +515,10 @@ function applyAccessControl() {
   elements.navItems.forEach((item) => {
     const adminOnly = item.dataset.adminOnly === "true";
     item.classList.toggle("hidden", adminOnly && !state.isAdmin);
+  });
+  elements.mobileNavItems.forEach((item) => {
+    const adminOnly = item.dataset.adminOnly === "true";
+    item.classList.toggle("hidden", adminOnly && !state.isAdmin);
 
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
@@ -584,6 +589,9 @@ function routeToCurrentPage() {
   }
 
   elements.navItems.forEach((item) =>
+    item.classList.toggle("active", item.dataset.route === route),
+  );
+  elements.mobileNavItems.forEach((item) =>
     item.classList.toggle("active", item.dataset.route === route),
   );
   elements.pages.forEach((page) =>

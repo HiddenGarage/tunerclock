@@ -18,6 +18,7 @@ const {
   TextInputBuilder,
   TextInputStyle,
   ChannelType,
+  MessageFlags,
 } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const {
@@ -430,7 +431,9 @@ async function publishRecruitmentEmbed() {
       .setDescription(
         "Nous sommes a la recherche de nouveaux talents passionnes par la mecanique !\n\nClique sur le bouton ci-dessous pour remplir le formulaire de candidature. Sois honnete et detaille tes reponses.\n\n*La direction etudiera ton profil et te contactera par message prive.*",
       )
-      .setImage("https://r2.fivemanage.com/eTqhuQe6RYlbhSLrET7bS/GIF/ST-1(LQ).gif") // Image generique de garage (optionnelle)
+      .setImage(
+        "https://r2.fivemanage.com/eTqhuQe6RYlbhSLrET7bS/GIF/ST-1(LQ).gif",
+      ) // Image generique de garage (optionnelle)
       .setFooter({ text: "Recrutement | Santos Tuners" })
       .setTimestamp();
 
@@ -487,6 +490,7 @@ function startDiscordBot() {
       });
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
+      publishRecruitmentEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -521,7 +525,7 @@ function startDiscordBot() {
           interaction.user.username;
 
         if (interaction.commandName === "in") {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
           const result = await punchInDiscordUser(
             interaction.user.id,
             displayName,
@@ -536,7 +540,7 @@ function startDiscordBot() {
         }
 
         if (interaction.commandName === "out") {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
           const result = await punchOutDiscordUser(interaction.user.id);
           await interaction.editReply(
             `Sortie enregistree. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`,
@@ -545,7 +549,7 @@ function startDiscordBot() {
         }
 
         if (interaction.commandName === "paye") {
-          await interaction.deferReply({ ephemeral: true });
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
           const summary = await getPaySummaryForDiscordUser(
             interaction.user.id,
           );
@@ -625,7 +629,7 @@ function startDiscordBot() {
         )
           return;
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
         const supabase = getSupabase();
         const { data: employee, error: employeeError } = await supabase
           .from("employees")
@@ -731,7 +735,7 @@ function startDiscordBot() {
         interaction.isModalSubmit() &&
         interaction.customId === "tc_apply_modal"
       ) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
         const q1 = interaction.fields.getTextInputValue("q1");
         const q2 = interaction.fields.getTextInputValue("q2");
         const q3 = interaction.fields.getTextInputValue("q3");
@@ -805,16 +809,26 @@ function startDiscordBot() {
         );
       }
     } catch (error) {
+      // Ignore silencieusement les erreurs de double interaction
+      if (
+        error.code === 40060 ||
+        error.code === 10062 ||
+        error.message.includes("acknowledged")
+      ) {
+        return;
+      }
       console.error("Interaction Discord impossible:", error.message);
       if (interaction.deferred || interaction.replied) {
         await interaction
           .editReply(`Erreur TunersHub: ${error.message}`)
           .catch(() => {});
       } else {
-        await interaction.reply({
-          content: `Erreur TunersHub: ${error.message}`,
-          ephemeral: true,
-        });
+        await interaction
+          .reply({
+            content: `Erreur TunersHub: ${error.message}`,
+            flags: [MessageFlags.Ephemeral],
+          })
+          .catch(() => {});
       }
     }
   });

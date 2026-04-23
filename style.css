@@ -292,7 +292,8 @@ a {
 
 .primary-button,
 .secondary-button,
-.danger-button {
+.danger-button,
+.success-button {
   min-height: 48px;
   padding: 12px 18px;
   border-radius: 4px;
@@ -311,7 +312,8 @@ a {
 
 .primary-button:hover,
 .secondary-button:hover,
-.danger-button:hover {
+.danger-button:hover,
+.success-button:hover {
   transform: translateY(-1px);
 }
 
@@ -323,6 +325,16 @@ a {
 
 .primary-button:hover {
   background: var(--red-hover);
+}
+
+.success-button {
+  color: #ffffff;
+  background: var(--teal);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
+
+.success-button:hover {
+  background: #3d8c40;
 }
 
 .secondary-button {

@@ -172,6 +172,39 @@
             </div>
           </div>
         </article>
+
+        <div id="personal-stats-section" class="dashboard-grid" style="margin-top: 22px; display: none;">
+          <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div class="card-head" style="margin-bottom: 0;">
+              <div>
+                <h3>Ma Cagnotte</h3>
+                <p class="muted">Heures validées en attente.</p>
+              </div>
+              <span class="mini-pill">À payer</span>
+            </div>
+            <div style="margin-top: auto; padding-top: 1rem;">
+              <p class="section-kicker">Montant estimé</p>
+              <h3 id="pending-pay" style="font-size: 2.8rem; color: var(--text); margin-bottom: 4px;">0$</h3>
+              <p class="muted" style="margin-top: 0;">Soit <strong id="pending-hours" style="color: var(--text);">0h 00m</strong> de travail cumulé.</p>
+            </div>
+          </article>
+
+          <article class="card card-span-2">
+            <div class="card-head">
+              <div>
+                <h3>Mes derniers shifts</h3>
+                <p class="muted">Historique de tes 5 dernières séances de travail.</p>
+              </div>
+              <span class="mini-pill success">Terminés</span>
+            </div>
+            <div class="table-wrap" style="margin-top: 1rem;">
+              <table>
+                <thead><tr><th>Date</th><th>Entrée</th><th>Sortie</th><th>Durée totale</th></tr></thead>
+                <tbody id="personal-history-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section id="page-stats" class="app-page stats-page">
@@ -675,8 +708,11 @@
         </div>
         <button id="close-part-picker" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
       </div>
-      <div class="field" style="margin-bottom: 1rem; flex-shrink: 0;">
-        <input type="text" id="part-picker-search" placeholder="Rechercher une pièce par nom ou catégorie..." style="background: rgba(0,0,0,0.4);">
+      <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-shrink: 0; align-items: center;">
+        <div class="field" style="flex-grow: 1; margin-bottom: 0;">
+          <input type="text" id="part-picker-search" placeholder="Rechercher une pièce par nom ou catégorie..." style="background: rgba(0,0,0,0.4);">
+        </div>
+        <button id="btn-pick-all" class="primary-button" style="display: none; min-height: 48px; padding: 12px 18px;">Lot Complet</button>
       </div>
       <div id="part-picker-grid" class="inventory-card-grid" style="overflow-y: auto; padding-right: 8px; flex-grow: 1; align-content: flex-start;"></div>
     </div>

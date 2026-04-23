@@ -56,32 +56,15 @@ const garageParts = [
     category: "Entretien",
   },
   { code: "suspension_parts", name: "Suspension Parts", category: "Entretien" },
-  { code: "i4_engine", name: "I4 Engine", category: "Moteur" },
-  { code: "v6_engine", name: "V6 Engine", category: "Moteur" },
-  { code: "v8_engine", name: "V8 Engine", category: "Moteur" },
-  { code: "v12_engine", name: "V12 Engine", category: "Moteur" },
   { code: "turbocharger", name: "Turbocharger", category: "Performance" },
   { code: "ev_motor", name: "EV Motor", category: "Electrique" },
   { code: "ev_battery", name: "EV Battery", category: "Electrique" },
   { code: "ev_coolant", name: "EV Coolant", category: "Electrique" },
-  { code: "awd_drivetrain", name: "AWD Drivetrain", category: "Transmission" },
-  { code: "rwd_drivetrain", name: "RWD Drivetrain", category: "Transmission" },
-  { code: "fwd_drivetrain", name: "FWD Drivetrain", category: "Transmission" },
-  { code: "slick_tyres", name: "Slick Tyres", category: "Pneus" },
-  { code: "semi_slick_tyres", name: "Semi Slick Tyres", category: "Pneus" },
-  { code: "offroad_tyres", name: "Offroad Tyres", category: "Pneus" },
-  {
-    code: "drift_tuning_kit",
-    name: "Drift Tuning Kit",
-    category: "Performance",
-  },
-  { code: "ceramic_brakes", name: "Ceramic Brakes", category: "Performance" },
   {
     code: "lighting_controller",
     name: "Lighting Controller",
     category: "Cosmetique",
   },
-  { code: "stancing_kit", name: "Stancer Kit", category: "Cosmetique" },
   { code: "cosmetic_part", name: "Cosmetic Parts", category: "Cosmetique" },
   { code: "respray_kit", name: "Respray Kit", category: "Cosmetique" },
   {
@@ -90,19 +73,7 @@ const garageParts = [
     category: "Cosmetique",
   },
   { code: "tyre_smoke_kit", name: "Tyre Smoke Kit", category: "Cosmetique" },
-  { code: "bulletproof_tyres", name: "Bulletproof Tyres", category: "Pneus" },
   { code: "extras_kit", name: "Extras Kit", category: "Cosmetique" },
-  { code: "nitrous_bottle", name: "Nitrous Bottle", category: "Nitro" },
-  {
-    code: "empty_nitrous_bottle",
-    name: "Empty Nitrous Bottle",
-    category: "Nitro",
-  },
-  {
-    code: "nitrous_install_kit",
-    name: "Nitrous Install Kit",
-    category: "Nitro",
-  },
   { code: "cleaning_kit", name: "Cleaning Kit", category: "Atelier" },
   { code: "repair_kit", name: "Repair Kit", category: "Atelier" },
   { code: "duct_tape", name: "Duct Tape", category: "Atelier" },
@@ -112,7 +83,6 @@ const garageParts = [
     category: "Performance",
   },
   { code: "mechanic_tablet", name: "Mechanic Tablet", category: "Outils" },
-  { code: "manual_gearbox", name: "Manual Gearbox", category: "Transmission" },
 ];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -243,6 +213,12 @@ const elements = {
   auditModal: document.getElementById("audit-modal"),
   auditModalContent: document.getElementById("audit-modal-content"),
   closeAuditBtn: document.getElementById("close-audit-modal"),
+  partPickerModal: document.getElementById("part-picker-modal"),
+  closePartPicker: document.getElementById("close-part-picker"),
+  partPickerSearch: document.getElementById("part-picker-search"),
+  partPickerGrid: document.getElementById("part-picker-grid"),
+  btnPickPart: document.getElementById("btn-pick-part"),
+  btnPickConsumePart: document.getElementById("btn-pick-consume-part"),
 };
 
 const doughnutCenterTextPlugin = {
@@ -382,32 +358,6 @@ function getRoleRate(roleName) {
   return numberOrDefault(state.roleRates[normaliseRole(roleName)], 0);
 }
 
-function populatePartOptions() {
-  if (!elements.partName || elements.partName.dataset.loaded === "true") return;
-  const options = garageParts.map(
-    (part) =>
-      `<option value="${part.code}" data-category="${part.category}">${part.name}</option>`,
-  );
-
-  if (elements.partName) {
-    elements.partName.innerHTML = [
-      `<option value="">Selectionner une piece</option>`,
-      `<option value="__all__" data-category="Lot complet">Tout le catalogue</option>`,
-      ...options,
-    ].join("");
-  }
-  elements.partName.dataset.loaded = "true";
-
-  if (elements.consumePartName) {
-    elements.consumePartName.innerHTML = [
-      `<option value="">Selectionner une piece</option>`,
-      ...options,
-    ].join("");
-  }
-
-  syncSelectedPartCategory();
-}
-
 function getSelectedPart() {
   const selectedCode = elements.partName?.value || "";
   if (selectedCode === "__all__") {
@@ -487,6 +437,56 @@ function renderPartPreview() {
       </div>
     </div>
   `,
+  );
+}
+
+let activePartPickerTarget = null;
+
+function renderPartPickerGrid(searchQuery = "") {
+  if (!elements.partPickerGrid) return;
+  const query = searchQuery.toLowerCase();
+
+  let html = "";
+
+  if (
+    activePartPickerTarget === "order" &&
+    "tout le catalogue".includes(query)
+  ) {
+    html += `
+      <div class="inventory-item-card picker-card" data-code="__all__" style="cursor: pointer; border-color: var(--teal);">
+        ${getPartIconMarkup("__all__", "Tout le catalogue")}
+        <div class="inventory-item-details" style="width: 100%;">
+          <strong>Tout le catalogue</strong>
+          <span>Lot complet</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const filtered = garageParts.filter(
+    (p) =>
+      p.name.toLowerCase().includes(query) ||
+      p.category.toLowerCase().includes(query),
+  );
+
+  html += filtered
+    .map(
+      (part) => `
+    <div class="inventory-item-card picker-card" data-code="${part.code}" style="cursor: pointer;">
+      ${getPartIconMarkup(part.code, part.name)}
+      <div class="inventory-item-details" style="width: 100%;">
+        <strong>${escapeHtml(part.name)}</strong>
+        <span>${escapeHtml(part.category)}</span>
+      </div>
+    </div>
+  `,
+    )
+    .join("");
+
+  setHtml(
+    elements.partPickerGrid,
+    html ||
+      `<p class="muted" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Aucune pièce trouvée.</p>`,
   );
 }
 
@@ -1168,17 +1168,23 @@ function renderInventory() {
         stockPill = `<span class="mini-pill warning">${currentStock} (Bas)</span>`;
 
       return `
-      <tr>
-        <td>${getPartIconMarkup(part.code, part.name)}</td>
-        <td>${escapeHtml(part.name)}</td>
-        <td>${escapeHtml(part.category)}</td>
-        <td>${stockPill}</td>
-      </tr>
+      <div class="inventory-item-card">
+        ${getPartIconMarkup(part.code, part.name)}
+        <div class="inventory-item-details" style="width: 100%;">
+          <strong>${escapeHtml(part.name)}</strong>
+          <span>${escapeHtml(part.category)}</span>
+          <div style="margin-top: 8px;">${stockPill}</div>
+        </div>
+      </div>
     `;
     })
     .join("");
 
-  setHtml(elements.inventoryBody, html);
+  setHtml(
+    elements.inventoryBody,
+    html ||
+      `<p class="muted" style="grid-column: 1/-1; text-align: center;">Aucune pièce configurée.</p>`,
+  );
 }
 
 function renderLeaderboard() {
@@ -2100,6 +2106,9 @@ async function addExpense() {
   setValue(elements.partCategory, "");
   setValue(elements.partNote, "");
   syncSelectedPartCategory();
+  if (elements.btnPickPart) {
+    elements.btnPickPart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
+  }
   showToast(
     `Commande ajoutee: ${selectedPart.isAll ? `${totalUnits} pieces au total` : `${quantity} x ${selectedPart.name}`}.`,
   );
@@ -2286,7 +2295,8 @@ async function consumePart() {
   }
 
   const itemCode = select.value;
-  const partName = select.options[select.selectedIndex].text;
+  const partObj = garageParts.find((p) => p.code === itemCode);
+  const partName = partObj ? partObj.name : itemCode;
   const quantity = Math.max(
     1,
     Number(elements.consumePartQuantity?.value || 1),
@@ -2308,6 +2318,9 @@ async function consumePart() {
   if (elements.consumePartQuantity) elements.consumePartQuantity.value = "1";
   if (elements.consumePartNote) elements.consumePartNote.value = "";
   select.value = "";
+  if (elements.btnPickConsumePart) {
+    elements.btnPickConsumePart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
+  }
   updateAll();
 }
 
@@ -2534,6 +2547,55 @@ elements.rebootButtons.forEach((button) => {
   );
 });
 
+elements.btnPickPart?.addEventListener("click", () => {
+  activePartPickerTarget = "order";
+  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
+  renderPartPickerGrid("");
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
+});
+
+elements.btnPickConsumePart?.addEventListener("click", () => {
+  activePartPickerTarget = "consume";
+  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
+  renderPartPickerGrid("");
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
+});
+
+elements.closePartPicker?.addEventListener("click", () => {
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
+});
+
+elements.partPickerSearch?.addEventListener("input", (e) => {
+  renderPartPickerGrid(e.target.value);
+});
+
+elements.partPickerGrid?.addEventListener("click", (e) => {
+  const card = e.target.closest(".picker-card");
+  if (!card) return;
+  const code = card.dataset.code;
+  const part =
+    code === "__all__"
+      ? { code: "__all__", name: "Tout le catalogue", isAll: true }
+      : garageParts.find((p) => p.code === code);
+
+  const btn =
+    activePartPickerTarget === "order"
+      ? elements.btnPickPart
+      : elements.btnPickConsumePart;
+  const input =
+    activePartPickerTarget === "order"
+      ? elements.partName
+      : elements.consumePartName;
+
+  if (input) input.value = code;
+  if (activePartPickerTarget === "order") syncSelectedPartCategory();
+  if (btn) {
+    const iconHtml = getPartIconMarkup(code, part.name);
+    btn.innerHTML = `${iconHtml.replace('class="part-icon"', 'class="part-icon btn-inline-icon"')} <span style="margin-left: 10px;">${escapeHtml(part.name)}</span>`;
+  }
+  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
+});
+
 elements.expenseBody?.addEventListener("click", (event) => {
   const deleteButton = event.target.closest(".delete-expense-button");
   if (!deleteButton) return;
@@ -2651,6 +2713,5 @@ elements.auditBody?.addEventListener("click", (event) => {
 
 window.addEventListener("hashchange", routeToCurrentPage);
 
-populatePartOptions();
 updateAll();
 loadAuthSession();

@@ -596,6 +596,28 @@
             </div>
             <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
           </article>
+
+          <article class="card" data-admin-only="true">
+            <div class="card-head">
+              <div>
+                <h3>Ajustement Manuel</h3>
+                <p class="muted">Ajouter ou retirer du stock sans créer de dépense.</p>
+              </div>
+              <span class="mini-pill danger">Admin</span>
+            </div>
+            <div class="form-grid" style="grid-template-columns: 1fr;">
+              <div class="field"><label class="input-label">Piece</label>
+                <input type="hidden" id="adjust-part-name">
+                <button type="button" id="btn-pick-adjust-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
+                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
+                </button>
+              </div>
+              <div class="field"><label class="input-label">Action</label><select id="adjust-part-action"><option value="add">Ajouter au stock (+)</option><option value="remove">Retirer du stock (-)</option></select></div>
+              <div class="field"><label class="input-label">Quantite</label><input id="adjust-part-quantity" type="number" min="1" step="1" value="1"></div>
+            </div>
+            <div class="parts-actions" style="margin-top: 1rem;"><button id="adjust-stock-btn" class="primary-button" style="width: 100%;">Confirmer l'ajustement</button></div>
+          </article>
+
         </div>
       </section>
 

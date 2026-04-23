@@ -345,7 +345,10 @@
             <div class="form-grid parts-form-grid">
               <div class="field">
                 <label for="part-name" class="input-label">Piece</label>
-                <select id="part-name"></select>
+                <input type="hidden" id="part-name">
+                <button type="button" id="btn-pick-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
+                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
+                </button>
               </div>
               <div class="field">
                 <label for="part-quantity" class="input-label">Nombre de pieces</label>
@@ -538,12 +541,7 @@
               </div>
               <span class="mini-pill">Inventaire</span>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Icone</th><th>Piece</th><th>Categorie</th><th>En stock</th></tr></thead>
-                <tbody id="inventory-body"></tbody>
-              </table>
-            </div>
+            <div id="inventory-body" class="inventory-card-grid" style="margin-top: 1rem;"></div>
           </article>
 
           <article class="card">
@@ -554,7 +552,12 @@
               </div>
             </div>
             <div class="form-grid" style="grid-template-columns: 1fr;">
-              <div class="field"><label class="input-label">Piece utilisee</label><select id="consume-part-name"></select></div>
+              <div class="field"><label class="input-label">Piece utilisee</label>
+                <input type="hidden" id="consume-part-name">
+                <button type="button" id="btn-pick-consume-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
+                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
+                </button>
+              </div>
               <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
               <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
             </div>
@@ -660,6 +663,22 @@
       <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
         <button id="close-audit-modal" class="secondary-button">Fermer</button>
       </div>
+    </div>
+  </div>
+
+  <div id="part-picker-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <div class="card-head" style="flex-shrink: 0; margin-bottom: 1rem;">
+        <div>
+          <h3>Catalogue de pièces</h3>
+          <p class="muted">Recherche et sélectionne une pièce avec son image.</p>
+        </div>
+        <button id="close-part-picker" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
+      </div>
+      <div class="field" style="margin-bottom: 1rem; flex-shrink: 0;">
+        <input type="text" id="part-picker-search" placeholder="Rechercher une pièce par nom ou catégorie..." style="background: rgba(0,0,0,0.4);">
+      </div>
+      <div id="part-picker-grid" class="inventory-card-grid" style="overflow-y: auto; padding-right: 8px; flex-grow: 1; align-content: flex-start;"></div>
     </div>
   </div>
 

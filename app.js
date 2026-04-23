@@ -353,6 +353,14 @@ function formatHoursMinutes(hoursValue) {
   return `${hours}h ${String(minutes).padStart(2, "0")}m`;
 }
 
+function formatHoursMinutesSeconds(hoursValue) {
+  const totalSeconds = Math.max(0, Math.round(Number(hoursValue || 0) * 3600));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+}
+
 function formatCompactHours(hoursValue) {
   return `${Number(hoursValue || 0).toFixed(1)}h`;
 }
@@ -652,8 +660,8 @@ function updateLivePunchMetrics() {
     setText(
       elements.todayHours,
       state.currentUser
-        ? formatHoursMinutes(state.currentUser.todayHours)
-        : "0h 00m",
+        ? formatHoursMinutesSeconds(state.currentUser.todayHours)
+        : "0h 00m 00s",
     );
     setText(
       elements.todayPay,
@@ -668,7 +676,7 @@ function updateLivePunchMetrics() {
 
   const elapsedHours = (Date.now() - activeShiftStartedAt) / 3600000;
   state.currentUser.todayHours = elapsedHours;
-  setText(elements.todayHours, formatHoursMinutes(elapsedHours));
+  setText(elements.todayHours, formatHoursMinutesSeconds(elapsedHours));
   setText(
     elements.todayPay,
     formatMoney(elapsedHours * state.currentUser.hourlyRate),
@@ -1017,7 +1025,7 @@ function renderPresenceList() {
         <td>${employee.name}</td>
         <td>${employee.roleName}</td>
         <td>${entryLabel}</td>
-        <td>${formatHoursMinutes(liveHours)}</td>
+        <td>${formatHoursMinutesSeconds(liveHours)}</td>
         <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
         <td><span class="${status.className}">${status.label}</span></td>
         <td><span class="${reminder.className}">${reminder.label}</span></td>
@@ -1288,7 +1296,7 @@ function renderShiftState() {
     setText(elements.shiftBadge, "Hors service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
     setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
-    setText(elements.todayHours, "0h 00m");
+    setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
     if (elements.punchIn) elements.punchIn.disabled = true;
     if (elements.punchOut) elements.punchOut.disabled = true;

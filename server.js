@@ -173,8 +173,7 @@ const DEFAULT_RADIO_PLAYLISTS = [
   {
     id: "default",
     name: "Tuner Mix",
-    cover:
-      "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+    cover: "logo/playlist.svg",
     tracks: DEFAULT_RADIO_TRACKS,
   },
 ];
@@ -1985,8 +1984,7 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
         {
           id: "default",
           name: "Tuner Mix",
-          cover:
-            "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+          cover: "logo/playlist.svg",
           tracks: settings.radio_tracks,
         },
       ];
@@ -2203,8 +2201,7 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
         {
           id: "default",
           name: "Tuner Mix",
-          cover:
-            "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+          cover: "logo/playlist.svg",
           tracks: settings.radio_tracks,
         },
       ];

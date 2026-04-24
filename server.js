@@ -1517,6 +1517,63 @@ function startReminderMonitor() {
   setTimeout(scanLongActiveShifts, 15000);
 }
 
+async function scanInactivity() {
+  if (!process.env.DISCORD_BOT_TOKEN) return;
+  try {
+    const supabase = getSupabase();
+    const { data: employees } = await supabase.from("employees").select("*").eq("is_active", false);
+    if (!employees || employees.length === 0) return;
+    const { data: shifts } = await supabase.from("shifts").select("*").order("punched_in_at", { ascending: false });
+    
+    const settings = await getSettingsMap(supabase);
+    const alertsSent = settings.inactivity_alerts || {};
+    let stateChanged = false;
+
+    for (const emp of employees) {
+      const empShifts = shifts?.filter(s => s.employee_id === emp.id) || [];
+      if (empShifts.length === 0) continue;
+      const lastShiftDate = new Date(Math.max(...empShifts.map(s => new Date(s.punched_in_at).getTime())));
+      const daysInactive = Math.floor((Date.now() - lastShiftDate.getTime()) / (1000 * 3600 * 24));
+      
+      if (daysInactive > 3) {
+        const lastAlert = alertsSent[emp.id];
+        // Alerte si jamais alerté, ou si la dernière alerte remonte à plus de 3 jours
+        if (!lastAlert || (Date.now() - new Date(lastAlert).getTime() > 3 * 24 * 3600 * 1000)) {
+          const bosses = ["893278269170933810", "417605116070461442"];
+          const embed = new EmbedBuilder()
+            .setColor(0xd94b4b)
+            .setTitle("⚠️ Alerte Inactivité")
+            .setDescription(`L'employé **${emp.discord_name}** n'a pas pris son service depuis plus de 3 jours.`)
+            .addFields(
+              { name: "Jours d'inactivité", value: \`${daysInactive} jours\`, inline: true },
+              { name: "Dernier service", value: lastShiftDate.toLocaleDateString('fr-CA'), inline: true }
+            )
+            .setTimestamp();
+            
+          for (const bossId of bosses) {
+            await sendDiscordDmPayload(bossId, { embeds: [embed] });
+          }
+          alertsSent[emp.id] = new Date().toISOString();
+          stateChanged = true;
+        }
+      } else if (daysInactive <= 3 && alertsSent[emp.id]) {
+        delete alertsSent[emp.id];
+        stateChanged = true;
+      }
+    }
+    if (stateChanged) {
+      await upsertSetting(supabase, "inactivity_alerts", alertsSent);
+    }
+  } catch (error) {
+    console.error("Scan inactivité impossible:", error.message);
+  }
+}
+
+function startInactivityMonitor() {
+  setInterval(scanInactivity, 12 * 60 * 60 * 1000); // Scanne aux 12 heures
+  setTimeout(scanInactivity, 60000); // 1 minute après redémarrage
+}
+
 function startKeepAliveMonitor() {
   if (!KEEPALIVE_ENABLED || !KEEPALIVE_URL || keepAliveMonitorId) {
     if (!KEEPALIVE_ENABLED) console.log("Keep-alive desactive.");
@@ -3071,6 +3128,7 @@ app.get("*", (req, res) => {
 
 startDiscordBot();
 startReminderMonitor();
+startInactivityMonitor();
 startKeepAliveMonitor();
 
 app.listen(PORT, () => {

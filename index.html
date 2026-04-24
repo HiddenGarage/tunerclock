@@ -9,7 +9,8 @@
   <title>TunersHub | Centre de gestion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="logo/TurboPunch.png">
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -41,6 +42,9 @@
         <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
+        <div class="nav-category">Détente</div>
+        <a href="#radio" class="nav-item" data-route="radio">Musique (Radio)</a>
+
         <div class="nav-category" data-admin-only="true" data-hidden-gerant="true">Système</div>
         <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Registre</a>
         <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Système</a>
@@ -568,6 +572,34 @@
         </div>
       </section>
 
+      <section id="page-radio" class="app-page radio-page">
+        <div class="spotify-header card">
+          <img src="https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80" alt="Playlist Cover" class="spotify-cover">
+          <div class="spotify-header-info">
+            <span>PLAYLIST GARAGE</span>
+            <h1>Tuner Mix</h1>
+            <p class="muted">La meilleure sélection de sons pour travailler sur les gamos. Clique sur "Copier" pour l'écouter in-game !</p>
+            <div class="spotify-actions">
+              <button id="play-all-btn" class="spotify-play-btn">▶</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card spotify-tracklist-card">
+          <div class="spotify-tracklist">
+            <div class="spotify-tracklist-header">
+              <div>#</div>
+              <div>Titre</div>
+              <div>Artiste</div>
+              <div style="text-align: right;">Action</div>
+            </div>
+            <div id="spotify-tracks-body">
+              <!-- Pistes injectées ici -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="page-inventaire" class="app-page inventaire-page">
         <div class="dashboard-grid">
           <article class="card card-span-2">
@@ -765,9 +797,32 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
       <span>Équipe</span>
     </a>
+    <a href="#radio" class="mobile-nav-item" data-route="radio">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
+      <span>Musique</span>
+    </a>
   </nav>
 
   <div id="toast" class="toast hidden"></div>
+
+  <div id="bottom-player" class="bottom-player">
+    <div class="player-left">
+      <img id="player-cover" src="https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=150&q=80" alt="Cover">
+      <div class="player-info">
+        <strong id="player-title">Aucune lecture</strong>
+        <span id="player-artist">-</span>
+      </div>
+    </div>
+    <div class="player-center">
+      <button id="player-prev-btn" class="player-icon-btn">⏮</button>
+      <button id="player-play-btn" class="player-play-pause">▶</button>
+      <button id="player-next-btn" class="player-icon-btn">⏭</button>
+    </div>
+    <div class="player-right">
+      <button id="player-copy-btn" class="primary-button copy-link-btn">🔗 Copier pour FiveM</button>
+    </div>
+    <div id="yt-player-container" style="display:none;"></div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>

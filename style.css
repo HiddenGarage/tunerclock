@@ -513,10 +513,14 @@ a {
 
 /* SPOTIFY RADIO STYLES */
 .radio-page {
-  display: flex;
   flex-direction: column;
   gap: 22px;
 }
+
+.radio-page.active-page {
+  display: flex;
+}
+
 .spotify-header {
   display: flex;
   align-items: flex-end;
@@ -568,10 +572,14 @@ a {
   transition:
     transform 0.2s,
     background 0.2s;
+  padding-left: 4px; /* Centrage optique du triangle (Play) */
 }
 .spotify-play-btn:hover {
   transform: scale(1.05);
   background: #3d8c40;
+}
+.spotify-play-btn.playing {
+  padding-left: 0; /* Retire le décalage pour l'icône Pause */
 }
 .spotify-tracklist-card {
   padding: 0;
@@ -1123,6 +1131,10 @@ td {
   justify-content: center;
   font-size: 1.2rem;
   cursor: pointer;
+  padding-left: 4px; /* Centrage optique du triangle (Play) */
+}
+.player-play-pause.playing {
+  padding-left: 0; /* Retire le décalage pour l'icône Pause */
 }
 .player-right {
   width: 30%;

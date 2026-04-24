@@ -113,6 +113,62 @@ const GARAGE_PART_CODES = [
   "performance_part",
   "mechanic_tablet",
 ];
+const DEFAULT_RADIO_TRACKS = [
+  {
+    id: "DpYP_erIPoU",
+    title: "SCH - Autobahn (Clip officiel)",
+    artist: "SCH",
+    link: "https://www.youtube.com/watch?v=DpYP_erIPoU&list=RDDpYP_erIPoU&start_radio=1",
+  },
+  {
+    id: "AAgZAZZQXrE",
+    title: "Ninho - Jefe (Clip officiel)",
+    artist: "Ninho",
+    link: "https://www.youtube.com/watch?v=AAgZAZZQXrE",
+  },
+  {
+    id: "ShvtQKwtZV0",
+    title: "Gazo - DIE",
+    artist: "Gazo",
+    link: "https://www.youtube.com/watch?v=ShvtQKwtZV0&list=RDShvtQKwtZV0&start_radio=1&pp=oAcB",
+  },
+  {
+    id: "UladhaGCmL0",
+    title: "Leto - Macaroni (feat. Ninho)",
+    artist: "Leto",
+    link: "https://www.youtube.com/watch?v=UladhaGCmL0&list=RDUladhaGCmL0&start_radio=1&pp=oAcB",
+  },
+  {
+    id: "r7eFY9YYTdE",
+    title: "Ninho - Eurostar",
+    artist: "Ninho",
+    link: "https://www.youtube.com/watch?v=r7eFY9YYTdE",
+  },
+  {
+    id: "BuRtcHbZI74",
+    title: "PLK - Petrouchka",
+    artist: "PLK",
+    link: "https://www.youtube.com/watch?v=BuRtcHbZI74",
+  },
+  {
+    id: "0MOkLkTP-Jk",
+    title: "Gazo - CELINE 3X",
+    artist: "Gazo",
+    link: "https://www.youtube.com/watch?v=0MOkLkTP-Jk",
+  },
+  {
+    id: "O50Ln3oM2JI",
+    title: "Werenoi - Laboratoire",
+    artist: "Werenoi",
+    link: "https://www.youtube.com/watch?v=O50Ln3oM2JI",
+  },
+  {
+    id: "tSCDOl5O6lI",
+    title: "Zola - Amber",
+    artist: "Zola",
+    link: "https://www.youtube.com/watch?v=tSCDOl5O6lI",
+  },
+];
 
 const SYSTEM_WEBHOOK_URL =
   "https://discord.com/api/webhooks/1496910730417537316/YV3-cS7_kcckxMC7IhYnRK5bj02dqoSoonLJ7e3Y5gCvoZ5_61k15Oj9Tc6xUwdrPooU";
@@ -1920,6 +1976,7 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
       recentShifts,
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
+      radioTracks: settings.radio_tracks || DEFAULT_RADIO_TRACKS,
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2128,6 +2185,7 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
       recruitments: settings.recruitments_list || [],
+      radioTracks: settings.radio_tracks || DEFAULT_RADIO_TRACKS,
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2675,6 +2733,53 @@ app.post("/api/admin-adjust-stock", requireAdmin, async (req, res) => {
     });
 
     res.json({ ok: true, stock });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-radio-tracks", requireAuth, async (req, res) => {
+  try {
+    if (!req.session.isAdmin || req.session.isSupervision) {
+      return res.status(403).send("Acces refuse.");
+    }
+    const { title, artist, link } = req.body;
+    if (!link) return res.status(400).send("Lien manquant.");
+
+    let trackId = "UNKNOWN_" + Date.now();
+    const urlMatch = link.match(/(?:v=|youtu\.be\/)([^&?]+)/);
+    if (urlMatch && urlMatch[1]) trackId = urlMatch[1];
+
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const tracks = settings.radio_tracks || DEFAULT_RADIO_TRACKS;
+
+    const newTrack = {
+      id: trackId,
+      title: title || "Titre inconnu",
+      artist: artist || "Artiste inconnu",
+      link,
+    };
+    tracks.push(newTrack);
+
+    await upsertSetting(supabase, "radio_tracks", tracks);
+    res.json({ ok: true, tracks });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.delete("/api/admin-radio-tracks/:id", requireAuth, async (req, res) => {
+  try {
+    if (!req.session.isAdmin || req.session.isSupervision) {
+      return res.status(403).send("Acces refuse.");
+    }
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    let tracks = settings.radio_tracks || DEFAULT_RADIO_TRACKS;
+    tracks = tracks.filter((t) => t.id !== req.params.id);
+    await upsertSetting(supabase, "radio_tracks", tracks);
+    res.json({ ok: true, tracks });
   } catch (error) {
     res.status(500).send(error.message);
   }

@@ -2634,6 +2634,38 @@ app.delete("/api/admin-employees/:id", requireAdminAccess, async (req, res) => {
       for (const bossId of bosses) {
         await sendDiscordDm(bossId, msgBoss);
       }
+
+      try {
+        if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
+          const guild = discordClient.guilds.cache.get(
+            process.env.DISCORD_GUILD_ID,
+          );
+          if (guild) {
+            const member = await guild.members
+              .fetch(employee.discord_id)
+              .catch(() => null);
+            if (member) {
+              const roleDef = ROLE_DEFINITIONS.find(
+                (r) => r.name === employee.role,
+              );
+              if (roleDef && roleDef.id) {
+                await member.roles.remove(roleDef.id).catch(() => null);
+              }
+              await member.roles
+                .remove("1496901938216828938")
+                .catch(() => null); // Role "En service"
+              await member.roles
+                .remove("1496902369743605851")
+                .catch(() => null); // Role "Hors service"
+
+              const clientRoleId = "1487852582922616952";
+              await member.roles.add(clientRoleId).catch(() => null);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erreur retrait roles discord:", err.message);
+      }
     }
 
     const { error } = await supabase

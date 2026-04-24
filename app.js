@@ -1651,7 +1651,7 @@ function renderRadioPlaylistsSidebar() {
       const isActive = pl.id === activePlaylistId;
       return `
       <div class="playlist-card ${isActive ? "active" : ""}" data-id="${escapeHtml(pl.id)}">
-        <img src="${escapeHtml(pl.cover || "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=150&q=80")}" alt="Cover">
+        <img src="${escapeHtml(pl.cover || "logo/playlist.svg")}" alt="Cover">
         <div class="playlist-card-info">
           <strong>${escapeHtml(pl.name)}</strong>
           <span>${pl.tracks.length} sons</span>
@@ -1676,10 +1676,7 @@ function renderRadioPlaylist() {
 
   const coverEl = document.getElementById("active-playlist-cover");
   const nameEl = document.getElementById("active-playlist-name");
-  if (coverEl)
-    coverEl.src =
-      activePlaylist.cover ||
-      "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=300&q=80";
+  if (coverEl) coverEl.src = activePlaylist.cover || "logo/playlist.svg";
   if (nameEl) nameEl.textContent = activePlaylist.name;
 
   if (!elements.spotifyTracksBody) return;
@@ -3036,9 +3033,7 @@ document.getElementById("add-playlist-btn")?.addEventListener("click", () => {
   if (state.isSupervision) return;
   const name = prompt("Nom de la nouvelle playlist ?");
   if (!name) return;
-  const cover =
-    prompt("Lien de l'image de couverture (optionnel) ?") ||
-    "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=300&q=80";
+  const cover = "logo/playlist.svg";
 
   const newPl = {
     id: "pl_" + Date.now(),

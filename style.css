@@ -568,14 +568,10 @@ a {
   transition:
     transform 0.2s,
     background 0.2s;
-  padding-left: 4px;
 }
 .spotify-play-btn:hover {
   transform: scale(1.05);
   background: #3d8c40;
-}
-.spotify-play-btn.playing {
-  padding-left: 0;
 }
 .spotify-tracklist-card {
   padding: 0;
@@ -1127,10 +1123,6 @@ td {
   justify-content: center;
   font-size: 1.2rem;
   cursor: pointer;
-  padding-left: 4px;
-}
-.player-play-pause.playing {
-  padding-left: 0;
 }
 .player-right {
   width: 30%;

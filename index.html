@@ -574,30 +574,41 @@
       </section>
 
       <section id="page-radio" class="app-page radio-page">
-        <div class="spotify-header card">
-          <img src="https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80" alt="Playlist Cover" class="spotify-cover">
-          <div class="spotify-header-info">
-            <span>PLAYLIST GARAGE</span>
-            <h1>Tuner Mix</h1>
-            <p class="muted">La meilleure sélection de sons pour travailler sur les gamos. Clique sur "Copier" pour l'écouter in-game !</p>
-            <div class="spotify-actions">
-              <button id="play-all-btn" class="spotify-play-btn">▶</button>
+        <div class="spotify-container">
+          <div class="spotify-header">
+            <img src="https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80" alt="Playlist Cover" class="spotify-cover">
+            <div class="spotify-header-info">
+              <span>PLAYLIST GARAGE</span>
+              <h1>Tuner Mix</h1>
+              <p style="color: #b3b3b3;">Les meilleurs radios pour travailler sur les crachoire au garage . Clique sur l'icône de copie, turn la switch dla TV pi colle le lien !</p>
             </div>
           </div>
-        </div>
 
-        <div class="card spotify-tracklist-card">
+          <div class="spotify-controls-bar">
+            <button id="play-all-btn" class="spotify-play-btn">▶</button>
+          </div>
+
           <div class="spotify-tracklist">
             <div class="spotify-tracklist-header">
-              <div>#</div>
-              <div>Titre</div>
-              <div>Artiste</div>
-              <div style="text-align: right;">Action</div>
+              <div class="track-number">#</div>
+              <div class="track-info-col">Titre</div>
+              <div class="track-actions-col" style="text-align: right;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
             </div>
             <div id="spotify-tracks-body">
               <!-- Pistes injectées ici -->
             </div>
           </div>
+
+          <div class="spotify-admin-panel" data-admin-only="true">
+            <h3>Ajouter une musique (Admin)</h3>
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; align-items: end;">
+              <div class="field"><label class="input-label" style="color: #b3b3b3;">Titre</label><input type="text" id="track-title" placeholder="Ex: Ninho - Eurostar" style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
+              <div class="field"><label class="input-label" style="color: #b3b3b3;">Artiste</label><input type="text" id="track-artist" placeholder="Ex: Ninho" style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
+              <div class="field"><label class="input-label" style="color: #b3b3b3;">Lien YouTube</label><input type="text" id="track-link" placeholder="https://www.youtube.com/watch?v=..." style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
+              <button id="add-track-btn" class="success-button" style="min-height: 48px; border-radius: 30px; font-size: 0.9rem;">Ajouter</button>
+            </div>
+          </div>
+        </div>
         </div>
       </section>
 

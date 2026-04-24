@@ -169,6 +169,15 @@ const DEFAULT_RADIO_TRACKS = [
     link: "https://www.youtube.com/watch?v=tSCDOl5O6lI",
   },
 ];
+const DEFAULT_RADIO_PLAYLISTS = [
+  {
+    id: "default",
+    name: "Tuner Mix",
+    cover:
+      "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+    tracks: DEFAULT_RADIO_TRACKS,
+  },
+];
 
 const SYSTEM_WEBHOOK_URL =
   "https://discord.com/api/webhooks/1496910730417537316/YV3-cS7_kcckxMC7IhYnRK5bj02dqoSoonLJ7e3Y5gCvoZ5_61k15Oj9Tc6xUwdrPooU";
@@ -1970,13 +1979,26 @@ app.get("/api/me-state", requireAuth, async (req, res) => {
     }
 
     const settings = await getSettingsMap(supabase);
+    let radioPlaylists = settings.radio_playlists;
+    if (!radioPlaylists && settings.radio_tracks) {
+      radioPlaylists = [
+        {
+          id: "default",
+          name: "Tuner Mix",
+          cover:
+            "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+          tracks: settings.radio_tracks,
+        },
+      ];
+    }
+
     res.json({
       employee,
       activeShift,
       recentShifts,
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
-      radioTracks: settings.radio_tracks || DEFAULT_RADIO_TRACKS,
+      radioPlaylists: radioPlaylists || DEFAULT_RADIO_PLAYLISTS,
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2175,6 +2197,19 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
     if (profitsResult.error) throw profitsResult.error;
     if (shiftsResult.error) throw shiftsResult.error;
 
+    let radioPlaylists = settings.radio_playlists;
+    if (!radioPlaylists && settings.radio_tracks) {
+      radioPlaylists = [
+        {
+          id: "default",
+          name: "Tuner Mix",
+          cover:
+            "https://images.unsplash.com/photo-1600861194942-f883de0dfe96?auto=format&fit=crop&w=300&q=80",
+          tracks: settings.radio_tracks,
+        },
+      ];
+    }
+
     res.json({
       employees,
       expenses: expensesResult.data || [],
@@ -2185,7 +2220,7 @@ app.get("/api/admin-dashboard", requireAdminAccess, async (req, res) => {
       contracts: settings.contracts_list || [],
       inventoryStock: settings.inventory_stock || {},
       recruitments: settings.recruitments_list || [],
-      radioTracks: settings.radio_tracks || DEFAULT_RADIO_TRACKS,
+      radioPlaylists: radioPlaylists || DEFAULT_RADIO_PLAYLISTS,
     });
   } catch (error) {
     res.status(500).send(error.message);
@@ -2738,48 +2773,17 @@ app.post("/api/admin-adjust-stock", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/admin-radio-tracks", requireAuth, async (req, res) => {
+app.post("/api/radio/playlists", requireAuth, async (req, res) => {
   try {
-    if (!req.session.isAdmin || req.session.isSupervision) {
-      return res.status(403).send("Acces refuse.");
-    }
-    const { title, artist, link } = req.body;
-    if (!link) return res.status(400).send("Lien manquant.");
-
-    let trackId = "UNKNOWN_" + Date.now();
-    const urlMatch = link.match(/(?:v=|youtu\.be\/)([^&?]+)/);
-    if (urlMatch && urlMatch[1]) trackId = urlMatch[1];
-
-    const supabase = getSupabase();
-    const settings = await getSettingsMap(supabase);
-    const tracks = settings.radio_tracks || DEFAULT_RADIO_TRACKS;
-
-    const newTrack = {
-      id: trackId,
-      title: title || "Titre inconnu",
-      artist: artist || "Artiste inconnu",
-      link,
-    };
-    tracks.push(newTrack);
-
-    await upsertSetting(supabase, "radio_tracks", tracks);
-    res.json({ ok: true, tracks });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
-app.delete("/api/admin-radio-tracks/:id", requireAuth, async (req, res) => {
-  try {
-    if (!req.session.isAdmin || req.session.isSupervision) {
-      return res.status(403).send("Acces refuse.");
+    if (req.session.isSupervision)
+      return res.status(403).send("Lecture seule.");
+    const playlists = req.body.playlists;
+    if (!Array.isArray(playlists)) {
+      return res.status(400).send("Format invalide.");
     }
     const supabase = getSupabase();
-    const settings = await getSettingsMap(supabase);
-    let tracks = settings.radio_tracks || DEFAULT_RADIO_TRACKS;
-    tracks = tracks.filter((t) => t.id !== req.params.id);
-    await upsertSetting(supabase, "radio_tracks", tracks);
-    res.json({ ok: true, tracks });
+    await upsertSetting(supabase, "radio_playlists", playlists);
+    res.json({ ok: true, playlists });
   } catch (error) {
     res.status(500).send(error.message);
   }

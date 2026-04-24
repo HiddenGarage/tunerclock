@@ -39,6 +39,7 @@ const routes = [
   "logs",
   "inventaire",
   "reboot",
+  "radio",
 ];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const garageParts = [
@@ -104,6 +105,7 @@ const pageTitles = {
   contrats: "Contrats",
   logs: "Registre",
   reboot: "Système",
+  radio: "Musique",
 };
 
 const state = {
@@ -228,7 +230,47 @@ const elements = {
   pendingPay: document.getElementById("pending-pay"),
   personalHistoryBody: document.getElementById("personal-history-body"),
   personalStatsSection: document.getElementById("personal-stats-section"),
+  // Radio
+  spotifyTracksBody: document.getElementById("spotify-tracks-body"),
+  playerTitle: document.getElementById("player-title"),
+  playerArtist: document.getElementById("player-artist"),
+  bottomPlayer: document.getElementById("bottom-player"),
+  ytPlayerContainer: document.getElementById("yt-player-container"),
+  playerPlayBtn: document.getElementById("player-play-btn"),
+  playerPrevBtn: document.getElementById("player-prev-btn"),
+  playerNextBtn: document.getElementById("player-next-btn"),
+  playerCopyBtn: document.getElementById("player-copy-btn"),
+  playAllBtn: document.getElementById("play-all-btn"),
 };
+
+const playlistTracks = [
+  {
+    id: "DpYP_erIPoU",
+    title: "SCH - Autobahn (Mix)",
+    artist: "Playlist YouTube",
+    link: "https://www.youtube.com/watch?v=DpYP_erIPoU&list=RDDpYP_erIPoU&start_radio=1",
+  },
+  {
+    id: "AAgZAZZQXrE",
+    title: "Ninho - Jefe",
+    artist: "Ninho",
+    link: "https://www.youtube.com/watch?v=AAgZAZZQXrE",
+  },
+  {
+    id: "ShvtQKwtZV0",
+    title: "Gazo - DIE (Mix)",
+    artist: "Playlist YouTube",
+    link: "https://www.youtube.com/watch?v=ShvtQKwtZV0&list=RDShvtQKwtZV0&start_radio=1&pp=oAcB",
+  },
+  {
+    id: "UladhaGCmL0",
+    title: "Leto - Macaroni (Mix)",
+    artist: "Playlist YouTube",
+    link: "https://www.youtube.com/watch?v=UladhaGCmL0&list=RDUladhaGCmL0&start_radio=1&pp=oAcB",
+  },
+];
+let currentTrackIndex = -1;
+let isPlayingWeb = false;
 
 const doughnutCenterTextPlugin = {
   id: "doughnutCenterText",
@@ -571,6 +613,7 @@ function routeToCurrentPage() {
       "pointage",
       "inventaire",
       "contrats",
+      "radio",
     ];
     if (!allowedRoutes.includes(route)) {
       route = "tableau";
@@ -580,7 +623,7 @@ function routeToCurrentPage() {
     }
   } else if (
     !state.isAdmin &&
-    !["pointage", "contrats", "inventaire"].includes(route)
+    !["pointage", "contrats", "inventaire", "radio"].includes(route)
   ) {
     route = "pointage";
     if (window.location.hash !== "#pointage") {
@@ -1589,6 +1632,75 @@ function drawTrendChart() {
   });
 }
 
+function renderRadioPlaylist() {
+  if (!elements.spotifyTracksBody) return;
+  elements.spotifyTracksBody.innerHTML = playlistTracks
+    .map((track, index) => {
+      const isActive = index === currentTrackIndex;
+      return `
+      <div class="spotify-track-row ${isActive ? "active-track" : ""}" data-index="${index}">
+        <div>${isActive && isPlayingWeb ? "🎧" : index + 1}</div>
+        <div class="track-title">${escapeHtml(track.title)}</div>
+        <div class="track-artist">${escapeHtml(track.artist)}</div>
+        <div style="text-align: right;">
+          <button class="secondary-button track-action-btn copy-single-track" data-link="${escapeHtml(track.link)}">Copier</button>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
+function playTrack(index) {
+  if (index < 0 || index >= playlistTracks.length) return;
+  currentTrackIndex = index;
+  isPlayingWeb = true;
+  const track = playlistTracks[index];
+
+  if (elements.playerTitle) elements.playerTitle.textContent = track.title;
+  if (elements.playerArtist) elements.playerArtist.textContent = track.artist;
+  if (elements.bottomPlayer) elements.bottomPlayer.classList.add("active");
+  document.body.style.paddingBottom = "90px"; // Laisse de la place pour le lecteur
+
+  const embedUrl = `https://www.youtube.com/embed/${track.id}?autoplay=1`;
+  if (elements.ytPlayerContainer)
+    elements.ytPlayerContainer.innerHTML = `<iframe width="10" height="10" src="${embedUrl}" allow="autoplay" style="display:none;"></iframe>`;
+
+  if (elements.playerPlayBtn) {
+    elements.playerPlayBtn.textContent = "⏸";
+    elements.playerPlayBtn.classList.add("playing");
+  }
+  if (elements.playAllBtn) {
+    elements.playAllBtn.textContent = "⏸";
+    elements.playAllBtn.classList.add("playing");
+  }
+  renderRadioPlaylist();
+}
+
+function pauseTrack() {
+  isPlayingWeb = false;
+  if (elements.ytPlayerContainer) elements.ytPlayerContainer.innerHTML = "";
+  if (elements.playerPlayBtn) {
+    elements.playerPlayBtn.textContent = "▶";
+    elements.playerPlayBtn.classList.remove("playing");
+  }
+  if (elements.playAllBtn) {
+    elements.playAllBtn.textContent = "▶";
+    elements.playAllBtn.classList.remove("playing");
+  }
+  renderRadioPlaylist();
+}
+
+function togglePlay() {
+  if (currentTrackIndex === -1) {
+    playTrack(0);
+  } else if (isPlayingWeb) {
+    pauseTrack();
+  } else {
+    playTrack(currentTrackIndex);
+  }
+}
+
 function updateAll() {
   applyAccessControl();
   routeToCurrentPage();
@@ -1607,6 +1719,7 @@ function updateAll() {
   renderPersonalDashboard();
   renderSimulation();
   startAdminLiveTimer();
+  renderRadioPlaylist();
   applyAccessControl();
 }
 
@@ -2818,6 +2931,38 @@ elements.auditBody?.addEventListener("click", (event) => {
   elements.simWeeklyParts,
 ].forEach((element) => {
   element?.addEventListener("input", queueFinanceSave);
+});
+
+elements.spotifyTracksBody?.addEventListener("click", (e) => {
+  const copyBtn = e.target.closest(".copy-single-track");
+  if (copyBtn) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(copyBtn.dataset.link);
+    showToast("Lien YouTube copié ! (Prêt pour la radio FiveM)");
+    return;
+  }
+  const row = e.target.closest(".spotify-track-row");
+  if (row) {
+    const idx = Number(row.dataset.index);
+    if (idx === currentTrackIndex && isPlayingWeb) pauseTrack();
+    else playTrack(idx);
+  }
+});
+
+elements.playerPlayBtn?.addEventListener("click", togglePlay);
+elements.playAllBtn?.addEventListener("click", togglePlay);
+elements.playerPrevBtn?.addEventListener("click", () => {
+  if (currentTrackIndex > 0) playTrack(currentTrackIndex - 1);
+});
+elements.playerNextBtn?.addEventListener("click", () => {
+  if (currentTrackIndex < playlistTracks.length - 1)
+    playTrack(currentTrackIndex + 1);
+});
+elements.playerCopyBtn?.addEventListener("click", () => {
+  if (currentTrackIndex !== -1) {
+    navigator.clipboard.writeText(playlistTracks[currentTrackIndex].link);
+    showToast("Lien de la musique copié ! (Prêt pour la radio FiveM)");
+  }
 });
 
 window.addEventListener("hashchange", routeToCurrentPage);

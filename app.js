@@ -247,7 +247,9 @@ const elements = {
   trackLinkInput: document.getElementById("track-link"),
 };
 
-let playlistTracks = [];
+let radioPlaylists = [];
+let activePlaylistId = null;
+let currentPlaylistIdPlaying = null;
 let currentTrackIndex = -1;
 let isPlayingWeb = false;
 
@@ -1641,25 +1643,67 @@ function drawTrendChart() {
   });
 }
 
+function renderRadioPlaylistsSidebar() {
+  const container = document.getElementById("playlists-body");
+  if (!container) return;
+  container.innerHTML = radioPlaylists
+    .map((pl) => {
+      const isActive = pl.id === activePlaylistId;
+      return `
+      <div class="playlist-card ${isActive ? "active" : ""}" data-id="${escapeHtml(pl.id)}">
+        <img src="${escapeHtml(pl.cover || "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=150&q=80")}" alt="Cover">
+        <div class="playlist-card-info">
+          <strong>${escapeHtml(pl.name)}</strong>
+          <span>${pl.tracks.length} sons</span>
+        </div>
+        <div class="playlist-card-actions">
+          <button class="spotify-icon-btn delete-playlist-btn" data-id="${escapeHtml(pl.id)}" title="Supprimer" style="color: #e63946;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        </div>
+      </div>
+    `;
+    })
+    .join("");
+}
+
 function renderRadioPlaylist() {
+  const activePlaylist = radioPlaylists.find((p) => p.id === activePlaylistId);
+  if (!activePlaylist) {
+    if (elements.spotifyTracksBody) elements.spotifyTracksBody.innerHTML = "";
+    return;
+  }
+
+  const coverEl = document.getElementById("active-playlist-cover");
+  const nameEl = document.getElementById("active-playlist-name");
+  if (coverEl)
+    coverEl.src =
+      activePlaylist.cover ||
+      "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=300&q=80";
+  if (nameEl) nameEl.textContent = activePlaylist.name;
+
   if (!elements.spotifyTracksBody) return;
-  elements.spotifyTracksBody.innerHTML = playlistTracks
+  elements.spotifyTracksBody.innerHTML = activePlaylist.tracks
     .map((track, index) => {
-      const isActive = index === currentTrackIndex;
-      const adminHtml =
-        state.isAdmin && !state.isSupervision
-          ? `<button class="spotify-icon-btn delete-single-track" data-id="${escapeHtml(track.id)}" title="Supprimer de la playlist"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`
-          : "";
+      const isPlayingThisTrack =
+        currentPlaylistIdPlaying === activePlaylist.id &&
+        index === currentTrackIndex &&
+        isPlayingWeb;
+      const isActiveTrack =
+        currentPlaylistIdPlaying === activePlaylist.id &&
+        index === currentTrackIndex;
 
       return `
-      <div class="spotify-track-row ${isActive ? "active-track" : ""}" data-index="${index}">
-        <div class="track-number">${isActive && isPlayingWeb ? "🎧" : index + 1}</div>
+      <div class="spotify-track-row ${isActiveTrack ? "active-track" : ""}" data-index="${index}">
+        <div class="track-number">${isPlayingThisTrack ? "🎧" : index + 1}</div>
         <div class="track-info-col">
           <div class="track-title">${escapeHtml(track.title)}</div>
           <div class="track-artist">${escapeHtml(track.artist)}</div>
         </div>
         <div class="track-actions-col">
-          ${adminHtml}
+          <button class="spotify-icon-btn move-up-track" data-index="${index}" title="Monter"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg></button>
+          <button class="spotify-icon-btn move-down-track" data-index="${index}" title="Descendre"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+          <button class="spotify-icon-btn delete-single-track" data-index="${index}" title="Supprimer de la playlist"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
           <button class="spotify-icon-btn copy-single-track" data-link="${escapeHtml(track.link)}" title="Copier le lien YouTube">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
           </button>
@@ -1670,11 +1714,15 @@ function renderRadioPlaylist() {
     .join("");
 }
 
-function playTrack(index) {
-  if (index < 0 || index >= playlistTracks.length) return;
+function playTrack(index, playlistId = activePlaylistId) {
+  const pl = radioPlaylists.find((p) => p.id === playlistId);
+  if (!pl) return;
+  if (index < 0 || index >= pl.tracks.length) return;
+
   currentTrackIndex = index;
+  currentPlaylistIdPlaying = playlistId;
   isPlayingWeb = true;
-  const track = playlistTracks[index];
+  const track = pl.tracks[index];
 
   if (elements.playerTitle) elements.playerTitle.textContent = track.title;
   if (elements.playerArtist) elements.playerArtist.textContent = track.artist;
@@ -1711,12 +1759,18 @@ function pauseTrack() {
 }
 
 function togglePlay() {
-  if (currentTrackIndex === -1) {
-    playTrack(0);
+  const pl = radioPlaylists.find((p) => p.id === activePlaylistId);
+  if (!pl || pl.tracks.length === 0) return;
+
+  if (
+    currentPlaylistIdPlaying !== activePlaylistId ||
+    currentTrackIndex === -1
+  ) {
+    playTrack(0, activePlaylistId);
   } else if (isPlayingWeb) {
     pauseTrack();
   } else {
-    playTrack(currentTrackIndex);
+    playTrack(currentTrackIndex, activePlaylistId);
   }
 }
 
@@ -1739,6 +1793,7 @@ function updateAll() {
   renderSimulation();
   startAdminLiveTimer();
   renderRadioPlaylist();
+  renderRadioPlaylistsSidebar();
   applyAccessControl();
 }
 
@@ -1853,8 +1908,11 @@ async function loadAdminDashboard() {
       );
       if (matching) state.currentUser = matching;
     }
-    if (data.radioTracks) {
-      playlistTracks = data.radioTracks;
+    if (data.radioPlaylists) {
+      radioPlaylists = data.radioPlaylists;
+      if (!activePlaylistId && radioPlaylists.length > 0) {
+        activePlaylistId = radioPlaylists[0].id;
+      }
     }
   } catch (error) {
     console.error(error);
@@ -1910,8 +1968,11 @@ async function loadMeState() {
     if (data.recentShifts) {
       myRecentShifts = data.recentShifts;
     }
-    if (data.radioTracks) {
-      playlistTracks = data.radioTracks;
+    if (data.radioPlaylists) {
+      radioPlaylists = data.radioPlaylists;
+      if (!activePlaylistId && radioPlaylists.length > 0) {
+        activePlaylistId = radioPlaylists[0].id;
+      }
     }
   } catch (error) {
     console.error(error);
@@ -2958,30 +3019,103 @@ elements.auditBody?.addEventListener("click", (event) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 
+async function saveRadioPlaylists() {
+  try {
+    await fetch("/api/radio/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ playlists: radioPlaylists }),
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+document.getElementById("add-playlist-btn")?.addEventListener("click", () => {
+  if (state.isSupervision) return;
+  const name = prompt("Nom de la nouvelle playlist ?");
+  if (!name) return;
+  const cover =
+    prompt("Lien de l'image de couverture (optionnel) ?") ||
+    "https://images.unsplash.com/photo-1614680376593-902f7410d2e7?auto=format&fit=crop&w=300&q=80";
+
+  const newPl = {
+    id: "pl_" + Date.now(),
+    name,
+    cover,
+    tracks: [],
+  };
+  radioPlaylists.push(newPl);
+  activePlaylistId = newPl.id;
+  renderRadioPlaylistsSidebar();
+  renderRadioPlaylist();
+  saveRadioPlaylists();
+});
+
+document.getElementById("playlists-body")?.addEventListener("click", (e) => {
+  if (state.isSupervision) return;
+  const deleteBtn = e.target.closest(".delete-playlist-btn");
+  if (deleteBtn) {
+    e.stopPropagation();
+    if (!window.confirm("Supprimer cette playlist ?")) return;
+    radioPlaylists = radioPlaylists.filter(
+      (p) => p.id !== deleteBtn.dataset.id,
+    );
+    if (activePlaylistId === deleteBtn.dataset.id) {
+      activePlaylistId =
+        radioPlaylists.length > 0 ? radioPlaylists[0].id : null;
+    }
+    renderRadioPlaylistsSidebar();
+    renderRadioPlaylist();
+    saveRadioPlaylists();
+    return;
+  }
+
+  const card = e.target.closest(".playlist-card");
+  if (card) {
+    activePlaylistId = card.dataset.id;
+    renderRadioPlaylistsSidebar();
+    renderRadioPlaylist();
+  }
+});
+
 elements.addTrackBtn?.addEventListener("click", async () => {
-  if (!state.isAdmin || state.isSupervision) return;
+  if (state.isSupervision) return;
+  if (!activePlaylistId)
+    return showToast("Sélectionne une playlist d'abord.", true);
+
   const title = elements.trackTitleInput?.value;
   const artist = elements.trackArtistInput?.value;
   const link = elements.trackLinkInput?.value;
   if (!link) return showToast("Le lien YouTube est obligatoire.", true);
 
-  const response = await fetch("/api/admin-radio-tracks", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ title, artist, link }),
-  });
-  if (response.ok) {
-    const data = await response.json();
-    playlistTracks = data.tracks;
-    if (elements.trackTitleInput) elements.trackTitleInput.value = "";
-    if (elements.trackArtistInput) elements.trackArtistInput.value = "";
-    if (elements.trackLinkInput) elements.trackLinkInput.value = "";
-    showToast("Musique ajoutée !");
-    renderRadioPlaylist();
-  } else {
-    showToast("Erreur lors de l'ajout.", true);
-  }
+  // Extracteur FIABLE de l'ID YouTube (gère les liens web, mobiles et les Shorts)
+  let trackId = null;
+  const match = link.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([^&?]+)/,
+  );
+  if (match && match[1]) trackId = match[1];
+  else return showToast("Lien YouTube invalide.", true);
+
+  const newTrack = {
+    id: trackId,
+    title: title || "Titre inconnu",
+    artist: artist || "Artiste inconnu",
+    link,
+  };
+
+  const pl = radioPlaylists.find((p) => p.id === activePlaylistId);
+  if (pl) pl.tracks.push(newTrack);
+
+  if (elements.trackTitleInput) elements.trackTitleInput.value = "";
+  if (elements.trackArtistInput) elements.trackArtistInput.value = "";
+  if (elements.trackLinkInput) elements.trackLinkInput.value = "";
+  showToast("Musique ajoutée !");
+
+  renderRadioPlaylist();
+  renderRadioPlaylistsSidebar();
+  saveRadioPlaylists();
 });
 
 elements.spotifyTracksBody?.addEventListener("click", (e) => {
@@ -2992,45 +3126,75 @@ elements.spotifyTracksBody?.addEventListener("click", (e) => {
     showToast("Lien YouTube copié ! (Prêt pour la radio FiveM)");
     return;
   }
+
+  const pl = radioPlaylists.find((p) => p.id === activePlaylistId);
+  if (!pl || state.isSupervision) return;
+
   const delBtn = e.target.closest(".delete-single-track");
   if (delBtn) {
     e.stopPropagation();
-    if (!state.isAdmin || state.isSupervision) return;
     if (!window.confirm("Supprimer cette musique de la playlist ?")) return;
-    const trackId = delBtn.dataset.id;
-    fetch(`/api/admin-radio-tracks/${trackId}`, {
-      method: "DELETE",
-      credentials: "include",
-    }).then(async (res) => {
-      if (res.ok) {
-        const data = await res.json();
-        playlistTracks = data.tracks;
-        showToast("Musique supprimée.");
-        renderRadioPlaylist();
-      }
-    });
+    const idx = Number(delBtn.dataset.index);
+    pl.tracks.splice(idx, 1);
+    renderRadioPlaylist();
+    renderRadioPlaylistsSidebar();
+    saveRadioPlaylists();
+    return;
+  }
+  const moveUp = e.target.closest(".move-up-track");
+  if (moveUp) {
+    e.stopPropagation();
+    const idx = Number(moveUp.dataset.index);
+    if (idx > 0) {
+      const temp = pl.tracks[idx];
+      pl.tracks[idx] = pl.tracks[idx - 1];
+      pl.tracks[idx - 1] = temp;
+      renderRadioPlaylist();
+      saveRadioPlaylists();
+    }
+    return;
+  }
+  const moveDown = e.target.closest(".move-down-track");
+  if (moveDown) {
+    e.stopPropagation();
+    const idx = Number(moveDown.dataset.index);
+    if (idx < pl.tracks.length - 1) {
+      const temp = pl.tracks[idx];
+      pl.tracks[idx] = pl.tracks[idx + 1];
+      pl.tracks[idx + 1] = temp;
+      renderRadioPlaylist();
+      saveRadioPlaylists();
+    }
     return;
   }
   const row = e.target.closest(".spotify-track-row");
   if (row) {
     const idx = Number(row.dataset.index);
-    if (idx === currentTrackIndex && isPlayingWeb) pauseTrack();
-    else playTrack(idx);
+    if (
+      currentPlaylistIdPlaying === activePlaylistId &&
+      idx === currentTrackIndex &&
+      isPlayingWeb
+    )
+      pauseTrack();
+    else playTrack(idx, activePlaylistId);
   }
 });
 
 elements.playerPlayBtn?.addEventListener("click", togglePlay);
 elements.playAllBtn?.addEventListener("click", togglePlay);
 elements.playerPrevBtn?.addEventListener("click", () => {
-  if (currentTrackIndex > 0) playTrack(currentTrackIndex - 1);
+  if (currentTrackIndex > 0)
+    playTrack(currentTrackIndex - 1, currentPlaylistIdPlaying);
 });
 elements.playerNextBtn?.addEventListener("click", () => {
-  if (currentTrackIndex < playlistTracks.length - 1)
-    playTrack(currentTrackIndex + 1);
+  const pl = radioPlaylists.find((p) => p.id === currentPlaylistIdPlaying);
+  if (pl && currentTrackIndex < pl.tracks.length - 1)
+    playTrack(currentTrackIndex + 1, currentPlaylistIdPlaying);
 });
 elements.playerCopyBtn?.addEventListener("click", () => {
   if (currentTrackIndex !== -1) {
-    navigator.clipboard.writeText(playlistTracks[currentTrackIndex].link);
+    const pl = radioPlaylists.find((p) => p.id === currentPlaylistIdPlaying);
+    if (pl) navigator.clipboard.writeText(pl.tracks[currentTrackIndex].link);
     showToast("Lien de la musique copié ! (Prêt pour la radio FiveM)");
   }
 });

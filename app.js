@@ -241,34 +241,13 @@ const elements = {
   playerNextBtn: document.getElementById("player-next-btn"),
   playerCopyBtn: document.getElementById("player-copy-btn"),
   playAllBtn: document.getElementById("play-all-btn"),
+  addTrackBtn: document.getElementById("add-track-btn"),
+  trackTitleInput: document.getElementById("track-title"),
+  trackArtistInput: document.getElementById("track-artist"),
+  trackLinkInput: document.getElementById("track-link"),
 };
 
-const playlistTracks = [
-  {
-    id: "DpYP_erIPoU",
-    title: "SCH - Autobahn (Clip officiel)",
-    artist: "SCH",
-    link: "https://www.youtube.com/watch?v=DpYP_erIPoU&list=RDDpYP_erIPoU&start_radio=1",
-  },
-  {
-    id: "AAgZAZZQXrE",
-    title: "Ninho - Jefe (Clip officiel)",
-    artist: "Ninho",
-    link: "https://www.youtube.com/watch?v=AAgZAZZQXrE",
-  },
-  {
-    id: "ShvtQKwtZV0",
-    title: "Gazo - DIE",
-    artist: "Gazo",
-    link: "https://www.youtube.com/watch?v=ShvtQKwtZV0&list=RDShvtQKwtZV0&start_radio=1&pp=oAcB",
-  },
-  {
-    id: "UladhaGCmL0",
-    title: "Leto - Macaroni (feat. Ninho)",
-    artist: "Leto",
-    link: "https://www.youtube.com/watch?v=UladhaGCmL0&list=RDUladhaGCmL0&start_radio=1&pp=oAcB",
-  },
-];
+let playlistTracks = [];
 let currentTrackIndex = -1;
 let isPlayingWeb = false;
 
@@ -1667,13 +1646,23 @@ function renderRadioPlaylist() {
   elements.spotifyTracksBody.innerHTML = playlistTracks
     .map((track, index) => {
       const isActive = index === currentTrackIndex;
+      const adminHtml =
+        state.isAdmin && !state.isSupervision
+          ? `<button class="spotify-icon-btn delete-single-track" data-id="${escapeHtml(track.id)}" title="Supprimer de la playlist"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>`
+          : "";
+
       return `
       <div class="spotify-track-row ${isActive ? "active-track" : ""}" data-index="${index}">
-        <div>${isActive && isPlayingWeb ? "🎧" : index + 1}</div>
-        <div class="track-title">${escapeHtml(track.title)}</div>
-        <div class="track-artist">${escapeHtml(track.artist)}</div>
-        <div style="text-align: right;">
-          <button class="secondary-button track-action-btn copy-single-track" data-link="${escapeHtml(track.link)}">Copier</button>
+        <div class="track-number">${isActive && isPlayingWeb ? "🎧" : index + 1}</div>
+        <div class="track-info-col">
+          <div class="track-title">${escapeHtml(track.title)}</div>
+          <div class="track-artist">${escapeHtml(track.artist)}</div>
+        </div>
+        <div class="track-actions-col">
+          ${adminHtml}
+          <button class="spotify-icon-btn copy-single-track" data-link="${escapeHtml(track.link)}" title="Copier le lien YouTube">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
         </div>
       </div>
     `;
@@ -1864,6 +1853,9 @@ async function loadAdminDashboard() {
       );
       if (matching) state.currentUser = matching;
     }
+    if (data.radioTracks) {
+      playlistTracks = data.radioTracks;
+    }
   } catch (error) {
     console.error(error);
   } finally {
@@ -1917,6 +1909,9 @@ async function loadMeState() {
     }
     if (data.recentShifts) {
       myRecentShifts = data.recentShifts;
+    }
+    if (data.radioTracks) {
+      playlistTracks = data.radioTracks;
     }
   } catch (error) {
     console.error(error);
@@ -2963,12 +2958,57 @@ elements.auditBody?.addEventListener("click", (event) => {
   element?.addEventListener("input", queueFinanceSave);
 });
 
+elements.addTrackBtn?.addEventListener("click", async () => {
+  if (!state.isAdmin || state.isSupervision) return;
+  const title = elements.trackTitleInput?.value;
+  const artist = elements.trackArtistInput?.value;
+  const link = elements.trackLinkInput?.value;
+  if (!link) return showToast("Le lien YouTube est obligatoire.", true);
+
+  const response = await fetch("/api/admin-radio-tracks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ title, artist, link }),
+  });
+  if (response.ok) {
+    const data = await response.json();
+    playlistTracks = data.tracks;
+    if (elements.trackTitleInput) elements.trackTitleInput.value = "";
+    if (elements.trackArtistInput) elements.trackArtistInput.value = "";
+    if (elements.trackLinkInput) elements.trackLinkInput.value = "";
+    showToast("Musique ajoutée !");
+    renderRadioPlaylist();
+  } else {
+    showToast("Erreur lors de l'ajout.", true);
+  }
+});
+
 elements.spotifyTracksBody?.addEventListener("click", (e) => {
   const copyBtn = e.target.closest(".copy-single-track");
   if (copyBtn) {
     e.stopPropagation();
     navigator.clipboard.writeText(copyBtn.dataset.link);
     showToast("Lien YouTube copié ! (Prêt pour la radio FiveM)");
+    return;
+  }
+  const delBtn = e.target.closest(".delete-single-track");
+  if (delBtn) {
+    e.stopPropagation();
+    if (!state.isAdmin || state.isSupervision) return;
+    if (!window.confirm("Supprimer cette musique de la playlist ?")) return;
+    const trackId = delBtn.dataset.id;
+    fetch(`/api/admin-radio-tracks/${trackId}`, {
+      method: "DELETE",
+      credentials: "include",
+    }).then(async (res) => {
+      if (res.ok) {
+        const data = await res.json();
+        playlistTracks = data.tracks;
+        showToast("Musique supprimée.");
+        renderRadioPlaylist();
+      }
+    });
     return;
   }
   const row = e.target.closest(".spotify-track-row");

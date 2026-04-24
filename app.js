@@ -246,26 +246,26 @@ const elements = {
 const playlistTracks = [
   {
     id: "DpYP_erIPoU",
-    title: "SCH - Autobahn (Mix)",
-    artist: "Playlist YouTube",
+    title: "SCH - Autobahn (Clip officiel)",
+    artist: "SCH",
     link: "https://www.youtube.com/watch?v=DpYP_erIPoU&list=RDDpYP_erIPoU&start_radio=1",
   },
   {
     id: "AAgZAZZQXrE",
-    title: "Ninho - Jefe",
+    title: "Ninho - Jefe (Clip officiel)",
     artist: "Ninho",
     link: "https://www.youtube.com/watch?v=AAgZAZZQXrE",
   },
   {
     id: "ShvtQKwtZV0",
-    title: "Gazo - DIE (Mix)",
-    artist: "Playlist YouTube",
+    title: "Gazo - DIE",
+    artist: "Gazo",
     link: "https://www.youtube.com/watch?v=ShvtQKwtZV0&list=RDShvtQKwtZV0&start_radio=1&pp=oAcB",
   },
   {
     id: "UladhaGCmL0",
-    title: "Leto - Macaroni (Mix)",
-    artist: "Playlist YouTube",
+    title: "Leto - Macaroni (feat. Ninho)",
+    artist: "Leto",
     link: "https://www.youtube.com/watch?v=UladhaGCmL0&list=RDUladhaGCmL0&start_radio=1&pp=oAcB",
   },
 ];
@@ -641,6 +641,10 @@ function routeToCurrentPage() {
     page.classList.toggle("active-page", page.id === `page-${route}`),
   );
   setText(elements.pageTitle, pageTitles[route]);
+
+  if (elements.bottomPlayer) {
+    elements.bottomPlayer.style.display = route === "radio" ? "flex" : "none";
+  }
 }
 
 function setStatusDot(active) {
@@ -864,6 +868,18 @@ function renderOverview() {
   }
 }
 
+function getLastActiveDays(employeeId) {
+  if (!shifts || shifts.length === 0) return -1;
+  const empShifts = shifts.filter((s) => s.employee_id === employeeId);
+  if (empShifts.length === 0) return -1;
+  const lastShiftDate = new Date(
+    Math.max(...empShifts.map((s) => new Date(s.punched_in_at).getTime())),
+  );
+  return Math.floor(
+    (Date.now() - lastShiftDate.getTime()) / (1000 * 3600 * 24),
+  );
+}
+
 function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
 
@@ -881,6 +897,19 @@ function renderStatsTables() {
           const employeeIndex = employees.findIndex(
             (entry) => entry.discordId === employee.discordId,
           );
+          const inactivityDays = getLastActiveDays(employee.id);
+          let inactivityHtml = '<span class="mini-pill">Inconnu</span>';
+          if (employee.active) {
+            inactivityHtml = '<span class="mini-pill info">En service</span>';
+          } else if (inactivityDays >= 0) {
+            if (inactivityDays <= 1)
+              inactivityHtml = `<span class="mini-pill success">${inactivityDays} j</span>`;
+            else if (inactivityDays <= 3)
+              inactivityHtml = `<span class="mini-pill warning">${inactivityDays} j</span>`;
+            else
+              inactivityHtml = `<span class="mini-pill danger">${inactivityDays} j</span>`;
+          }
+
           return `
       <tr>
         <td>${escapeHtml(employee.name)}</td>
@@ -890,6 +919,7 @@ function renderStatsTables() {
             ${formatHoursMinutes(employee.hours)}
           </button>
         </td>
+        <td>${inactivityHtml}</td>
         <td>${employee.activeDays}</td>
         <td>${escapeHtml(employee.preferredShift)}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>

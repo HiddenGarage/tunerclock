@@ -581,7 +581,7 @@
               <div class="spotify-header-info">
                 <span>PLAYLIST</span>
                 <h1 id="active-playlist-name">Tuner Mix</h1>
-                <p id="active-playlist-desc" style="color: #b3b3b3;">Les meilleurs radios pour travailler sur les crachoire au garage . Clique sur "Copier" turn la switch dla TV pi colle le lien !</p>
+                <p id="active-playlist-desc" style="color: #b3b3b3;">Sélectionne une playlist ou ajoutes-en une !</p>
               </div>
             </div>
 
@@ -641,42 +641,45 @@
           <article class="card">
             <div class="card-head">
               <div>
-                <h3>Consommer une piece</h3>
-                <p class="muted">A utiliser lors d'une reparation ou modification.</p>
+                <h3>Actions sur le stock</h3>
+                <p class="muted">Gérer les sorties et ajustements.</p>
               </div>
             </div>
-            <div class="form-grid" style="grid-template-columns: 1fr;">
-              <div class="field"><label class="input-label">Piece utilisee</label>
-                <input type="hidden" id="consume-part-name">
-                <button type="button" id="btn-pick-consume-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                </button>
+            
+            <!-- Consommer -->
+            <div>
+              <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: var(--text);">Consommer une pièce</h4>
+              <div class="form-grid" style="grid-template-columns: 1fr;">
+                <div class="field"><label class="input-label">Piece utilisee</label>
+                  <input type="hidden" id="consume-part-name">
+                  <button type="button" id="btn-pick-consume-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
+                    <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
+                  </button>
+                </div>
+                <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
+                <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
               </div>
-              <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
-              <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
+              <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
             </div>
-            <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
-          </article>
 
-          <article class="card" data-admin-only="true">
-            <div class="card-head">
-              <div>
-                <h3>Ajustement Manuel</h3>
-                <p class="muted">Ajouter ou retirer du stock sans créer de dépense.</p>
+            <!-- Ajustement Manuel -->
+            <div data-admin-only="true" style="border-top: 1px solid var(--line); padding-top: 1.5rem; margin-top: 1.5rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h4 style="margin: 0; font-size: 0.95rem; color: var(--red);">Ajustement Manuel</h4>
+                <span class="mini-pill danger" style="padding: 4px 8px; min-height: auto; font-size: 0.7rem;">Admin</span>
               </div>
-              <span class="mini-pill danger">Admin</span>
-            </div>
-            <div class="form-grid" style="grid-template-columns: 1fr;">
-              <div class="field"><label class="input-label">Piece</label>
-                <input type="hidden" id="adjust-part-name">
-                <button type="button" id="btn-pick-adjust-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                </button>
+              <div class="form-grid" style="grid-template-columns: 1fr;">
+                <div class="field"><label class="input-label">Piece</label>
+                  <input type="hidden" id="adjust-part-name">
+                  <button type="button" id="btn-pick-adjust-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
+                    <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
+                  </button>
+                </div>
+                <div class="field"><label class="input-label">Action</label><select id="adjust-part-action"><option value="add">Ajouter au stock (+)</option><option value="remove">Retirer du stock (-)</option></select></div>
+                <div class="field"><label class="input-label">Quantite</label><input id="adjust-part-quantity" type="number" min="1" step="1" value="1"></div>
               </div>
-              <div class="field"><label class="input-label">Action</label><select id="adjust-part-action"><option value="add">Ajouter au stock (+)</option><option value="remove">Retirer du stock (-)</option></select></div>
-              <div class="field"><label class="input-label">Quantite</label><input id="adjust-part-quantity" type="number" min="1" step="1" value="1"></div>
+              <div class="parts-actions" style="margin-top: 1rem; margin-bottom: 0;"><button id="adjust-stock-btn" class="primary-button" style="width: 100%;">Confirmer l'ajustement</button></div>
             </div>
-            <div class="parts-actions" style="margin-top: 1rem;"><button id="adjust-stock-btn" class="primary-button" style="width: 100%;">Confirmer l'ajustement</button></div>
           </article>
 
         </div>

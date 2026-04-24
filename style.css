@@ -520,6 +520,12 @@ a {
   flex-direction: column;
   gap: 22px;
 }
+.radio-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
 .spotify-container {
   background: #121212;
   border-radius: 8px;
@@ -684,7 +690,78 @@ a {
   margin: 0 0 16px 0;
   font-size: 1.1rem;
 }
+.spotify-sidebar {
+  background: #121212;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.spotify-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+.spotify-sidebar-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.spotify-playlists-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  background: rgba(255, 255, 255, 0.03);
+}
+.playlist-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.playlist-card.active {
+  background: rgba(48, 196, 163, 0.15);
+  border: 1px solid rgba(48, 196, 163, 0.3);
+}
+.playlist-card img {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.playlist-card-info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden;
+}
+.playlist-card-info strong {
+  color: white;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-card-info span {
+  color: #b3b3b3;
+  font-size: 0.75rem;
+}
+.playlist-card-actions {
+  display: flex;
+  gap: 4px;
+}
 @media (max-width: 600px) {
+  .radio-layout {
+    grid-template-columns: 1fr;
+  }
   .spotify-header {
     flex-direction: column;
     align-items: center;

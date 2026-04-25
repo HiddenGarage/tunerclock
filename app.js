@@ -45,45 +45,48 @@ const routes = [
 ];
 const roleOrder = ["Patron", "Copatron", "Gerant", "Mecano", "Apprenti"];
 const garageParts = [
-  { code: "engine_oil", name: "Engine Oil", category: "Entretien" },
-  { code: "tyre_replacement", name: "Tyre Replacement", category: "Entretien" },
+  { code: "engine_oil", name: "Huile à moteur", category: "Entretien" },
+  {
+    code: "tyre_replacement",
+    name: "Remplacement Pneus",
+    category: "Entretien",
+  },
   {
     code: "clutch_replacement",
-    name: "Clutch Replacement",
+    name: "Remplacement Embrayage",
     category: "Entretien",
   },
-  { code: "air_filter", name: "Air Filter", category: "Entretien" },
-  { code: "spark_plug", name: "Spark Plug", category: "Entretien" },
+  { code: "air_filter", name: "Filtre à air", category: "Entretien" },
+  { code: "spark_plug", name: "Bougie d'allumage", category: "Entretien" },
   {
     code: "brakepad_replacement",
-    name: "Brakepad Replacement",
+    name: "Remplacement Plaquette Freins",
     category: "Entretien",
   },
-  { code: "suspension_parts", name: "Suspension Parts", category: "Entretien" },
-  { code: "turbocharger", name: "Turbocharger", category: "Performance" },
+  {
+    code: "suspension_parts",
+    name: "Pièce de suspension",
+    category: "Entretien",
+  },
   {
     code: "lighting_controller",
-    name: "Lighting Controller",
+    name: "Contrôleur d'éclairage",
     category: "Cosmetique",
   },
-  { code: "cosmetic_part", name: "Cosmetic Parts", category: "Cosmetique" },
-  { code: "respray_kit", name: "Respray Kit", category: "Cosmetique" },
-  {
-    code: "vehicle_wheels",
-    name: "Vehicle Wheels Set",
-    category: "Cosmetique",
-  },
-  { code: "tyre_smoke_kit", name: "Tyre Smoke Kit", category: "Cosmetique" },
-  { code: "extras_kit", name: "Extras Kit", category: "Cosmetique" },
-  { code: "cleaning_kit", name: "Cleaning Kit", category: "Atelier" },
-  { code: "repair_kit", name: "Repair Kit", category: "Atelier" },
-  { code: "duct_tape", name: "Duct Tape", category: "Atelier" },
+  { code: "cosmetic_part", name: "Pièces Esthétique", category: "Cosmetique" },
+  { code: "respray_kit", name: "Kit de peinture", category: "Cosmetique" },
+  { code: "vehicle_wheels", name: "Ensemble de roue", category: "Cosmetique" },
+  { code: "tyre_smoke_kit", name: "Kit Pneu Fumée", category: "Cosmetique" },
+  { code: "extras_kit", name: "Kit Extra", category: "Cosmetique" },
+  { code: "cleaning_kit", name: "Kit de nettoyage", category: "Atelier" },
+  { code: "repair_kit", name: "Kit de réparation", category: "Atelier" },
+  { code: "duct_tape", name: "Ruban adhésif", category: "Atelier" },
   {
     code: "performance_part",
-    name: "Performance Parts",
+    name: "Pièce de Performance",
     category: "Performance",
   },
-  { code: "mechanic_tablet", name: "Mechanic Tablet", category: "Outils" },
+  { code: "mechanic_tablet", name: "Tablet de mécano", category: "Outils" },
 ];
 const roleIdMap = {
   Patron: "1487868408228741171",
@@ -205,10 +208,6 @@ const elements = {
   recruitmentModal: document.getElementById("recruitment-modal"),
   recruitmentContent: document.getElementById("recruitment-content"),
   closeRecruitmentBtn: document.getElementById("close-recruitment-modal"),
-  consumePartName: document.getElementById("consume-part-name"),
-  consumePartQuantity: document.getElementById("consume-part-quantity"),
-  consumePartNote: document.getElementById("consume-part-note"),
-  consumeBtn: document.getElementById("consume-btn"),
   notesModal: document.getElementById("notes-modal"),
   notesModalTitle: document.getElementById("notes-modal-title"),
   notesText: document.getElementById("employee-notes-text"),
@@ -1525,6 +1524,13 @@ function renderPersonalDashboard() {
 
   setText(elements.pendingHours, formatHoursMinutes(unpaidHours));
   setText(elements.pendingPay, formatMoney(pendingPay));
+
+  // Mise à jour de la barre de progression (Basé sur un objectif de 15h)
+  const progressEl = document.getElementById("pending-progress");
+  if (progressEl) {
+    const progress = Math.min(100, (unpaidHours / 15) * 100);
+    progressEl.style.width = `${progress}%`;
+  }
 
   if (!elements.personalHistoryBody) return;
   if (!myRecentShifts || myRecentShifts.length === 0) {
@@ -3103,17 +3109,33 @@ elements.inventoryBody?.addEventListener("click", async (e) => {
     if (state.isSupervision) return;
     const code = card.dataset.code;
     const part = garageParts.find((p) => p.code === code);
+    const currentQty = inventoryStock[code] || 0;
+
     document.getElementById("stock-modal-code").value = code;
     document.getElementById("stock-modal-title").textContent = part
       ? part.name
       : code;
-    document.getElementById("stock-modal-qty").value = "1";
-    document.getElementById("stock-modal-action").value = "remove";
-    document.getElementById("stock-modal-charge-container").style.display =
-      "block";
-    document.getElementById("stock-modal-cost").textContent = formatMoney(
-      Number(elements.partCost?.value || 105),
+
+    const qtyInput = document.getElementById("stock-modal-qty");
+    if (qtyInput) {
+      qtyInput.value = currentQty;
+      qtyInput.dataset.current = currentQty;
+    }
+
+    const chargeContainer = document.getElementById(
+      "stock-modal-charge-container",
     );
+    if (chargeContainer) chargeContainer.style.display = "block";
+
+    const chargeInput = document.getElementById("stock-modal-charge");
+    if (chargeInput) chargeInput.checked = false;
+
+    const costEl = document.getElementById("stock-modal-cost");
+    if (costEl) {
+      costEl.textContent = "0$ (Aucun changement)";
+      costEl.style.color = "var(--muted)";
+    }
+
     elements.stockActionModal.style.display = "flex";
   }
 });
@@ -3122,76 +3144,73 @@ elements.closeStockModalBtn?.addEventListener("click", () => {
   elements.stockActionModal.style.display = "none";
 });
 
-document
-  .getElementById("stock-modal-action")
-  ?.addEventListener("change", (e) => {
-    document.getElementById("stock-modal-charge-container").style.display =
-      e.target.value === "remove" ? "block" : "none";
-  });
-
 document.getElementById("stock-modal-qty")?.addEventListener("input", (e) => {
-  const qty = Number(e.target.value || 0);
-  document.getElementById("stock-modal-cost").textContent = formatMoney(
-    qty * Number(elements.partCost?.value || 105),
-  );
+  const newQty = Number(e.target.value || 0);
+  const currentQty = Number(e.target.dataset.current || 0);
+  const diff = newQty - currentQty;
+  const partCost = Number(elements.partCost?.value || 105);
+  const costEl = document.getElementById("stock-modal-cost");
+
+  if (diff === 0) {
+    costEl.textContent = "0$ (Aucun changement)";
+    costEl.style.color = "var(--muted)";
+  } else {
+    const total = Math.abs(diff) * partCost;
+    const sign = diff > 0 ? "+" : "";
+    costEl.textContent = `${formatMoney(total)} (${sign}${diff})`;
+    costEl.style.color = diff > 0 ? "var(--teal)" : "var(--orange)";
+  }
 });
 
 elements.confirmStockModalBtn?.addEventListener("click", async () => {
   const code = document.getElementById("stock-modal-code").value;
-  const action = document.getElementById("stock-modal-action").value;
-  const qty = Number(document.getElementById("stock-modal-qty").value || 1);
+  const newQtyInput = document.getElementById("stock-modal-qty");
+  const newQty = Number(newQtyInput.value || 0);
+  const currentQty = Number(newQtyInput.dataset.current || 0);
   const charge = document.getElementById("stock-modal-charge").checked;
   const part = garageParts.find((p) => p.code === code);
 
-  if (action === "add") {
-    if (!state.isAdmin) return showToast("Refusé.", true);
-    const currentStock = inventoryStock[code] || 0;
-    const res = await fetch("/api/admin-set-stock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        itemCode: code,
-        partName: part?.name,
-        quantity: currentStock + qty,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      inventoryStock = data.stock;
-      await loadInventoryLogs();
-      renderInventory();
-      renderInventoryLogs();
-      showToast(`Stock de ${part?.name || code} ajusté (+${qty}).`);
-      elements.stockActionModal.style.display = "none";
-    } else {
-      showToast("Erreur lors de la mise à jour.", true);
+  if (newQty === currentQty) {
+    elements.stockActionModal.style.display = "none";
+    return;
+  }
+
+  if (newQty > currentQty && !state.isAdmin) {
+    return showToast(
+      "Refusé. Seule la direction peut augmenter le stock.",
+      true,
+    );
+  }
+
+  const res = await fetch("/api/admin-smart-stock", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      itemCode: code,
+      partName: part?.name,
+      newQuantity: newQty,
+      createExpense: charge,
+    }),
+  });
+  if (res.ok) {
+    const data = await res.json();
+    inventoryStock = data.stock;
+    await loadInventoryLogs();
+    if (charge) {
+      await loadAdminDashboard();
     }
+    renderInventory();
+    renderInventoryLogs();
+    renderExpenseTable();
+    renderOverview();
+
+    const diff = newQty - currentQty;
+    const sign = diff > 0 ? "+" : "";
+    showToast(`Stock de ${part?.name || code} mis à jour (${sign}${diff}).`);
+    elements.stockActionModal.style.display = "none";
   } else {
-    const noteStr = charge ? "Facturé au client" : "Usage interne";
-    const res = await fetch("/api/consume-part", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        itemCode: code,
-        partName: part?.name,
-        quantity: qty,
-        note: noteStr,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      inventoryStock = data.stock;
-      await loadInventoryLogs();
-      renderInventory();
-      renderInventoryLogs();
-      showToast(`${qty}x ${part?.name || code} retiré(s).`);
-      document.getElementById("stock-modal-charge").checked = false;
-      elements.stockActionModal.style.display = "none";
-    } else {
-      showToast("Erreur lors de la consommation.", true);
-    }
+    showToast("Erreur lors de la mise à jour.", true);
   }
 });
 

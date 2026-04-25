@@ -792,16 +792,11 @@ function startDiscordBot() {
           try {
             const supabase = getSupabase();
             const settings = await getSettingsMap(supabase);
-            const finance = settings.finance_inputs || {
-              serviceIncome: 0,
-              weeklyProfit: 0,
-              manualPayouts: 0,
-              miscExpenses: 0,
-              calcNote: "",
-            };
+            const finance = settings.finance_inputs || { weeklyProfit: 0 };
 
             const change = action === "ajouter" ? montant : -montant;
-            finance.serviceIncome = Number(finance.serviceIncome || 0) + change;
+            finance.weeklyProfit = Number(finance.weeklyProfit || 0) + change;
+
             await upsertSetting(supabase, "finance_inputs", finance);
             await supabase.from("weekly_profit_entries").insert({
               label: notes,
@@ -2568,46 +2563,28 @@ app.post("/api/admin-send-reminder", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/admin-part-settings", requireAdmin, async (req, res) => {
+app.post("/api/admin-adjust-revenue", requireAdmin, async (req, res) => {
   try {
-    const fixedCost = Number(req.body?.fixedCost || 105) || 105;
-    const supabase = getSupabase();
-    await upsertSetting(supabase, "part_settings", { fixedCost });
-    res.json({ ok: true, fixedCost });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
+    const amount = Number(req.body.amount || 0);
+    if (amount === 0) return res.json({ ok: true });
 
-app.post("/api/admin-finance-settings", requireAdmin, async (req, res) => {
-  try {
-    const payload = {
-      serviceIncome: Number(req.body?.serviceIncome || 0),
-      weeklyProfit: Number(req.body?.weeklyProfit || 0),
-      manualPayouts: Number(req.body?.manualPayouts || 0),
-      miscExpenses: Number(req.body?.miscExpenses || 0),
-      calcNote: String(req.body?.calcNote || ""),
-    };
     const supabase = getSupabase();
-    await upsertSetting(supabase, "finance_inputs", payload);
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
+    const settings = await getSettingsMap(supabase);
+    const finance = settings.finance_inputs || { weeklyProfit: 0 };
+    finance.weeklyProfit = Number(finance.weeklyProfit || 0) + amount;
+    await upsertSetting(supabase, "finance_inputs", finance);
 
-app.post("/api/admin-analysis-settings", requireAdmin, async (req, res) => {
-  try {
-    const payload = {
-      revenue: Number(req.body?.revenue || 0),
-      expenses: Number(req.body?.expenses || 0),
-      targetProfitPercent: Number(req.body?.targetProfitPercent || 0),
-      resalePrice: Number(req.body?.resalePrice || 0),
-      weeklyParts: Number(req.body?.weeklyParts || 0),
-    };
-    const supabase = getSupabase();
-    await upsertSetting(supabase, "analysis_settings", payload);
-    res.json({ ok: true });
+    await supabase.from("weekly_profit_entries").insert({
+      label: "Ajustement manuel (Dashboard)",
+      amount: amount,
+      created_by_discord_id: req.session.discordId,
+    });
+
+    await writeAuditLog(supabase, req, "revenue_adjusted", {
+      details: { amount, newTotal: finance.weeklyProfit },
+    });
+
+    res.json({ ok: true, weeklyProfit: finance.weeklyProfit });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -3394,7 +3371,7 @@ app.delete("/api/admin-clear-logs/:type", requireAdmin, async (req, res) => {
         .neq("id", "00000000-0000-0000-0000-000000000000");
     }
 
-    await writeAuditLog(supabase, req, "system_reboot", {
+    await writeAuditLog(supabase, req, "logs_cleared", {
       details: { scope: `clear_logs_${type}` },
     });
 

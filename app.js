@@ -1014,51 +1014,6 @@ function getLastActiveDays(employeeId) {
   );
 }
 
-function renderPresenceList() {
-  if (!elements.presenceBody) return;
-  const activeEmployees = employees.filter((employee) => employee.active);
-  if (!activeEmployees.length) {
-    setHtml(
-      elements.presenceBody,
-      `<tr><td colspan="8">Aucun employe en service.</td></tr>`,
-    );
-    return;
-  }
-
-  setHtml(
-    elements.presenceBody,
-    activeEmployees
-      .map((employee) => {
-        const employeeIndex = employees.findIndex(
-          (entry) => entry.discordId === employee.discordId,
-        );
-        const liveHours = getLiveEmployeeHours(employee);
-        const status = getPresenceStatus(liveHours);
-        const reminder = getReminderInfo(employee);
-        const entryLabel = employee.activeShiftStartedAt
-          ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
-          : "-";
-
-        return `
-      <tr>
-        <td>${escapeHtml(employee.name)}</td>
-        <td>${escapeHtml(employee.roleName)}</td>
-        <td>${entryLabel}</td>
-        <td>${formatHoursMinutesSeconds(liveHours)}</td>
-        <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
-        <td><span class="${status.className}">${status.label}</span></td>
-        <td><span class="${reminder.className}">${reminder.label}</span></td>
-        <td>
-          <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
-          <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
-        </td>
-      </tr>
-    `;
-      })
-      .join(""),
-  );
-}
-
 function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
 
@@ -1151,6 +1106,51 @@ function renderStatsTables() {
     </tr>
   `,
       )
+      .join(""),
+  );
+}
+
+function renderPresenceList() {
+  if (!elements.presenceBody) return;
+  const activeEmployees = employees.filter((employee) => employee.active);
+  if (!activeEmployees.length) {
+    setHtml(
+      elements.presenceBody,
+      `<tr><td colspan="8">Aucun employe en service.</td></tr>`,
+    );
+    return;
+  }
+
+  setHtml(
+    elements.presenceBody,
+    activeEmployees
+      .map((employee) => {
+        const employeeIndex = employees.findIndex(
+          (entry) => entry.discordId === employee.discordId,
+        );
+        const liveHours = getLiveEmployeeHours(employee);
+        const status = getPresenceStatus(liveHours);
+        const reminder = getReminderInfo(employee);
+        const entryLabel = employee.activeShiftStartedAt
+          ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
+          : "-";
+
+        return `
+      <tr>
+        <td>${escapeHtml(employee.name)}</td>
+        <td>${escapeHtml(employee.roleName)}</td>
+        <td>${entryLabel}</td>
+        <td>${formatHoursMinutesSeconds(liveHours)}</td>
+        <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
+        <td><span class="${status.className}">${status.label}</span></td>
+        <td><span class="${reminder.className}">${reminder.label}</span></td>
+        <td>
+          <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
+          <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
+        </td>
+      </tr>
+    `;
+      })
       .join(""),
   );
 }
@@ -2571,6 +2571,9 @@ async function loadMeState() {
     const data = await response.json();
     if (!data.employee || !state.currentUser) return;
 
+    const intendedPunchState = localStorage.getItem(
+      "tuner_intended_punch_state",
+    );
     const current = normaliseEmployeeRecord(data.employee);
     current.name = state.currentUser.name;
     state.currentUser = current;
@@ -2588,6 +2591,7 @@ async function loadMeState() {
       if (localStorage.getItem("tuner_punch_pending") === "out") {
         // The previous punch out was interrupted! Auto resolve.
         localStorage.removeItem("tuner_punch_pending");
+        localStorage.setItem("tuner_intended_punch_state", "out"); // Intention est sortie
         activeShiftStartedAt = null;
         state.punchedIn = false;
         fetch("/api/punch-out", {
@@ -2599,11 +2603,23 @@ async function loadMeState() {
           data.activeShift.punched_in_at,
         ).getTime();
         state.punchedIn = true;
+        localStorage.setItem("tuner_intended_punch_state", "in"); // Confirmer l'intention
       }
     } else {
       if (localStorage.getItem("tuner_punch_pending") === "in") {
         // The previous punch in was interrupted! Auto resolve.
         localStorage.removeItem("tuner_punch_pending");
+        localStorage.setItem("tuner_intended_punch_state", "in"); // Confirmer l'intention
+        activeShiftStartedAt = Date.now();
+        state.punchedIn = true;
+        if (state.currentUser) state.currentUser.active = true;
+        fetch("/api/punch-in", {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => null);
+      } else if (intendedPunchState === "in") {
+        // Si le serveur dit "hors service" mais l'intention était "en service", on retente un punch-in
+        showToast("Tentative de reconnexion au service...", false);
         activeShiftStartedAt = Date.now();
         state.punchedIn = true;
         if (state.currentUser) state.currentUser.active = true;
@@ -2614,6 +2630,7 @@ async function loadMeState() {
       } else {
         activeShiftStartedAt = null;
         state.punchedIn = false;
+        localStorage.setItem("tuner_intended_punch_state", "out"); // Confirmer l'intention
       }
     }
 
@@ -2877,6 +2894,7 @@ async function punchIn() {
   updateAll();
 
   localStorage.setItem("tuner_punch_pending", "in");
+  localStorage.setItem("tuner_intended_punch_state", "in");
   const response = await fetch("/api/punch-in", {
     method: "POST",
     credentials: "include",
@@ -2884,12 +2902,14 @@ async function punchIn() {
   }).catch(() => null);
   if (!response?.ok) {
     localStorage.removeItem("tuner_punch_pending");
+    localStorage.setItem("tuner_intended_punch_state", "out"); // Si échec, l'intention est "out"
     state.punchedIn = false;
     state.currentUser.active = false;
     activeShiftStartedAt = null;
     showToast("Erreur pendant l'entree en service.", true);
   } else {
     localStorage.removeItem("tuner_punch_pending");
+    localStorage.setItem("tuner_intended_punch_state", "in"); // Si succès, l'intention est "in"
     await loadMeState();
   }
   updateAll();
@@ -2911,6 +2931,7 @@ async function punchOut() {
   updateAll();
 
   localStorage.setItem("tuner_punch_pending", "out");
+  localStorage.setItem("tuner_intended_punch_state", "out");
   const response = await fetch("/api/punch-out", {
     method: "POST",
     credentials: "include",
@@ -2918,6 +2939,7 @@ async function punchOut() {
   }).catch(() => null);
   if (response?.ok) {
     localStorage.removeItem("tuner_punch_pending");
+    localStorage.setItem("tuner_intended_punch_state", "out"); // Si succès, l'intention est "out"
     const data = await response.json();
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
@@ -2926,6 +2948,7 @@ async function punchOut() {
     await loadMeState();
   } else {
     localStorage.removeItem("tuner_punch_pending");
+    localStorage.setItem("tuner_intended_punch_state", "in"); // Si échec, l'intention est "in"
     state.currentUser.hours += state.currentUser.todayHours;
     showToast(
       "Sortie de service sauvegardee localement, verifie le serveur.",
@@ -3990,6 +4013,16 @@ document.addEventListener("click", async (e) => {
 });
 
 window.addEventListener("hashchange", routeToCurrentPage);
+
+window.addEventListener(
+  "scroll",
+  () => {
+    document
+      .querySelectorAll(".action-menu-dropdown")
+      .forEach((d) => (d.style.display = "none"));
+  },
+  { passive: true, capture: true },
+);
 
 updateAll();
 loadAuthSession();

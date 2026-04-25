@@ -1,898 +1,1845 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#1a1b1d">
-  <title>TunersHub | Centre de gestion</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="logo/TurboPunch.png">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand-block brand-logo-only">
-        <img src="logo/TurboPunch.png" alt="Logo TunersHub" class="brand-logo">
-      </div>
+:root {
+  --bg: #1a1b1d;
+  --panel: #222325;
+  --bg-soft: #1b1b1e;
+  --panel-soft: #2a2b2f;
+  --panel-muted: #1c1d20;
+  --sidebar: #111112;
+  --sidebar-soft: #1a1a1c;
+  --sidebar-line: rgba(255, 255, 255, 0.07);
+  --line: #33363a;
+  --line-strong: #44474d;
+  --text: #f4f7fb;
+  --muted: #8b949e;
+  --blue: #4b7cf6;
+  --blue-soft: rgba(75, 124, 246, 0.15);
+  --teal: #4caf50;
+  --teal-soft: rgba(76, 175, 80, 0.15);
+  --orange: #f77f00;
+  --orange-soft: rgba(247, 127, 0, 0.15);
+  --red: #e63946;
+  --red-hover: #d62828;
+  --red-soft: rgba(230, 57, 70, 0.15);
+  --shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  --radius-xl: 4px;
+  --radius-lg: 4px;
+  --radius-md: 4px;
+  --radius-sm: 3px;
+}
 
-      <nav class="sidebar-nav">
-        <div class="nav-category">Pointage</div>
-        <a href="#pointage" class="nav-item" data-route="pointage">Punch</a>
-        <a href="#historique" class="nav-item" data-route="historique" data-admin-only="true">Historique</a>
-        
-        <div class="nav-category">Atelier</div>
-        <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
-        <a href="#presence" class="nav-item nav-item-highlight" data-route="presence" data-admin-only="true">Sur le plancher</a>
-        <a href="#inventaire" class="nav-item" data-route="inventaire">Gestion Stock</a>
-        <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Fournisseurs</a>
-        
-        <div class="nav-category" data-admin-only="true">Équipe</div>
-        <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Équipe</a>
-        <a href="#recrutements" class="nav-item" data-route="recrutements" data-admin-only="true">Recrutements <span id="recrutement-badge" class="nav-badge hidden">0</span></a>
-        
-        <div class="nav-category">Direction</div>
-        <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
-        <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Trésorerie</a>
-        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
-        <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
-        
-        <div class="nav-category">Détente</div>
-        <a href="#radio" class="nav-item" data-route="radio">Musique (Radio)</a>
+* {
+  box-sizing: border-box;
+}
 
-        <div class="nav-category" data-admin-only="true" data-hidden-gerant="true">Système</div>
-        <a href="#logs" class="nav-item" data-route="logs" data-admin-only="true">Registre</a>
-        <a href="#reboot" class="nav-item nav-item-danger" data-route="reboot" data-admin-only="true">Système</a>
-      </nav>
-      <div class="sidebar-footer">© No One</div>
-    </aside>
+html {
+  scroll-behavior: smooth;
+}
 
-    <main class="main-panel">
-      <header class="topbar">
-        <div>
-          <p class="page-kicker">Centre des operations</p>
-          <h2 id="page-title">Tableau de bord</h2>
-        </div>
-        <div class="topbar-tools">
-          <button id="logout-button" class="secondary-button topbar-button hidden">Se deconnecter</button>
-          <div class="status-pill" id="bot-status-pill">Bot hors ligne</div>
-          <div class="status-pill" id="topbar-role-pill">Connexion securisee</div>
-        </div>
-      </header>
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Manrope", sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+}
 
-      <section id="page-tableau" class="app-page active-page dashboard-page">
-        <div class="dashboard-grid dashboard-kpis">
-          <article class="card stat-card metric-card metric-revenue">
-            <p class="section-kicker">Revenus</p>
-            <h3 id="total-income">0$</h3>
-            <p class="muted">Totales de l'entreprise</p>
-          </article>
-          <article class="card stat-card metric-card metric-expenses">
-            <p class="section-kicker">Depenses</p>
-            <h3 id="total-expenses">0$</h3>
-            <p class="muted">Pieces, frais atelier et divers</p>
-          </article>
-          <article class="card stat-card metric-card metric-payroll">
-            <p class="section-kicker">Salaires dus</p>
-            <h3 id="total-payroll">0$</h3>
-            <p class="muted">Montant payable a l'équipe</p>
-          </article>
-          <article class="card stat-card metric-card metric-profit">
-            <p class="section-kicker">Profit brut</p>
-            <h3 id="gross-profit">0$</h3>
-            <p class="muted">Resultat brut actuel</p>
-          </article>
-        </div>
+input,
+button,
+a {
+  font: inherit;
+}
 
-        <div class="dashboard-grid enterprise-grid">
-          <article class="card card-span-2 gradient-card enterprise-hero">
-            <div class="card-head">
-              <div>
-                <h3>Performance globale de l'entreprise</h3>
-                <p class="muted">Vue synthese des chiffres utiles: charge salariale, rentabilite, activite et cadence atelier.</p>
-              </div>
-              <span class="mini-pill success">Entreprise</span>
-            </div>
-            <div class="summary-band enterprise-summary">
-              <div class="summary-item">
-                <span>Marge brute</span>
-                <strong id="gross-margin">0%</strong>
-              </div>
-              <div class="summary-item">
-                <span>Cout total</span>
-                <strong id="total-costs">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Paiements employes</span>
-                <strong id="employee-payments">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Employes actifs</span>
-                <strong id="active-count">0</strong>
-              </div>
-              <div class="summary-item">
-                <span>Heures cumulees</span>
-                <strong id="weekly-hours">0h 00m</strong>
-              </div>
-              <div class="summary-item">
-                <span>Leader activite</span>
-                <strong id="top-worker">-</strong>
-              </div>
-            </div>
-          </article>
+.hidden {
+  display: none !important;
+}
 
-          <article class="card chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Repartition des quarts</h3>
-                <p class="muted">Poids des heures Jour / Soir / Nuit dans l'entreprise.</p>
-              </div>
-            </div>
-            <canvas id="shift-chart" width="720" height="320"></canvas>
-          </article>
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
 
-          <article class="card card-span-3 chart-card large-chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Tendance d'activite sur 7 jours</h3>
-                <p class="muted">Evolution recente des heures fermees et de la cadence atelier.</p>
-              </div>
-            </div>
-            <canvas id="analysis-chart" width="1280" height="300"></canvas>
-          </article>
-        </div>
-      </section>
+.sidebar {
+  background: linear-gradient(180deg, #9b111e 0%, #3a0000 100%);
+  color: #f7f8fb;
+  padding: 24px 18px 22px;
+  display: grid;
+  align-content: start;
+  gap: 26px;
+  border-right: 1px solid rgba(255, 77, 77, 0.2);
+}
 
-      <section id="page-pointage" class="app-page pointage-page">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
-          <div>
-            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Pointage</h2>
-            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour commencer ton quart.</p>
-          </div>
-          <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
-        </div>
+.brand-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 88px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
 
-        <div class="dashboard-grid">
-          <article class="card card-span-2 clock-in-widget" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; text-align: center;">
-            <span id="shift-badge" class="mini-pill danger" style="margin-bottom: 32px; font-size: 0.9rem; padding: 10px 20px;">Hors service</span>
-            
-            <div style="margin-bottom: 40px;">
-              <span class="muted" style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 800;">Temps de la session</span>
-              <h1 id="today-hours" style="font-size: 5rem; margin: 12px 0; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--text); line-height: 1;">0h 00m 00s</h1>
-              <div style="color: var(--teal); font-weight: 800; font-size: 1.4rem;">+ <span id="today-pay">0$</span></div>
-            </div>
+.brand-logo {
+  width: 100%;
+  max-width: 240px;
+  height: auto;
+  object-fit: contain;
+  padding: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+}
 
-            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">ENTRER EN SERVICE</button>
-          </article>
+.sidebar-nav {
+  display: grid;
+  gap: 8px;
+}
 
-          <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
-            <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column; padding: 24px;">
-              <div class="card-head" style="margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 1.1rem;">Ma Cagnotte</h3>
-                </div>
-                <span class="mini-pill">À payer</span>
-              </div>
-              <div style="flex-grow: 1;">
-                <h3 id="pending-pay" style="font-size: 2.4rem; color: var(--text); margin: 0 0 4px 0;">0$</h3>
-                <span class="muted" style="font-size: 0.85rem;">Temps cumulé: <strong id="pending-hours" style="color: var(--text);">0h 00m</strong></span>
-              </div>
-              <div style="width: 100%; height: 110px; margin-top: 16px; position: relative;">
-                <canvas id="cagnotte-chart"></canvas>
-              </div>
-            </article>
+.nav-category {
+  margin: 20px 0 4px 0;
+  padding-top: 16px;
+  padding-left: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.7);
+}
+.nav-category:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
 
-            <article class="card" style="flex-grow: 1;">
-              <div class="card-head" style="margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 1.1rem;">Derniers shifts</h3>
-                </div>
-              </div>
-              <div class="table-wrap">
-                <table style="font-size: 0.85rem;">
-                  <tbody id="personal-history-body"></tbody>
-                </table>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  padding: 13px 16px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    border-color 0.18s ease;
+}
 
-      <section id="page-historique" class="app-page historique-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Historique des pointages</h3>
-                <p class="muted">Détails de toutes les entrées et sorties de l'équipe.</p>
-              </div>
-              <span class="mini-pill success">Registres</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employé</th>
-                    <th>Entrée</th>
-                    <th>Sortie</th>
-                    <th>Durée</th>
-                    <th>Statut</th>
-                  </tr>
-                </thead>
-                <tbody id="historique-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.nav-item:hover,
+.nav-item.active {
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.3);
+  border-color: transparent;
+  transform: translateX(2px);
+  border-left-color: #ffffff;
+}
 
-      <section id="page-stats" class="app-page stats-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Statistiques employes</h3>
-                <p class="muted">Vue des heures, jours actifs, quarts forts et paie estimee.</p>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employe</th>
-                    <th>Role</th>
-                    <th>Heures (clic pour modifier)</th>
-                    <th>Inactivité</th>
-                    <th>Jours actifs</th>
-                    <th>Quart fort</th>
-                    <th>Taux horaire</th>
-                    <th>Paie estimee</th>
-                    <th>Dossier</th>
-                  </tr>
-                </thead>
-                <tbody id="stats-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.nav-item::before {
+  display: none;
+}
 
-      <section id="page-recrutements" class="app-page recrutements-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Candidatures en attente</h3>
-                <p class="muted">Formulaires soumis depuis le salon Discord. Les reponses (Accepter/Refuser) envoient un MP auto au candidat.</p>
-              </div>
-              <span class="mini-pill success">Recrutement</span>
-            </div>
-            <div id="recrutements-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px;"></div>
-          </article>
-        </div>
-      </section>
+.nav-item-gestion,
+.nav-item-highlight,
+.nav-item-success,
+.nav-item-danger {
+  color: #ffffff;
+  background: transparent;
+  border-color: transparent;
+}
 
-      <section id="page-gestion" class="app-page gestion-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Reglement des employes</h3>
-                <p class="muted">Classement des montants dus, paiement et envoi de la slip.</p>
-              </div>
-              <span class="mini-pill success">Paye</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employe</th>
-                    <th>Role</th>
-                    <th>Heures</th>
-                    <th>Paie estimee</th>
-                    <th>Prime ($)</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="leaderboard-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.main-panel {
+  padding: 28px;
+  background-image: none !important;
+  background-color: var(--bg) !important;
+}
 
-      <section id="page-presence" class="app-page presence-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Presence live</h3>
-                <p class="muted">Controle des employes actuellement en service, rappels Discord et fermeture forcee des shifts oublies.</p>
-              </div>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employe</th>
-                    <th>Role</th>
-                    <th>Entree</th>
-                    <th>Duree live</th>
-                    <th>Cout live</th>
-                    <th>Statut</th>
-                    <th>Rappel</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="presence-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.page-kicker,
+.section-kicker {
+  margin: 0 0 8px;
+  color: #95a2b5;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
 
-      <section id="page-salaire" class="app-page salaire-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux.</p>
-              </div>
-              <span class="mini-pill">Roles</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Taux actuel</th>
-                    <th>Nouveau taux</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="role-rates-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 24px;
+}
 
-      <section id="page-finance" class="app-page finance-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Profit du garage</h3>
-                <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
-              </div>
-              <span class="mini-pill">Profit</span>
-            </div>
-            <div class="form-grid finance-form-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
-              <div class="field">
-                <label for="weekly-profit" class="input-label">Profit de la semaine</label>
-                <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
-                <label for="misc-expenses" class="input-label">Autres depenses garage</label>
-                <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="parts-actions">
-              <button id="save-finance" class="primary-button">Enregistrer</button>
-            </div>
-          </article>
-        </div>
-      </section>
+.topbar h2,
+.card h3 {
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
 
-      <section id="page-pieces" class="app-page parts-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Commandes de pieces</h3>
-                <p class="muted">Selectionne une piece, indique la quantite et le cout total se calcule automatiquement.</p>
-              </div>
-              <span class="mini-pill danger">Atelier</span>
-            </div>
-            <div class="form-grid parts-form-grid">
-              <div class="field">
-                <label for="part-name" class="input-label">Piece</label>
-                <input type="hidden" id="part-name">
-                <button type="button" id="btn-pick-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                </button>
-              </div>
-              <div class="field">
-                <label for="part-quantity" class="input-label">Nombre de pieces</label>
-                <input id="part-quantity" type="number" min="1" step="1" value="1">
-              </div>
-              <div class="field">
-                <label for="part-cost" class="input-label">Cout unitaire</label>
-                <div class="inline-field">
-                  <input id="part-cost" type="number" value="105" readonly>
-                  <button id="edit-part-cost" class="secondary-button inline-button" type="button">Edit</button>
-                </div>
-              </div>
-              <div class="field">
-                <label for="part-category" class="input-label">Categorie</label>
-                <input id="part-category" type="text" placeholder="Categorie automatique">
-              </div>
-              <div class="field">
-                <label for="part-note" class="input-label">Note</label>
-                <input id="part-note" type="text" placeholder="Urgent, client, stock">
-              </div>
-            </div>
-            <div id="part-preview" class="part-preview"></div>
-            <div class="parts-actions">
-              <button id="add-expense" class="primary-button">Ajouter la commande</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Commande</th>
-                    <th>Categorie</th>
-                    <th>Nombre</th>
-                    <th>Cout total</th>
-                    <th>Note</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="expense-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
-      <section id="page-analyse" class="app-page analyse-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Analyse automatique</h3>
-                <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses.</p>
-              </div>
-              <button id="refresh-analysis-btn" class="secondary-button" style="padding: 6px 12px; min-height: auto;">Rafraîchir</button>
-            </div>
-            <div class="analysis-auto-grid">
-              <div class="analysis-auto-item">
-                <span>Source</span>
-                <strong>Stats live</strong>
-                <small>Dashboard + Supabase</small>
-              </div>
-              <div class="analysis-auto-item">
-                <span>Equipe</span>
-                <strong id="sim-role-mix">Chargement...</strong>
-                <small>Roles actuellement enregistres</small>
-              </div>
-              <div class="analysis-auto-item">
-                <span>Regle</span>
-                <strong>Bornes anti-abus</strong>
-                <small>Conseil limite a +/- 20%</small>
-              </div>
-            </div>
-          </article>
+.search-box input {
+  width: 260px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  padding: 12px 16px;
+}
 
-          <article class="card stat-card metric-card metric-parts">
-            <p class="section-kicker">Paie estimee</p>
-            <h3 id="sim-possible-payroll">0$</h3>
-            <p class="muted">Salaires dus</p>
-          </article>
-          <article class="card stat-card metric-card metric-revenue">
-            <p class="section-kicker">Taux horaire conseille</p>
-            <h3 id="sim-recommended-hourly">0$</h3>
-            <p class="muted">Base Mecano conseillee</p>
-          </article>
-          <article class="card stat-card metric-card metric-profit">
-            <p class="section-kicker">Profit net actuel</p>
-            <h3 id="sim-remaining-profit">0$</h3>
-            <p class="muted">Revenus moins paies, paiements et depenses.</p>
-          </article>
-          <article class="card stat-card metric-card metric-payroll">
-            <p class="section-kicker">Nombre d'employes</p>
-            <h3 id="sim-employee-count">0</h3>
-            <p class="muted">Effectif actuel</p>
-          </article>
+.status-pill,
+.mini-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
 
-          <article class="card card-span-3 analysis-advice-card">
-            <div class="card-head">
-              <div>
-                <h3>Conseil final</h3>
-                <p class="muted">Recommandation lisible selon les donnees actuelles, sans toucher aux taux officiels.</p>
-              </div>
-            </div>
-            <div class="summary-band simulation-summary">
-              <div class="summary-item">
-                <span>Marge actuelle</span>
-                <strong id="sim-profit-target">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Salaires actuellement dus</span>
-                <strong id="sim-current-payroll">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Ratio salaires / revenus</span>
-                <strong id="sim-payroll-gap">0%</strong>
-              </div>
-            </div>
-            <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
-          </article>
-        </div>
-      </section>
+.status-pill.success,
+.mini-pill.success {
+  background: var(--teal-soft);
+  color: #81c784;
+  border-color: rgba(76, 175, 80, 0.3);
+}
 
-      <section id="page-contrats" class="app-page contrats-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-2">
-            <div class="card-head">
-              <div>
-                <h3>Contrats et Partenariats</h3>
-                <p class="muted">Gere les accords avec les autres entreprises. Les couts fixes s'ajoutent a tes depenses globales.</p>
-              </div>
-              <span class="mini-pill success">Deals</span>
-            </div>
-            <div class="form-grid">
-              <div class="field">
-                <label class="input-label">Entreprise / Organisation</label>
-                <input id="contract-name" type="text" placeholder="Ex: Burgershot">
-              </div>
-              <div class="field">
-                <label class="input-label">Notes</label>
-                <input id="contract-note" type="text" placeholder="Details">
-              </div>
-            </div>
-            
-            <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--line); background: rgba(0,0,0,0.2); border-radius: 4px;">
-              <h4 style="margin: 0 0 12px 0; color: var(--text);">Ajouter un article au contrat</h4>
-              <div class="form-grid" style="align-items: end;">
-                <div class="field"><label class="input-label">Article</label><input id="contract-item-name" placeholder="Ex: Moteur V8"></div>
-                <div class="field"><label class="input-label">Prix régulier ($)</label><input type="number" id="contract-item-price" min="0" placeholder="0"></div>
-                <div class="field"><label class="input-label">Quantité</label><input type="number" id="contract-item-qty" min="1" value="1"></div>
-                <div class="field"><label class="input-label">Rabais (%)</label><input type="number" id="contract-item-discount" min="0" max="100" value="0"></div>
-                <div class="field"><button id="add-contract-item-btn" class="secondary-button" style="width: 100%;">Ajouter l'article</button></div>
-              </div>
-              <table style="margin-top: 1rem;">
-                <thead><tr><th>Article</th><th>Régulier</th><th>Rabais</th><th>Total Payé</th><th>Action</th></tr></thead>
-                <tbody id="contract-items-body"></tbody>
-              </table>
-              <div style="text-align: right; margin-top: 1rem; font-size: 0.95rem;">
-                <span class="muted">Total Régulier: <strong id="contract-total-reg" style="color: var(--text);">0$</strong></span> | 
-                <span style="color: var(--teal);">Total Remisé: <strong id="contract-total-disc">0$</strong></span>
-              </div>
-            </div>
+.status-pill.danger,
+.mini-pill.danger {
+  background: var(--red-soft);
+  color: #ff6b6b;
+  border-color: rgba(230, 57, 70, 0.3);
+}
 
-            <div class="parts-actions" style="margin-top: 1.5rem;">
-              <button id="add-contract-btn" class="primary-button" style="width: 100%;">Sauvegarder le contrat</button>
-            </div>
-            <div class="table-wrap" style="margin-top: 1.5rem;">
-              <table>
-                <thead><tr><th>Entreprise</th><th>Articles / Accord</th><th>Coût fixe total</th><th>Notes</th><th>Action</th></tr></thead>
-                <tbody id="contracts-body"></tbody>
-              </table>
-            </div>
-          </article>
+.status-pill.info,
+.mini-pill.info {
+  background: var(--blue-soft);
+  color: #81a4ff;
+  border-color: rgba(75, 124, 246, 0.3);
+}
 
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Protocole LSPD / BCSO</h3>
-                <p class="muted">Regles strictes du gouvernement.</p>
-              </div>
-              <span class="mini-pill danger">Police</span>
-            </div>
-            <div class="summary-band" style="display: block; padding: 1rem; margin-bottom: 1rem; background: rgba(217, 75, 75, 0.05); border: 1px solid rgba(217, 75, 75, 0.2); border-radius: 8px;">
-              <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;"><strong>✓ Reparations :</strong> Gratuites</p>
-              <p style="margin: 0 0 0.5rem 0; font-size: 0.9rem;"><strong>✓ Entretien :</strong> Fixe 1200$</p>
-              <p style="margin: 0; font-size: 0.9rem; color: #d94b4b;"><strong>✗ Modifications :</strong> INTERDITES. Ne jamais modifier un vehicule plaque police (ex: 911).</p>
-            </div>
-            <div style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-              <p style="font-size: 0.85rem; margin-bottom: 0.75rem; color: var(--text-muted);">Si un agent insiste pour une modif illegale, prends son matricule et signale-le ici :</p>
-              <div class="field"><input id="police-matricule" type="text" placeholder="Matricule (ex: 12)" style="margin-bottom: 0.5rem;"></div>
-              <div class="field"><input id="police-reason" type="text" placeholder="Description de l'abus" style="margin-bottom: 0.5rem;"></div>
-              <button id="submit-police-report" class="danger-button" style="width: 100%;">Signaler a la direction</button>
-            </div>
-          </article>
-        </div>
-      </section>
+.mini-pill.warning {
+  background: var(--orange-soft);
+  color: #ffb74d;
+  border-color: rgba(247, 127, 0, 0.3);
+}
 
-      <section id="page-radio" class="app-page radio-page">
-        <div class="radio-layout">
-          <div class="spotify-container">
-            <div class="spotify-header">
-              <img id="active-playlist-cover" src="logo/playlist.svg" alt="Playlist Cover" class="spotify-cover">
-              <div class="spotify-header-info">
-                <span>PLAYLIST</span>
-                <h1 id="active-playlist-name">Tuner Mix</h1>
-                <p id="active-playlist-desc" style="color: #b3b3b3;">Sélectionne une playlist ou ajoutes-en une !</p>
-              </div>
-            </div>
+.primary-button,
+.secondary-button,
+.danger-button,
+.success-button {
+  min-height: 48px;
+  padding: 12px 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
+}
 
-            <div class="spotify-controls-bar">
-              <button id="play-all-btn" class="spotify-play-btn">▶</button>
-            </div>
+.primary-button:hover,
+.secondary-button:hover,
+.danger-button:hover,
+.success-button:hover {
+  transform: translateY(-1px);
+}
 
-            <div class="spotify-tracklist">
-              <div class="spotify-tracklist-header">
-                <div class="track-number">#</div>
-                <div class="track-info-col">Titre</div>
-                <div class="track-actions-col" style="text-align: right;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
-              </div>
-              <div id="spotify-tracks-body">
-                <!-- Pistes injectées ici -->
-              </div>
-            </div>
+.primary-button {
+  color: #ffffff;
+  background: var(--red);
+  box-shadow: 0 4px 15px rgba(230, 57, 70, 0.3);
+}
 
-            <div class="spotify-admin-panel">
-              <h3>Ajouter une musique</h3>
-              <div class="form-grid" style="grid-template-columns: 1fr 1fr 2fr auto; gap: 12px; align-items: end;">
-                <div class="field"><label class="input-label" style="color: #b3b3b3;">Titre</label><input type="text" id="track-title" placeholder="Ex: Ninho - Eurostar" style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
-                <div class="field"><label class="input-label" style="color: #b3b3b3;">Artiste</label><input type="text" id="track-artist" placeholder="Ex: Ninho" style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
-                <div class="field"><label class="input-label" style="color: #b3b3b3;">Lien YouTube</label><input type="text" id="track-link" placeholder="https://www.youtube.com/watch?v=..." style="background: rgba(255,255,255,0.1); border:none; color: white;"></div>
-                <button id="add-track-btn" class="success-button" style="min-height: 48px; border-radius: 30px; font-size: 0.9rem;">Ajouter</button>
-              </div>
-            </div>
-          </div>
+.primary-button:hover {
+  background: var(--red-hover);
+}
 
-          <div class="spotify-sidebar">
-            <div class="spotify-sidebar-header">
-              <h3>Playlists</h3>
-              <button id="add-playlist-btn" class="spotify-icon-btn" title="Nouvelle playlist">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              </button>
-            </div>
-            <div id="playlists-body" class="spotify-playlists-list">
-              <!-- Playlists injected ici -->
-            </div>
-          </div>
-        </div>
-      </section>
+.punch-toggle-btn {
+  grid-column: span 2;
+  min-height: 64px;
+  font-size: 1.15rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.punch-toggle-btn.active {
+  background: linear-gradient(90deg, #1d2430 0%, #2a3b55 50%, #1d2430 100%);
+  background-size: 200% 100%;
+  animation: scan-bg 2.5s linear infinite;
+  border-color: var(--teal);
+  color: var(--teal);
+  box-shadow: inset 0 0 20px rgba(76, 175, 80, 0.15);
+}
+@keyframes scan-bg {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
 
-      <section id="page-inventaire" class="app-page inventaire-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Stock actuel</h3>
-                <p class="muted">Apercu des pieces disponibles dans l'atelier.</p>
-              </div>
-              <span class="mini-pill">Inventaire</span>
-            </div>
-            <div id="inventory-body" class="inventory-card-grid" style="margin-top: 1rem;"></div>
-          </article>
+.success-button {
+  color: #ffffff;
+  background: var(--teal);
+  box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+}
 
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Historique des mouvements</h3>
-                <p class="muted">Suivi des entrées, sorties et ajustements d'inventaire en direct.</p>
-              </div>
-              <span class="mini-pill">Registre</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Employé</th>
-                    <th>Action</th>
-                    <th>Pièce</th>
-                    <th>Quantité</th>
-                  </tr>
-                </thead>
-                <tbody id="inventory-logs-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
+.success-button:hover {
+  background: #3d8c40;
+}
 
-      <section id="page-reboot" class="app-page reboot-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3 reboot-card">
-            <div class="card-head">
-              <div>
-                <h3 class="gestion-title">Reboot</h3>
-                <p class="muted">Choisis une section, tape RESET, puis confirme.</p>
-              </div>
-              <span class="mini-pill danger">Danger</span>
-            </div>
-            <div class="reboot-grid">
-              <button class="danger-button reboot-scope-button" data-reboot-scope="shifts">Reset pointages</button>
-              <button class="danger-button reboot-scope-button" data-reboot-scope="expenses">Reset commandes</button>
-              <button class="danger-button reboot-scope-button" data-reboot-scope="payouts">Reset paies</button>
-              <button class="danger-button reboot-scope-button" data-reboot-scope="finance">Reset profit</button>
-              <button id="reboot-all" class="danger-button reboot-main-button reboot-scope-button" data-reboot-scope="all">Reboot complet</button>
-            </div>
-          </article>
-        </div>
-      </section>
+.secondary-button {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--line);
+}
 
-      <section id="page-logs" class="app-page logs-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Audit logs</h3>
-                <p class="muted">Historique des actions sensibles: paiements, corrections, rappels, sorties forcees et reboot.</p>
-              </div>
-              <span class="mini-pill">Trace</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Action</th>
-                    <th>Admin</th>
-                    <th>Cible</th>
-                    <th>Details</th>
-                  </tr>
-                </thead>
-                <tbody id="audit-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-    </main>
-  </div>
+.secondary-button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--muted);
+}
 
-  <div id="notes-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <div class="card-head">
-        <div>
-          <h3 id="notes-modal-title">Dossier Employe</h3>
-          <p class="muted">Notes secretes de la direction.</p>
-        </div>
-        <span class="mini-pill warning">Prive</span>
-      </div>
-      <div class="form-grid" style="grid-template-columns: 1fr; margin-top: 1rem;">
-        <div class="field">
-          <textarea id="employee-notes-text" rows="6" placeholder="Avertissements, bons coups, remarques..." style="background: #111827; color: #f8fbff; border: 1px solid #2a3b55; border-radius: 6px; padding: 0.75rem; width: 100%; resize: vertical; font-family: inherit; font-size: 0.95rem;"></textarea>
-        </div>
-      </div>
-      <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
-        <button id="close-notes-modal" class="secondary-button">Fermer</button>
-        <button id="save-notes-modal" class="primary-button">Enregistrer</button>
-      </div>
-    </div>
-  </div>
+.danger-button {
+  color: var(--red);
+  background: transparent;
+  border: 1px solid var(--red);
+}
 
-  <div id="recruitment-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <div class="card-head" style="flex-shrink: 0; border-bottom: 1px solid var(--line); padding-bottom: 1rem; margin-bottom: 1rem;">
-        <div>
-          <h3>Dossier de candidature</h3>
-          <p class="muted">Reponses au formulaire Discord.</p>
-        </div>
-        <button id="close-recruitment-modal" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
-      </div>
-      <div id="recruitment-content" style="overflow-y: auto; padding-right: 8px; flex-grow: 1;"></div>
-    </div>
-  </div>
+.danger-button:hover {
+  background: var(--red-soft);
+}
 
-  <div id="audit-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <div class="card-head">
-        <div>
-          <h3>Détails de l'action</h3>
-          <p class="muted">Valeurs avant/après et informations complémentaires.</p>
-        </div>
-      </div>
-      <div id="audit-modal-content" style="margin-top: 1rem; background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap; font-family: monospace; color: #a3b2c7;"></div>
-      <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-        <button id="close-audit-modal" class="secondary-button">Fermer</button>
-      </div>
-    </div>
-  </div>
+.topbar-button {
+  min-width: 164px;
+}
 
-  <div id="stock-action-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 400px; border: 1px solid var(--line);">
-      <div class="card-head" style="margin-bottom: 1rem;">
-        <div>
-          <h3 id="stock-modal-title">Pièce</h3>
-          <p class="muted">Ajuster ou retirer du stock</p>
-        </div>
-      </div>
-      <input type="hidden" id="stock-modal-code">
-      <div class="form-grid" style="grid-template-columns: 1fr; gap: 14px;">
-        <div class="field">
-          <label class="input-label">Nouveau stock exact</label>
-          <input type="number" id="stock-modal-qty" min="0" style="font-size: 1.5rem; font-weight: bold; height: 60px; color: #fff;">
-        </div>
-        <div class="field" id="stock-modal-charge-container">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); background: rgba(0,0,0,0.2); padding: 12px; border: 1px solid var(--line); border-radius: 4px;">
-            <input type="checkbox" id="stock-modal-charge" style="width:20px; min-height:auto;">
-            Enregistrer la différence dans les dépenses d'entreprise
-          </label>
-        </div>
-        <div class="field" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 4px;">
-          <label class="input-label" style="margin-bottom: 4px;">Impact financier estimé</label>
-          <strong id="stock-modal-cost" style="font-size: 1.4rem; color: var(--teal);">0$</strong>
-        </div>
-      </div>
-      <div class="button-row" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
-        <button id="close-stock-modal" class="secondary-button">Annuler</button>
-        <button id="confirm-stock-modal" class="primary-button">Confirmer</button>
-      </div>
-    </div>
-  </div>
+.app-page {
+  display: none;
+}
 
-  <div id="part-picker-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <div class="card-head" style="flex-shrink: 0; margin-bottom: 1rem;">
-        <div>
-          <h3>Catalogue de pièces</h3>
-          <p class="muted">Recherche et sélectionne une pièce avec son image.</p>
-        </div>
-        <button id="close-part-picker" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
-      </div>
-      <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-shrink: 0; align-items: center;">
-        <div class="field" style="flex-grow: 1; margin-bottom: 0;">
-          <input type="text" id="part-picker-search" placeholder="Rechercher une pièce par nom ou catégorie..." style="background: rgba(0,0,0,0.4);">
-        </div>
-        <button id="btn-pick-all" class="primary-button" style="display: none; min-height: 48px; padding: 12px 18px;">Lot Complet</button>
-      </div>
-      <div id="part-picker-grid" class="inventory-card-grid" style="overflow-y: auto; padding-right: 8px; flex-grow: 1; align-content: flex-start;"></div>
-    </div>
-  </div>
+.app-page.active-page {
+  display: grid;
+  gap: 16px;
+}
 
-  <nav class="mobile-nav">
-    <a href="#pointage" class="mobile-nav-item" data-route="pointage">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-      <span>Punch</span>
-    </a>
-    <a href="#tableau" class="mobile-nav-item active" data-route="tableau" data-admin-only="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-      <span>Dashboard</span>
-    </a>
-    <a href="#presence" class="mobile-nav-item" data-route="presence" data-admin-only="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-      <span>Plancher</span>
-    </a>
-    <a href="#inventaire" class="mobile-nav-item" data-route="inventaire">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-      <span>Stock</span>
-    </a>
-    <a href="#stats" class="mobile-nav-item" data-route="stats" data-admin-only="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-      <span>Équipe</span>
-    </a>
-    <a href="#radio" class="mobile-nav-item" data-route="radio">
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
-      <span>Musique</span>
-    </a>
-  </nav>
+.dashboard-grid,
+.summary-band,
+.button-row,
+.form-grid,
+.pointage-metrics {
+  display: grid;
+  gap: 18px;
+}
 
-  <div id="toast" class="toast hidden"></div>
+.dashboard-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
 
-  <div id="bottom-player" class="bottom-player">
-    <div class="player-left">
-      <img id="player-cover" src="logo/playlist.svg" alt="Cover">
-      <div class="player-info">
-        <strong id="player-title">Aucune lecture</strong>
-        <span id="player-artist">-</span>
-      </div>
-    </div>
-    <div class="player-center">
-      <button id="player-prev-btn" class="player-icon-btn">⏮</button>
-      <button id="player-play-btn" class="player-play-pause">▶</button>
-      <button id="player-next-btn" class="player-icon-btn">⏭</button>
-    </div>
-    <div class="player-right">
-      <button id="player-copy-btn" class="primary-button copy-link-btn">🔗 Copier pour FiveM</button>
-    </div>
-    <div id="yt-player-container" style="display:none;"></div>
-  </div>
+.dashboard-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="app.js"></script>
-</body>
-</html>
+.card {
+  position: relative;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.card::after {
+  display: none;
+}
+
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.gradient-card {
+  background: transparent;
+}
+
+.card-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.card-head p,
+.muted {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.card-span-2 {
+  grid-column: span 2;
+}
+
+.card-span-3 {
+  grid-column: span 3;
+}
+
+.stat-card {
+  min-height: 178px;
+}
+
+.stat-card h3,
+.summary-item strong,
+.pointage-meter strong {
+  margin: 4px 0 0;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.stat-card::before {
+  display: none;
+}
+
+.summary-band {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.summary-item,
+.pointage-meter {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.summary-item span,
+.pointage-meter span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-bottom: 8px;
+}
+
+.enterprise-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.enterprise-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.enterprise-hero {
+  min-height: 264px;
+}
+
+.chart-card {
+  background: transparent;
+  contain: layout paint;
+  overflow: hidden;
+}
+
+.chart-card canvas {
+  width: 100%;
+  height: 260px !important;
+  max-height: 260px;
+  display: block;
+}
+
+.large-chart-card canvas {
+  height: 300px !important;
+  min-height: 300px;
+  max-height: 300px;
+}
+
+/* SPOTIFY RADIO STYLES */
+.radio-page {
+  display: none;
+}
+.radio-page.active-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.radio-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+.spotify-container {
+  background: #121212;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.spotify-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 32px 24px 24px;
+  background: linear-gradient(
+    to bottom,
+    rgba(48, 196, 163, 0.3) 0%,
+    rgba(18, 18, 18, 1) 100%
+  );
+}
+.spotify-cover {
+  width: 190px;
+  height: 190px;
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.spotify-header-info h1 {
+  font-size: 3.5rem;
+  margin: 8px 0;
+  color: white;
+  letter-spacing: -0.04em;
+}
+.spotify-header-info p {
+  font-size: 0.95rem;
+  margin-bottom: 16px;
+}
+.spotify-header-info span {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #fff;
+}
+.spotify-controls-bar {
+  padding: 0 24px 24px;
+  background: #121212;
+}
+.spotify-play-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1db954;
+  color: #fff;
+  font-size: 1.5rem;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.2s,
+    background 0.2s;
+  padding-left: 4px;
+}
+.spotify-play-btn:hover {
+  transform: scale(1.05);
+  background: #1ed760;
+}
+.spotify-play-btn.playing {
+  padding-left: 0;
+}
+.spotify-tracklist {
+  padding: 0 24px 32px;
+  background: #121212;
+}
+.spotify-tracklist-header {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #b3b3b3;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+.spotify-track-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  padding: 8px 16px;
+  align-items: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.spotify-track-row:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.spotify-track-row.active-track {
+  background: rgba(48, 196, 163, 0.1);
+}
+.spotify-track-row.active-track .track-title,
+.spotify-track-row.active-track .track-number {
+  color: #1db954;
+}
+.track-number {
+  color: #b3b3b3;
+  font-variant-numeric: tabular-nums;
+}
+.track-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.track-title {
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 1rem;
+}
+.track-artist {
+  color: #b3b3b3;
+  font-size: 0.85rem;
+}
+.track-actions-col {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #b3b3b3;
+}
+.spotify-icon-btn {
+  background: none;
+  border: none;
+  color: #b3b3b3;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  transition:
+    color 0.2s,
+    transform 0.2s;
+}
+.spotify-icon-btn:hover {
+  color: #ffffff;
+  transform: scale(1.1);
+}
+.copy-single-track:hover {
+  color: #1db954;
+}
+.delete-single-track:hover {
+  color: #e63946;
+}
+.spotify-admin-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.spotify-admin-panel h3 {
+  color: #fff;
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+}
+.spotify-sidebar {
+  background: #121212;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.spotify-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+}
+.spotify-sidebar-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.spotify-playlists-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  background: rgba(255, 255, 255, 0.03);
+}
+.playlist-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.playlist-card.active {
+  background: rgba(48, 196, 163, 0.15);
+  border: 1px solid rgba(48, 196, 163, 0.3);
+}
+.playlist-card img {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.playlist-card-info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden;
+}
+.playlist-card-info strong {
+  color: white;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.playlist-card-info span {
+  color: #b3b3b3;
+  font-size: 0.75rem;
+}
+.playlist-card-actions {
+  display: flex;
+  gap: 4px;
+}
+@media (max-width: 600px) {
+  .radio-layout {
+    grid-template-columns: 1fr;
+  }
+  .spotify-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 24px 16px;
+  }
+  .spotify-controls-bar {
+    padding: 0 16px 16px;
+  }
+  .spotify-tracklist {
+    padding: 0 16px 24px;
+  }
+  .spotify-tracklist-header {
+    display: none;
+  }
+  .spotify-track-row {
+    grid-template-columns: auto 1fr auto;
+    padding: 12px 8px;
+  }
+  .spotify-track-row .track-number {
+    display: none;
+  }
+}
+
+.pointage-page,
+.presence-page,
+.historique-page,
+.logs-page,
+.stats-page,
+.gestion-page,
+.salaire-page,
+.finance-page,
+.parts-page,
+.analyse-page,
+.reboot-page {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pointage-shell {
+  min-height: 360px;
+  background: var(--panel);
+}
+
+.pointage-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.pointage-buttons {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 22px 0 12px;
+}
+
+.demo-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  padding: 8px 14px;
+  background: var(--panel-muted);
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.status-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 4px;
+  background: var(--red);
+  box-shadow: 0 0 0 6px rgba(226, 92, 92, 0.12);
+}
+
+.pointage-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 22px;
+}
+
+.pointage-main-meter {
+  min-height: 190px;
+  align-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 4px solid var(--teal);
+}
+
+.blue-meter {
+  background: rgba(0, 0, 0, 0.2);
+  border-left-color: var(--red);
+}
+
+.pointage-main-meter strong {
+  font-size: 3rem;
+}
+
+.clean-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.clean-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.clean-list li:last-child {
+  border-bottom: 0;
+}
+
+.form-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.finance-form-grid,
+.simulation-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.parts-form-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.simulation-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.analysis-auto-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.analysis-auto-item,
+.analysis-recommendation {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 16px;
+}
+
+.analysis-auto-item span,
+.analysis-recommendation small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analysis-auto-item strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.analysis-auto-item small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.analysis-advice-card {
+  border-color: rgba(48, 196, 163, 0.22);
+}
+
+.analysis-recommendation {
+  margin-top: 16px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.analysis-recommendation-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(48, 196, 163, 0.18);
+}
+
+.analysis-recommendation-head span {
+  color: var(--text);
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.analysis-recommendation-head strong {
+  color: #14876e;
+  font-size: 1.6rem;
+}
+
+.analysis-recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.analysis-recommendation-grid p {
+  margin: 6px 0 0;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.field {
+  display: grid;
+}
+
+.input-label {
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #526173;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  padding: 12px 14px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+select {
+  appearance: none;
+  cursor: pointer;
+}
+
+input:focus,
+select:focus {
+  border-color: #b8cbef;
+  box-shadow: 0 0 0 4px rgba(75, 124, 246, 0.12);
+}
+
+input[readonly] {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.inline-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.part-preview {
+  margin-top: 16px;
+}
+
+.part-preview-empty,
+.part-preview-card {
+  min-height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--muted);
+  padding: 14px;
+}
+
+.part-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.part-preview-card strong,
+.part-preview-card span {
+  display: block;
+}
+
+.part-preview-card strong {
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.part-icon,
+.part-icon-all {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 4px;
+  object-fit: contain;
+  background: rgba(14, 22, 33, 0.08);
+  border: 1px solid rgba(163, 178, 201, 0.24);
+  padding: 5px;
+}
+
+.part-icon-all {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: #30c4a3;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.part-icon-stack {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.part-icon-stack .part-icon {
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+}
+
+.part-table-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.part-table-cell .part-icon,
+.part-table-cell .part-icon-all {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
+  padding: 3px;
+}
+
+.editable-hours-button {
+  border: 1px solid rgba(48, 196, 163, 0.28);
+  border-radius: 4px;
+  background: rgba(48, 196, 163, 0.11);
+  color: var(--text);
+  padding: 8px 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.editable-hours-button:hover {
+  border-color: rgba(48, 196, 163, 0.6);
+  background: rgba(48, 196, 163, 0.2);
+}
+
+.inline-button {
+  min-width: 86px;
+}
+
+.parts-actions {
+  display: grid;
+  grid-template-columns: max-content;
+  margin: 18px 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+th {
+  color: #93a1b5;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.73rem;
+}
+
+td {
+  color: var(--text);
+}
+
+.table-button {
+  min-height: 38px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.secondary-table-button {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+.secondary-table-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hour-adjust-input,
+.role-rate-input {
+  min-width: 120px;
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 50;
+  min-width: 280px;
+  max-width: 440px;
+  padding: 14px 16px;
+  border-radius: 4px;
+  background: #1f2430;
+  color: #f4f7ff;
+  border: 1px solid #3a495f;
+  box-shadow: 0 18px 40px rgba(8, 14, 24, 0.24);
+}
+
+/* BOTTOM PLAYER */
+.bottom-player {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 90px;
+  background: #18191b;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 1000;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
+}
+.bottom-player.active {
+  transform: translateY(0);
+}
+.player-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 30%;
+}
+.player-left img {
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.player-info {
+  display: flex;
+  flex-direction: column;
+}
+.player-info strong {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.player-info span {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.player-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 40%;
+  justify-content: center;
+}
+.player-icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.player-icon-btn:hover {
+  color: white;
+}
+.player-play-pause {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: white;
+  color: black;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding-left: 4px; /* Centrage optique du triangle (Play) */
+}
+.player-play-pause.playing {
+  padding-left: 0; /* Retire le décalage pour l'icône Pause */
+}
+.player-right {
+  width: 30%;
+  display: flex;
+  justify-content: flex-end;
+}
+.copy-link-btn {
+  padding: 8px 16px;
+  min-height: auto;
+  font-size: 0.85rem;
+}
+@media (max-width: 860px) {
+  .bottom-player {
+    bottom: 65px;
+    padding: 0 12px;
+  }
+  .player-left {
+    width: auto;
+    max-width: 45%;
+  }
+  .player-info strong {
+    max-width: 120px;
+  }
+  .player-right {
+    display: none;
+  }
+}
+
+.read-only-mode .card {
+  box-shadow: none;
+  border-left: 4px solid rgba(48, 196, 163, 0.5);
+}
+
+.read-only-mode .main-panel button:not(#logout-button),
+.read-only-mode .main-panel input:not([readonly]),
+.read-only-mode .main-panel select {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.reboot-card {
+  background: transparent;
+  border-color: var(--line);
+}
+
+.reboot-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reboot-main-button {
+  min-height: 58px;
+  font-size: 1rem;
+  margin-top: 12px;
+}
+
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .dashboard-grid,
+  .dashboard-kpis,
+  .enterprise-grid,
+  .enterprise-summary,
+  .summary-band,
+  .form-grid,
+  .finance-form-grid,
+  .parts-form-grid,
+  .reboot-grid,
+  .simulation-form-grid,
+  .simulation-summary,
+  .analysis-auto-grid,
+  .analysis-recommendation-grid,
+    grid-template-columns: 1fr;
+  }
+
+  .card-span-2,
+  .card-span-3 {
+    grid-column: span 1;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 65px;
+    background: #18191b;
+    border-top: 1px solid var(--line);
+    z-index: 100;
+    justify-content: space-around;
+    align-items: stretch;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-panel {
+    padding: 18px 18px 85px 18px;
+  }
+
+  .topbar,
+  .card-head,
+  .pointage-head {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-tools {
+    justify-content: start;
+  }
+
+  .search-box input {
+    width: 100%;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  gap: 4px;
+  transition: color 0.2s;
+}
+
+.mobile-nav-item.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+.mobile-nav-item.active {
+  color: #fff;
+  background: rgba(230, 57, 70, 0.2);
+  border-top: 2px solid var(--red);
+}
+
+.main-panel {
+  background-color: var(--bg);
+  border-left: none;
+}
+
+.topbar {
+  background: transparent;
+  border: 1px solid var(--line);
+  box-shadow: none;
+  padding: 18px 20px;
+  border-radius: 8px;
+}
+
+.metric-card {
+  min-height: 168px;
+  padding-top: 24px;
+  overflow: hidden;
+}
+
+.metric-card h3 {
+  font-size: 2.25rem;
+  letter-spacing: -0.05em;
+}
+
+/* Top borders for metrics */
+.metric-revenue {
+  border-top: 4px solid var(--teal);
+}
+.metric-expenses {
+  border-top: 4px solid var(--orange);
+}
+.metric-payroll {
+  border-top: 4px solid var(--red);
+}
+.metric-profit {
+  border-top: 4px solid var(--blue);
+}
+.metric-parts {
+  border-top: 4px solid var(--muted);
+}
+
+.summary-item strong {
+  color: white;
+  font-size: 1.55rem;
+}
+
+.chart-card {
+  min-height: 388px;
+}
+
+.large-chart-card {
+  min-height: 430px;
+  max-height: 430px;
+}
+
+.large-chart-card canvas {
+  height: 330px !important;
+  min-height: 330px;
+  max-height: 330px;
+}
+
+.pointage-shell {
+  border-top: 4px solid var(--red);
+}
+
+.pointage-main-meter {
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 4px solid var(--teal);
+}
+
+.blue-meter {
+  background: rgba(0, 0, 0, 0.2);
+  border-left-color: var(--red);
+}
+
+.pointage-main-meter strong {
+  letter-spacing: -0.05em;
+}
+
+table {
+  background: transparent;
+}
+
+th {
+  background: transparent;
+}
+
+tbody tr:hover {
+  background: var(--panel-soft);
+}
+
+select {
+  background-color: #1d2430 !important;
+  color: #ffffff !important;
+}
+select option {
+  background-color: #1d2430;
+  color: #ffffff;
+}
+
+.inventory-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.inventory-item-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition:
+    transform 0.2s,
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.inventory-item-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+  transform: translateY(-2px);
+}
+
+.inventory-item-card .part-icon {
+  width: 64px;
+  height: 64px;
+  padding: 8px;
+  margin-bottom: 12px;
+  background: rgba(14, 22, 33, 0.4);
+  border-radius: 8px;
+}
+
+.inventory-item-details strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inventory-item-details span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-bottom: 12px;
+}
+
+.btn-inline-icon {
+  width: 24px !important;
+  height: 24px !important;
+  padding: 2px !important;
+  margin-bottom: 0 !important;
+  background: transparent !important;
+}
+
+.part-picker-btn-icon {
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: var(--muted);
+}
+
+.read-only-mode .card {
+  box-shadow:
+    inset 4px 0 0 rgba(48, 196, 163, 0.28),
+    0 18px 48px rgba(22, 29, 42, 0.08);
+}
+
+.read-only-mode .main-panel button:not(#logout-button),
+.read-only-mode .main-panel input:not([readonly]),
+.read-only-mode .main-panel select {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.gestion-title {
+  color: var(--red);
+}
+
+.reboot-card {
+  background: var(--panel);
+  border-color: var(--line);
+}
+
+.reboot-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reboot-main-button {
+  min-height: 58px;
+  font-size: 1rem;
+  margin-top: 12px;
+}
+
+.mobile-nav {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .dashboard-grid,
+  .dashboard-kpis,
+  .enterprise-grid,
+  .enterprise-summary,
+  .summary-band,
+  .form-grid,
+  .finance-form-grid,
+  .parts-form-grid,
+  .reboot-grid,
+  .simulation-form-grid,
+  .simulation-summary,
+  .analysis-auto-grid,
+  .analysis-recommendation-grid,
+  .pointage-buttons,
+  .pointage-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .card-span-2,
+  .card-span-3 {
+    grid-column: span 1;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 65px;
+    background: #18191b;
+    border-top: 1px solid var(--line);
+    z-index: 100;
+    justify-content: space-around;
+    align-items: stretch;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-panel {
+    padding: 18px 18px 85px 18px;
+  }
+
+  .topbar,
+  .card-head,
+  .pointage-head {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-tools {
+    justify-content: start;
+  }
+
+  .search-box input {
+    width: 100%;
+  }
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  gap: 4px;
+  transition: color 0.2s;
+}
+
+.mobile-nav-item.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-nav-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* Visual polish: Payonex / TrafficTrace inspired dashboard */
+.brand-block {
+  border-bottom: 1px solid var(--sidebar-line);
+  padding-bottom: 18px;
+}
+
+.nav-item {
+  padding-left: 16px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+}
+
+.nav-item:hover,
+.nav-item.active {
+  border-left-color: var(--red);
+}
+.nav-item::before {
+  display: none;
+}
+
+.main-panel {
+  background-image: radial-gradient(
+    circle at top right,
+    rgba(230, 57, 70, 0.05),
+    transparent 40%
+  );
+  background-color: var(--bg);
+  border-left: none;
+}
+
+.topbar {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #1b1b1e 0,
+      #1b1b1e 2px,
+      #141415 2px,
+      #141415 4px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(0, 0, 0, 0.5) 0,
+      rgba(0, 0, 0, 0.5) 2px,
+      transparent 2px,
+      transparent 4px
+    );
+  background-color: #141415;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  padding: 18px 20px;
+  border-radius: 8px;
+}
+
+.metric-card {
+  min-height: 168px;
+  padding-top: 24px;
+  overflow: hidden;
+}
+
+.metric-card h3 {
+  font-size: 2.25rem;
+  letter-spacing: -0.05em;
+}
+
+/* Top borders for metrics */
+.metric-revenue {
+  border-top: 4px solid var(--teal);
+}
+.metric-expenses {
+  border-top: 4px solid var(--orange);
+}
+.metric-payroll {
+  border-top: 4px solid var(--red);
+}
+.metric-profit {
+  border-top: 4px solid var(--blue);
+}
+.metric-parts {
+  border-top: 4px solid var(--muted);
+}
+
+.enterprise-hero {
+  background: var(--panel);
+}
+
+.summary-item {
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: none;
+}
+
+.summary-item strong {
+  color: white;
+  font-size: 1.55rem;
+}
+
+.chart-card {
+  min-height: 388px;
+  background: var(--panel);
+}
+
+.chart-card::before {
+  display: none;
+}
+
+.large-chart-card {
+  min-height: 430px;
+  max-height: 430px;
+}
+
+.large-chart-card canvas {
+  height: 330px !important;
+  min-height: 330px;
+  max-height: 330px;
+}
+
+table {
+  background: transparent;
+}
+
+th {
+  background: transparent;
+}
+
+tbody tr:hover {
+  background: var(--panel-soft);
+}

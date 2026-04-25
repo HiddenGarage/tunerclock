@@ -147,8 +147,7 @@ const elements = {
   shiftMessage: document.getElementById("shift-message"),
   todayHours: document.getElementById("today-hours"),
   todayPay: document.getElementById("today-pay"),
-  punchIn: document.getElementById("punch-in"),
-  punchOut: document.getElementById("punch-out"),
+  punchToggle: document.getElementById("punch-toggle"),
   leaderboardBody: document.getElementById("leaderboard-body"),
   presenceBody: document.getElementById("presence-body"),
   auditBody: document.getElementById("audit-body"),
@@ -245,6 +244,19 @@ const elements = {
   trackTitleInput: document.getElementById("track-title"),
   trackArtistInput: document.getElementById("track-artist"),
   trackLinkInput: document.getElementById("track-link"),
+  // Contrats builder
+  contractItemName: document.getElementById("contract-item-name"),
+  contractItemPrice: document.getElementById("contract-item-price"),
+  contractItemQty: document.getElementById("contract-item-qty"),
+  contractItemDiscount: document.getElementById("contract-item-discount"),
+  addContractItemBtn: document.getElementById("add-contract-item-btn"),
+  contractItemsBody: document.getElementById("contract-items-body"),
+  contractTotalReg: document.getElementById("contract-total-reg"),
+  contractTotalDisc: document.getElementById("contract-total-disc"),
+  // Stock modal
+  stockActionModal: document.getElementById("stock-action-modal"),
+  closeStockModalBtn: document.getElementById("close-stock-modal"),
+  confirmStockModalBtn: document.getElementById("confirm-stock-modal"),
 };
 
 let radioPlaylists = [];
@@ -252,6 +264,7 @@ let activePlaylistId = null;
 let currentPlaylistIdPlaying = null;
 let currentTrackIndex = -1;
 let isPlayingWeb = false;
+let currentContractItems = [];
 
 const doughnutCenterTextPlugin = {
   id: "doughnutCenterText",
@@ -313,6 +326,16 @@ function formatLongDate(dateString) {
     second: "2-digit",
   });
   return `${day.charAt(0).toUpperCase() + day.slice(1)}, ${rest} à ${time}`;
+}
+
+function formatHistoryDate(dateString) {
+  if (!dateString) return "-";
+  const d = new Date(dateString);
+  const dayName = d.toLocaleDateString("fr-CA", { weekday: "long" });
+  const dayNameCap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+  const datePart = d.toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" });
+  const timePart = d.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }).replace(':', 'h');
+  return `${dayNameCap} ${datePart} | Heure : ${timePart}`;
 }
 
 function showToast(message, isError = false) {
@@ -570,11 +593,9 @@ function applyAccessControl() {
     )
     .forEach((element) => {
       if (element.id === "logout-button") return;
-      // Le Gérant (qui est readOnly pour le panel) doit quand même pouvoir punch in/out
       if (
         element.id === "logout-button" ||
-        element.id === "punch-in" ||
-        element.id === "punch-out"
+        element.id === "punch-toggle"
       )
         return;
       element.disabled = state.readOnly;
@@ -1176,6 +1197,23 @@ function renderRecruitmentsTable() {
   );
 }
 
+function renderContractBuilder() {
+  if (!elements.contractItemsBody) return;
+  elements.contractItemsBody.innerHTML = currentContractItems.map((item, idx) => `
+    <tr>
+      <td>${escapeHtml(item.name)} (x${item.quantity})</td>
+      <td>${formatMoney(item.regularPrice * item.quantity)}</td>
+      <td>${item.discountPercent}%</td>
+      <td style="color: var(--teal); font-weight: bold;">${formatMoney(item.finalPrice)}</td>
+      <td><button class="danger-button table-button" onclick="currentContractItems.splice(${idx},1); renderContractBuilder();">X</button></td>
+    </tr>
+  `).join("");
+  const reg = currentContractItems.reduce((s, i) => s + (i.regularPrice * i.quantity), 0);
+  const disc = currentContractItems.reduce((s, i) => s + i.finalPrice, 0);
+  if(elements.contractTotalReg) elements.contractTotalReg.textContent = formatMoney(reg);
+  if(elements.contractTotalDisc) elements.contractTotalDisc.textContent = formatMoney(disc);
+}
+
 function renderContractsTable() {
   if (!elements.contractsBody) return;
   if (!contracts.length) {
@@ -1192,17 +1230,20 @@ function renderContractsTable() {
     elements.contractsBody,
     contracts
       .map(
-        (c) => `
+        (c) => {
+          const itemsLabel = c.items && c.items.length > 0 ? c.items.map(i => `${i.quantity}x ${i.name}`).join(', ') : escapeHtml(c.discount || "-");
+          const costLabel = formatMoney(c.totalDiscounted || c.cost || 0);
+          return `
     <tr>
       <td>${escapeHtml(c.name)}</td>
-      <td>${escapeHtml(c.discount)}</td>
-      <td>${formatMoney(c.cost)}</td>
+      <td>${itemsLabel}</td>
+      <td style="color: var(--teal); font-weight: bold;">${costLabel}</td>
       <td>${escapeHtml(c.note)}</td>
       <td>
         ${canEdit ? `<button class="danger-button table-button delete-contract-btn" data-id="${c.id}">Supprimer</button>` : "-"}
       </td>
     </tr>
-  `,
+  `;}
       )
       .join(""),
   );
@@ -1231,9 +1272,9 @@ function renderHistorique() {
     elements.historiqueBody,
     sortedShifts
       .map((s) => {
-        const inDate = new Date(s.punched_in_at).toLocaleString("fr-CA");
+        const inDate = formatHistoryDate(s.punched_in_at);
         const outDate = s.punched_out_at
-          ? new Date(s.punched_out_at).toLocaleString("fr-CA")
+          ? formatHistoryDate(s.punched_out_at)
           : "-";
         const duration =
           s.status === "active"
@@ -1277,13 +1318,12 @@ function renderInventory() {
         state.isAdmin && !state.isSupervision ? "editable-stock-button" : "";
       const style =
         state.isAdmin && !state.isSupervision
-          ? "cursor: pointer; padding: 4px 12px; border:none;"
           : "";
 
-      const stockPill = `<${tag} class="mini-pill ${colorClass} ${extraClass}" data-code="${part.code}" style="${style}" title="${state.isAdmin && !state.isSupervision ? "Modifier le stock" : ""}">${label}</${tag}>`;
+      const stockPill = `<span class="mini-pill ${colorClass}">${label}</span>`;
 
       return `
-      <div class="inventory-item-card">
+      <div class="inventory-item-card" data-code="${part.code}" style="cursor: pointer;">
         ${getPartIconMarkup(part.code, part.name)}
         <div class="inventory-item-details" style="width: 100%;">
           <strong>${escapeHtml(part.name)}</strong>
@@ -1495,9 +1535,7 @@ function renderPersonalDashboard() {
         const end = new Date(shift.punched_out_at);
         return `
       <tr>
-        <td>${start.toLocaleDateString("fr-CA", { weekday: "short", day: "numeric", month: "short" })}</td>
-        <td>${start.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</td>
-        <td>${end.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })}</td>
+        <td colspan="3">${formatHistoryDate(shift.punched_in_at)}<br><span class="muted">Jusqu'à: ${end.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }).replace(':', 'h')}</span></td>
         <td><span class="mini-pill success">${formatHoursMinutes(shift.duration_hours)}</span></td>
       </tr>
     `;
@@ -1523,8 +1561,7 @@ function renderShiftState() {
     setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
     setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
-    if (elements.punchIn) elements.punchIn.disabled = true;
-    if (elements.punchOut) elements.punchOut.disabled = true;
+    if (elements.punchToggle) elements.punchToggle.disabled = true;
     setText(elements.discordLogin, "Se connecter avec Discord");
     setText(elements.demoUserText, "Aucun employe connecte");
     stopLiveTimer();
@@ -1541,8 +1578,7 @@ function renderShiftState() {
     );
     setText(elements.todayHours, "Lecture seule");
     setText(elements.todayPay, "Supervision");
-    if (elements.punchIn) elements.punchIn.disabled = true;
-    if (elements.punchOut) elements.punchOut.disabled = true;
+    if (elements.punchToggle) elements.punchToggle.disabled = true;
     setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
     setText(
       elements.demoUserText,
@@ -1552,8 +1588,6 @@ function renderShiftState() {
     return;
   }
 
-  if (elements.punchIn) elements.punchIn.disabled = state.punchedIn;
-  if (elements.punchOut) elements.punchOut.disabled = !state.punchedIn;
   setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
   setText(
     elements.demoUserText,
@@ -1568,9 +1602,10 @@ function renderShiftState() {
       elements.shiftMessage,
       "Tu es en service. Ton temps et ton argent montent en direct.",
     );
-    if (elements.punchIn) {
-      elements.punchIn.textContent = "En service";
-      elements.punchIn.classList.add("pulse-active");
+    if (elements.punchToggle) {
+      elements.punchToggle.textContent = "SORTIR DU SERVICE";
+      elements.punchToggle.classList.add("active");
+      elements.punchToggle.disabled = false;
     }
     startLiveTimer();
   } else {
@@ -1580,9 +1615,10 @@ function renderShiftState() {
       elements.shiftMessage,
       "Tu n'es pas en service. Entre en service pour lancer le pointage.",
     );
-    if (elements.punchIn) {
-      elements.punchIn.textContent = "Entrer en service";
-      elements.punchIn.classList.remove("pulse-active");
+    if (elements.punchToggle) {
+      elements.punchToggle.textContent = "ENTRER EN SERVICE";
+      elements.punchToggle.classList.remove("active");
+      elements.punchToggle.disabled = false;
     }
     stopLiveTimer();
     updateLivePunchMetrics();
@@ -2353,9 +2389,8 @@ async function forcePunchOut(employeeIndex) {
 
 async function punchIn() {
   if (!state.currentUser) return;
-  if (elements.punchIn) {
-    elements.punchIn.disabled = true;
-    elements.punchIn.textContent = "Connexion...";
+  if (elements.punchToggle) {
+    elements.punchToggle.disabled = true;
   }
   state.punchedIn = true;
   state.currentUser.active = true;
@@ -2380,17 +2415,13 @@ async function punchIn() {
   } else {
     await loadMeState();
   }
-  if (elements.punchIn) {
-    elements.punchIn.textContent = "Entrer en service";
-  }
   updateAll();
 }
 
 async function punchOut() {
   if (!state.currentUser) return;
-  if (elements.punchOut) {
-    elements.punchOut.disabled = true;
-    elements.punchOut.textContent = "Synchronisation...";
+  if (elements.punchToggle) {
+    elements.punchToggle.disabled = true;
   }
   state.punchedIn = false;
   state.currentUser.active = false;
@@ -2416,9 +2447,6 @@ async function punchOut() {
   }
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = null;
-  if (elements.punchOut) {
-    elements.punchOut.textContent = "Sortir du service";
-  }
   updateAll();
 }
 
@@ -2673,45 +2701,6 @@ async function rebootData(scope = "all") {
   updateAll();
 }
 
-async function consumePart() {
-  if (state.readOnly) return;
-  const select = elements.consumePartName;
-  if (!select || !select.value) {
-    showToast("Selectionne une piece a consommer.", true);
-    return;
-  }
-
-  const itemCode = select.value;
-  const partObj = garageParts.find((p) => p.code === itemCode);
-  const partName = partObj ? partObj.name : itemCode;
-  const quantity = Math.max(
-    1,
-    Number(elements.consumePartQuantity?.value || 1),
-  );
-  const note = elements.consumePartNote?.value || "";
-
-  const response = await fetch("/api/consume-part", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ itemCode, partName, quantity, note }),
-  }).catch(() => null);
-
-  if (!response?.ok) return showToast("Erreur lors de la consommation.", true);
-
-  const data = await response.json();
-  if (data.stock) inventoryStock = data.stock;
-  showToast(`${quantity}x ${partName} consomme(s).`);
-  await loadInventoryLogs();
-  if (elements.consumePartQuantity) elements.consumePartQuantity.value = "1";
-  if (elements.consumePartNote) elements.consumePartNote.value = "";
-  select.value = "";
-  if (elements.btnPickConsumePart) {
-    elements.btnPickConsumePart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
-  }
-  updateAll();
-}
-
 async function openNotesModal(id, name) {
   if (!state.isAdmin) return;
   currentNoteId = id;
@@ -2863,26 +2852,42 @@ async function resolveRecruitment(id, action) {
   }
 }
 
+elements.addContractItemBtn?.addEventListener("click", () => {
+  const name = elements.contractItemName?.value;
+  const price = Number(elements.contractItemPrice?.value || 0);
+  const qty = Number(elements.contractItemQty?.value || 1);
+  const discount = Number(elements.contractItemDiscount?.value || 0);
+  if(!name) return showToast("Nom de l'article requis", true);
+  const totalRegular = price * qty;
+  const totalDiscounted = totalRegular * (1 - (discount / 100));
+  currentContractItems.push({ name, regularPrice: price, quantity: qty, discountPercent: discount, finalPrice: totalDiscounted });
+  renderContractBuilder();
+  if(elements.contractItemName) elements.contractItemName.value = "";
+  if(elements.contractItemPrice) elements.contractItemPrice.value = "";
+  if(elements.contractItemQty) elements.contractItemQty.value = "1";
+  if(elements.contractItemDiscount) elements.contractItemDiscount.value = "0";
+});
+
 elements.addContractBtn?.addEventListener("click", async () => {
   if (!state.isAdmin || state.isSupervision) return;
   const name = document.getElementById("contract-name")?.value;
-  const discount = document.getElementById("contract-discount")?.value;
-  const cost = document.getElementById("contract-cost")?.value;
   const note = document.getElementById("contract-note")?.value;
   if (!name) return showToast("Le nom est obligatoire.", true);
+  const totalReg = currentContractItems.reduce((sum, item) => sum + (item.regularPrice * item.quantity), 0);
+  const totalDisc = currentContractItems.reduce((sum, item) => sum + item.finalPrice, 0);
 
   const response = await fetch("/api/admin-contracts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ name, discount, cost, note }),
+    body: JSON.stringify({ name, note, items: currentContractItems, totalRegular: totalReg, totalDiscounted: totalDisc }),
   });
   if (response.ok) {
     showToast("Contrat ajoute.");
     document.getElementById("contract-name").value = "";
-    document.getElementById("contract-discount").value = "";
-    document.getElementById("contract-cost").value = "";
     document.getElementById("contract-note").value = "";
+    currentContractItems = [];
+    renderContractBuilder();
     await loadAdminDashboard();
     updateAll();
   }
@@ -2909,15 +2914,16 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
 
 elements.discordLogin?.addEventListener("click", loginWithDiscord);
 elements.logoutButton?.addEventListener("click", logout);
-elements.punchIn?.addEventListener("click", punchIn);
-elements.punchOut?.addEventListener("click", punchOut);
+elements.punchToggle?.addEventListener("click", async () => {
+  if(state.punchedIn) await punchOut();
+  else await punchIn();
+});
 elements.saveFinance?.addEventListener("click", saveFinanceSettings);
 elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
 elements.addExpense?.addEventListener("click", addExpense);
 elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.partQuantity?.addEventListener("input", renderPartPreview);
-elements.consumeBtn?.addEventListener("click", consumePart);
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
 });
@@ -2943,14 +2949,6 @@ elements.btnPickPart?.addEventListener("click", () => {
   if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
 });
 
-elements.btnPickConsumePart?.addEventListener("click", () => {
-  activePartPickerTarget = "consume";
-  if (elements.btnPickAll) elements.btnPickAll.style.display = "none";
-  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
-  renderPartPickerGrid("");
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
-});
-
 function selectPartFromPicker(code) {
   const part =
     code === "__all__"
@@ -2959,14 +2957,8 @@ function selectPartFromPicker(code) {
 
   if (!part) return;
 
-  const btn =
-    activePartPickerTarget === "order"
-      ? elements.btnPickPart
-      : elements.btnPickConsumePart;
-  const input =
-    activePartPickerTarget === "order"
-      ? elements.partName
-      : elements.consumePartName;
+  const btn = elements.btnPickPart;
+  const input = elements.partName;
 
   if (input) input.value = code;
   if (activePartPickerTarget === "order") syncSelectedPartCategory();
@@ -3080,29 +3072,49 @@ elements.presenceBody?.addEventListener("click", (event) => {
 });
 
 elements.inventoryBody?.addEventListener("click", async (e) => {
-  const btn = e.target.closest(".editable-stock-button");
-  if (btn) {
-    if (!state.isAdmin || state.isSupervision) return;
-    const itemCode = btn.dataset.code;
-    const partObj = garageParts.find((p) => p.code === itemCode);
-    const currentStock = inventoryStock[itemCode] || 0;
-    const input = window.prompt(
-      `Nouveau stock exact pour ${partObj?.name || itemCode} :`,
-      currentStock,
-    );
-    if (input === null) return;
-    const qty = parseInt(input, 10);
-    if (isNaN(qty) || qty < 0) return showToast("Quantité invalide.", true);
+  const card = e.target.closest(".inventory-item-card");
+  if (card) {
+    if(state.isSupervision) return;
+    const code = card.dataset.code;
+    const part = garageParts.find(p => p.code === code);
+    document.getElementById("stock-modal-code").value = code;
+    document.getElementById("stock-modal-title").textContent = part ? part.name : code;
+    document.getElementById("stock-modal-qty").value = "1";
+    document.getElementById("stock-modal-action").value = "remove";
+    document.getElementById("stock-modal-charge-container").style.display = "block";
+    document.getElementById("stock-modal-cost").textContent = formatMoney(Number(elements.partCost?.value || 105));
+    elements.stockActionModal.style.display = "flex";
+  }
+});
 
+elements.closeStockModalBtn?.addEventListener("click", () => {
+  elements.stockActionModal.style.display = "none";
+});
+
+document.getElementById("stock-modal-action")?.addEventListener("change", (e) => {
+  document.getElementById("stock-modal-charge-container").style.display = e.target.value === "remove" ? "block" : "none";
+});
+
+document.getElementById("stock-modal-qty")?.addEventListener("input", (e) => {
+  const qty = Number(e.target.value || 0);
+  document.getElementById("stock-modal-cost").textContent = formatMoney(qty * Number(elements.partCost?.value || 105));
+});
+
+elements.confirmStockModalBtn?.addEventListener("click", async () => {
+  const code = document.getElementById("stock-modal-code").value;
+  const action = document.getElementById("stock-modal-action").value;
+  const qty = Number(document.getElementById("stock-modal-qty").value || 1);
+  const charge = document.getElementById("stock-modal-charge").checked;
+  const part = garageParts.find(p => p.code === code);
+  
+  if (action === "add") {
+    if(!state.isAdmin) return showToast("Refusé.", true);
+    const currentStock = inventoryStock[code] || 0;
     const res = await fetch("/api/admin-set-stock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({
-        itemCode,
-        partName: partObj?.name,
-        quantity: qty,
-      }),
+      body: JSON.stringify({ itemCode: code, partName: part?.name, quantity: currentStock + qty }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -3110,9 +3122,30 @@ elements.inventoryBody?.addEventListener("click", async (e) => {
       await loadInventoryLogs();
       renderInventory();
       renderInventoryLogs();
-      showToast(`Stock de ${partObj?.name || itemCode} mis à jour (${qty}).`);
+      showToast(`Stock de ${part?.name || code} ajusté (+${qty}).`);
+      elements.stockActionModal.style.display = "none";
     } else {
       showToast("Erreur lors de la mise à jour.", true);
+    }
+  } else {
+    const noteStr = charge ? "Facturé au client" : "Usage interne";
+    const res = await fetch("/api/consume-part", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ itemCode: code, partName: part?.name, quantity: qty, note: noteStr }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      inventoryStock = data.stock;
+      await loadInventoryLogs();
+      renderInventory();
+      renderInventoryLogs();
+      showToast(`${qty}x ${part?.name || code} retiré(s).`);
+      document.getElementById("stock-modal-charge").checked = false;
+      elements.stockActionModal.style.display = "none";
+    } else {
+      showToast("Erreur lors de la consommation.", true);
     }
   }
 });

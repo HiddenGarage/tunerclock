@@ -333,8 +333,14 @@ function formatHistoryDate(dateString) {
   const d = new Date(dateString);
   const dayName = d.toLocaleDateString("fr-CA", { weekday: "long" });
   const dayNameCap = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-  const datePart = d.toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" });
-  const timePart = d.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }).replace(':', 'h');
+  const datePart = d.toLocaleDateString("fr-CA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const timePart = d
+    .toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" })
+    .replace(":", "h");
   return `${dayNameCap} ${datePart} | Heure : ${timePart}`;
 }
 
@@ -593,10 +599,7 @@ function applyAccessControl() {
     )
     .forEach((element) => {
       if (element.id === "logout-button") return;
-      if (
-        element.id === "logout-button" ||
-        element.id === "punch-toggle"
-      )
+      if (element.id === "logout-button" || element.id === "punch-toggle")
         return;
       element.disabled = state.readOnly;
     });
@@ -1199,7 +1202,9 @@ function renderRecruitmentsTable() {
 
 function renderContractBuilder() {
   if (!elements.contractItemsBody) return;
-  elements.contractItemsBody.innerHTML = currentContractItems.map((item, idx) => `
+  elements.contractItemsBody.innerHTML = currentContractItems
+    .map(
+      (item, idx) => `
     <tr>
       <td>${escapeHtml(item.name)} (x${item.quantity})</td>
       <td>${formatMoney(item.regularPrice * item.quantity)}</td>
@@ -1207,11 +1212,18 @@ function renderContractBuilder() {
       <td style="color: var(--teal); font-weight: bold;">${formatMoney(item.finalPrice)}</td>
       <td><button class="danger-button table-button" onclick="currentContractItems.splice(${idx},1); renderContractBuilder();">X</button></td>
     </tr>
-  `).join("");
-  const reg = currentContractItems.reduce((s, i) => s + (i.regularPrice * i.quantity), 0);
+  `,
+    )
+    .join("");
+  const reg = currentContractItems.reduce(
+    (s, i) => s + i.regularPrice * i.quantity,
+    0,
+  );
   const disc = currentContractItems.reduce((s, i) => s + i.finalPrice, 0);
-  if(elements.contractTotalReg) elements.contractTotalReg.textContent = formatMoney(reg);
-  if(elements.contractTotalDisc) elements.contractTotalDisc.textContent = formatMoney(disc);
+  if (elements.contractTotalReg)
+    elements.contractTotalReg.textContent = formatMoney(reg);
+  if (elements.contractTotalDisc)
+    elements.contractTotalDisc.textContent = formatMoney(disc);
 }
 
 function renderContractsTable() {
@@ -1229,11 +1241,13 @@ function renderContractsTable() {
   setHtml(
     elements.contractsBody,
     contracts
-      .map(
-        (c) => {
-          const itemsLabel = c.items && c.items.length > 0 ? c.items.map(i => `${i.quantity}x ${i.name}`).join(', ') : escapeHtml(c.discount || "-");
-          const costLabel = formatMoney(c.totalDiscounted || c.cost || 0);
-          return `
+      .map((c) => {
+        const itemsLabel =
+          c.items && c.items.length > 0
+            ? c.items.map((i) => `${i.quantity}x ${i.name}`).join(", ")
+            : escapeHtml(c.discount || "-");
+        const costLabel = formatMoney(c.totalDiscounted || c.cost || 0);
+        return `
     <tr>
       <td>${escapeHtml(c.name)}</td>
       <td>${itemsLabel}</td>
@@ -1243,8 +1257,8 @@ function renderContractsTable() {
         ${canEdit ? `<button class="danger-button table-button delete-contract-btn" data-id="${c.id}">Supprimer</button>` : "-"}
       </td>
     </tr>
-  `;}
-      )
+  `;
+      })
       .join(""),
   );
 }
@@ -1313,12 +1327,6 @@ function renderInventory() {
         : isLow
           ? `${currentStock} (Bas)`
           : currentStock;
-      const tag = state.isAdmin && !state.isSupervision ? "button" : "span";
-      const extraClass =
-        state.isAdmin && !state.isSupervision ? "editable-stock-button" : "";
-      const style =
-        state.isAdmin && !state.isSupervision
-          : "";
 
       const stockPill = `<span class="mini-pill ${colorClass}">${label}</span>`;
 
@@ -1535,7 +1543,7 @@ function renderPersonalDashboard() {
         const end = new Date(shift.punched_out_at);
         return `
       <tr>
-        <td colspan="3">${formatHistoryDate(shift.punched_in_at)}<br><span class="muted">Jusqu'à: ${end.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }).replace(':', 'h')}</span></td>
+        <td colspan="3">${formatHistoryDate(shift.punched_in_at)}<br><span class="muted">Jusqu'à: ${end.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" }).replace(":", "h")}</span></td>
         <td><span class="mini-pill success">${formatHoursMinutes(shift.duration_hours)}</span></td>
       </tr>
     `;
@@ -2857,15 +2865,21 @@ elements.addContractItemBtn?.addEventListener("click", () => {
   const price = Number(elements.contractItemPrice?.value || 0);
   const qty = Number(elements.contractItemQty?.value || 1);
   const discount = Number(elements.contractItemDiscount?.value || 0);
-  if(!name) return showToast("Nom de l'article requis", true);
+  if (!name) return showToast("Nom de l'article requis", true);
   const totalRegular = price * qty;
-  const totalDiscounted = totalRegular * (1 - (discount / 100));
-  currentContractItems.push({ name, regularPrice: price, quantity: qty, discountPercent: discount, finalPrice: totalDiscounted });
+  const totalDiscounted = totalRegular * (1 - discount / 100);
+  currentContractItems.push({
+    name,
+    regularPrice: price,
+    quantity: qty,
+    discountPercent: discount,
+    finalPrice: totalDiscounted,
+  });
   renderContractBuilder();
-  if(elements.contractItemName) elements.contractItemName.value = "";
-  if(elements.contractItemPrice) elements.contractItemPrice.value = "";
-  if(elements.contractItemQty) elements.contractItemQty.value = "1";
-  if(elements.contractItemDiscount) elements.contractItemDiscount.value = "0";
+  if (elements.contractItemName) elements.contractItemName.value = "";
+  if (elements.contractItemPrice) elements.contractItemPrice.value = "";
+  if (elements.contractItemQty) elements.contractItemQty.value = "1";
+  if (elements.contractItemDiscount) elements.contractItemDiscount.value = "0";
 });
 
 elements.addContractBtn?.addEventListener("click", async () => {
@@ -2873,14 +2887,26 @@ elements.addContractBtn?.addEventListener("click", async () => {
   const name = document.getElementById("contract-name")?.value;
   const note = document.getElementById("contract-note")?.value;
   if (!name) return showToast("Le nom est obligatoire.", true);
-  const totalReg = currentContractItems.reduce((sum, item) => sum + (item.regularPrice * item.quantity), 0);
-  const totalDisc = currentContractItems.reduce((sum, item) => sum + item.finalPrice, 0);
+  const totalReg = currentContractItems.reduce(
+    (sum, item) => sum + item.regularPrice * item.quantity,
+    0,
+  );
+  const totalDisc = currentContractItems.reduce(
+    (sum, item) => sum + item.finalPrice,
+    0,
+  );
 
   const response = await fetch("/api/admin-contracts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ name, note, items: currentContractItems, totalRegular: totalReg, totalDiscounted: totalDisc }),
+    body: JSON.stringify({
+      name,
+      note,
+      items: currentContractItems,
+      totalRegular: totalReg,
+      totalDiscounted: totalDisc,
+    }),
   });
   if (response.ok) {
     showToast("Contrat ajoute.");
@@ -2915,7 +2941,7 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
 elements.discordLogin?.addEventListener("click", loginWithDiscord);
 elements.logoutButton?.addEventListener("click", logout);
 elements.punchToggle?.addEventListener("click", async () => {
-  if(state.punchedIn) await punchOut();
+  if (state.punchedIn) await punchOut();
   else await punchIn();
 });
 elements.saveFinance?.addEventListener("click", saveFinanceSettings);
@@ -3074,15 +3100,20 @@ elements.presenceBody?.addEventListener("click", (event) => {
 elements.inventoryBody?.addEventListener("click", async (e) => {
   const card = e.target.closest(".inventory-item-card");
   if (card) {
-    if(state.isSupervision) return;
+    if (state.isSupervision) return;
     const code = card.dataset.code;
-    const part = garageParts.find(p => p.code === code);
+    const part = garageParts.find((p) => p.code === code);
     document.getElementById("stock-modal-code").value = code;
-    document.getElementById("stock-modal-title").textContent = part ? part.name : code;
+    document.getElementById("stock-modal-title").textContent = part
+      ? part.name
+      : code;
     document.getElementById("stock-modal-qty").value = "1";
     document.getElementById("stock-modal-action").value = "remove";
-    document.getElementById("stock-modal-charge-container").style.display = "block";
-    document.getElementById("stock-modal-cost").textContent = formatMoney(Number(elements.partCost?.value || 105));
+    document.getElementById("stock-modal-charge-container").style.display =
+      "block";
+    document.getElementById("stock-modal-cost").textContent = formatMoney(
+      Number(elements.partCost?.value || 105),
+    );
     elements.stockActionModal.style.display = "flex";
   }
 });
@@ -3091,13 +3122,18 @@ elements.closeStockModalBtn?.addEventListener("click", () => {
   elements.stockActionModal.style.display = "none";
 });
 
-document.getElementById("stock-modal-action")?.addEventListener("change", (e) => {
-  document.getElementById("stock-modal-charge-container").style.display = e.target.value === "remove" ? "block" : "none";
-});
+document
+  .getElementById("stock-modal-action")
+  ?.addEventListener("change", (e) => {
+    document.getElementById("stock-modal-charge-container").style.display =
+      e.target.value === "remove" ? "block" : "none";
+  });
 
 document.getElementById("stock-modal-qty")?.addEventListener("input", (e) => {
   const qty = Number(e.target.value || 0);
-  document.getElementById("stock-modal-cost").textContent = formatMoney(qty * Number(elements.partCost?.value || 105));
+  document.getElementById("stock-modal-cost").textContent = formatMoney(
+    qty * Number(elements.partCost?.value || 105),
+  );
 });
 
 elements.confirmStockModalBtn?.addEventListener("click", async () => {
@@ -3105,16 +3141,20 @@ elements.confirmStockModalBtn?.addEventListener("click", async () => {
   const action = document.getElementById("stock-modal-action").value;
   const qty = Number(document.getElementById("stock-modal-qty").value || 1);
   const charge = document.getElementById("stock-modal-charge").checked;
-  const part = garageParts.find(p => p.code === code);
-  
+  const part = garageParts.find((p) => p.code === code);
+
   if (action === "add") {
-    if(!state.isAdmin) return showToast("Refusé.", true);
+    if (!state.isAdmin) return showToast("Refusé.", true);
     const currentStock = inventoryStock[code] || 0;
     const res = await fetch("/api/admin-set-stock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ itemCode: code, partName: part?.name, quantity: currentStock + qty }),
+      body: JSON.stringify({
+        itemCode: code,
+        partName: part?.name,
+        quantity: currentStock + qty,
+      }),
     });
     if (res.ok) {
       const data = await res.json();
@@ -3133,7 +3173,12 @@ elements.confirmStockModalBtn?.addEventListener("click", async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ itemCode: code, partName: part?.name, quantity: qty, note: noteStr }),
+      body: JSON.stringify({
+        itemCode: code,
+        partName: part?.name,
+        quantity: qty,
+        note: noteStr,
+      }),
     });
     if (res.ok) {
       const data = await res.json();

@@ -1055,6 +1055,22 @@ function renderStatsTables() {
     if (presenceCard) presenceCard.style.display = "none";
   }
 
+  // AUTO-FIX : Mettre à jour les en-têtes du tableau pour correspondre aux 7 colonnes
+  const thead = elements.statsBody.previousElementSibling;
+  if (thead && thead.tagName === "THEAD") {
+    thead.innerHTML = `
+      <tr>
+        <th>Employé</th>
+        <th>Rôle</th>
+        <th>Statut</th>
+        <th>Heures</th>
+        <th>Taux</th>
+        <th>Salaire</th>
+        <th style="text-align: right;">Actions</th>
+      </tr>
+    `;
+  }
+
   if (!employees.length) {
     setHtml(
       elements.statsBody,
@@ -1099,7 +1115,7 @@ function renderStatsTables() {
           let actionsHtml = `
             <div style="position: relative; display: inline-block; text-align: left;" class="action-menu-container">
               <button class="secondary-button table-button action-menu-btn" data-id="${employee.id}" style="padding: 4px 10px; font-weight: bold; font-size: 1.2rem; background: transparent; border: none; color: var(--text); cursor: pointer;">⋮</button>
-              <div class="action-menu-dropdown hidden" id="menu-${employee.id}" style="position: absolute; right: 0; top: 100%; background: #1d2430; border: 1px solid #3b4b63; border-radius: 6px; padding: 0.5rem; z-index: 1000; min-width: 170px; box-shadow: 0 8px 16px rgba(0,0,0,0.6); display: none; flex-direction: column; gap: 4px;">
+              <div class="action-menu-dropdown hidden" id="menu-${employee.id}" style="position: fixed; background: #1d2430; border: 1px solid #3b4b63; border-radius: 6px; padding: 0.5rem; z-index: 9999; min-width: 170px; box-shadow: 0 8px 16px rgba(0,0,0,0.6); display: none; flex-direction: column; gap: 4px;">
                 <button class="menu-item-btn open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}" style="background: transparent; border: none; color: var(--text); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">📂 Dossier</button>
                 <button class="menu-item-btn editable-hours-button" data-employee-index="${employeeIndex}" style="background: transparent; border: none; color: var(--text); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">⏱ Ajuster heures</button>
           `;
@@ -3472,7 +3488,12 @@ elements.statsBody?.addEventListener("click", (event) => {
     document
       .querySelectorAll(".action-menu-dropdown")
       .forEach((d) => (d.style.display = "none"));
-    if (isHidden) dropdown.style.display = "flex";
+    if (isHidden) {
+      dropdown.style.display = "flex";
+      const rect = menuBtn.getBoundingClientRect();
+      dropdown.style.top = `${rect.bottom + 4}px`;
+      dropdown.style.right = `${window.innerWidth - rect.right}px`;
+    }
     return;
   }
 
@@ -4009,6 +4030,16 @@ document.addEventListener("click", async (e) => {
 });
 
 window.addEventListener("hashchange", routeToCurrentPage);
+
+window.addEventListener(
+  "scroll",
+  () => {
+    document
+      .querySelectorAll(".action-menu-dropdown")
+      .forEach((d) => (d.style.display = "none"));
+  },
+  { passive: true, capture: true },
+);
 
 updateAll();
 loadAuthSession();

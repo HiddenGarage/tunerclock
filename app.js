@@ -460,12 +460,7 @@ function applyAccessControl() {
 
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
-      const hiddenForGerant = [
-        "logs",
-        "reboot",
-        "recrutements",
-        "salaire",
-      ];
+      const hiddenForGerant = ["logs", "reboot", "recrutements", "salaire"];
       if (
         hiddenForGerant.includes(item.dataset.route) ||
         item.dataset.hiddenGerant === "true"
@@ -2509,18 +2504,18 @@ async function loadAdminDashboard() {
       const matching = employees.find(
         (employee) => employee.discordId === state.currentUser.discordId,
       );
-          if (matching) {
-            const wasActive = state.currentUser.active;
-            const wasStartedAt = state.currentUser.activeShiftStartedAt;
-            const wasTodayHours = state.currentUser.todayHours;
-            
-            state.currentUser = matching;
-            if (state.punchedIn && !state.currentUser.active) {
-              state.currentUser.active = wasActive;
-              state.currentUser.activeShiftStartedAt = wasStartedAt;
-              state.currentUser.todayHours = wasTodayHours;
-            }
-          }
+      if (matching) {
+        const wasActive = state.currentUser.active;
+        const wasStartedAt = state.currentUser.activeShiftStartedAt;
+        const wasTodayHours = state.currentUser.todayHours;
+
+        state.currentUser = matching;
+        if (state.punchedIn && !state.currentUser.active) {
+          state.currentUser.active = wasActive;
+          state.currentUser.activeShiftStartedAt = wasStartedAt;
+          state.currentUser.todayHours = wasTodayHours;
+        }
+      }
     }
     if (data.radioPlaylists) {
       radioPlaylists = data.radioPlaylists;
@@ -3019,36 +3014,59 @@ function renderRebootPage() {
     `;
     rebootContainer.appendChild(resetDiv);
 
-    document.getElementById("reset-employee-btn").addEventListener("click", async () => {
-      const select = document.getElementById("reset-employee-select");
-      const empId = select.value;
-      if (!empId) return showToast("Veuillez sélectionner un employé.", true);
+    document
+      .getElementById("reset-employee-btn")
+      .addEventListener("click", async () => {
+        const select = document.getElementById("reset-employee-select");
+        const empId = select.value;
+        if (!empId) return showToast("Veuillez sélectionner un employé.", true);
 
-      const emp = employees.find(e => e.id === empId);
-      if (!emp) return;
+        const emp = employees.find((e) => e.id === empId);
+        if (!emp) return;
 
-      if (!window.confirm(`Voulez-vous vraiment réinitialiser toutes les stats de ${emp.name} ?`)) return;
-      const typed = window.prompt("Tapez RESET pour confirmer.");
-      if (typed !== "RESET") return showToast("Annulé.", true);
+        if (
+          !window.confirm(
+            `Voulez-vous vraiment réinitialiser toutes les stats de ${emp.name} ?`,
+          )
+        )
+          return;
+        const typed = window.prompt("Tapez RESET pour confirmer.");
+        if (typed !== "RESET") return showToast("Annulé.", true);
 
-      const response = await fetch(\`/api/admin-employees/\${empId}/reset\`, { method: "POST", credentials: "include" }).catch(() => null);
-      if (response?.ok) {
-        showToast(\`Stats de \${emp.name} réinitialisées.\`);
-      } else {
-        // Fallback: Reset les heures à 0 avec l'ancienne route si la nouvelle n'est pas encore codée sur ton bot
-        await fetch("/api/admin-adjust-employee-hours", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ employeeId: empId, totalHours: 0 }) });
-        showToast(\`Heures de \${emp.name} remises à 0 (Fallback).\`);
-      }
-      await loadAdminDashboard();
-      updateAll();
-    });
+        const response = await fetch(`/api/admin-employees/${empId}/reset`, {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => null);
+        if (response?.ok) {
+          showToast(`Stats de ${emp.name} réinitialisées.`);
+        } else {
+          // Fallback: Reset les heures à 0 avec l'ancienne route si la nouvelle n'est pas encore codée sur ton bot
+          await fetch("/api/admin-adjust-employee-hours", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ employeeId: empId, totalHours: 0 }),
+          });
+          showToast(`Heures de ${emp.name} remises à 0 (Fallback).`);
+        }
+        await loadAdminDashboard();
+        updateAll();
+      });
   }
-  
+
   const select = document.getElementById("reset-employee-select");
   if (select) {
     const currentValue = select.value;
-    select.innerHTML = '<option value="">-- Choisir un employé --</option>' + employees.map(e => \`<option value="\${e.id}">\${escapeHtml(e.name)} (\${escapeHtml(e.roleName)})\</option>\`).join("");
-    if (employees.find(e => e.id === currentValue)) select.value = currentValue;
+    select.innerHTML =
+      '<option value="">-- Choisir un employé --</option>' +
+      employees
+        .map(
+          (e) =>
+            `<option value="${e.id}">${escapeHtml(e.name)} (${escapeHtml(e.roleName)})</option>`,
+        )
+        .join("");
+    if (employees.find((e) => e.id === currentValue))
+      select.value = currentValue;
   }
 }
 

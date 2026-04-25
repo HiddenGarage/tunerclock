@@ -29,7 +29,6 @@ const routes = [
   "tableau",
   "pointage",
   "historique",
-  "presence",
   "stats",
   "recrutements",
   "gestion",
@@ -97,10 +96,9 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord",
-  pointage: "Punch",
+  pointage: "Mise en service",
   historique: "Historique",
   inventaire: "Gestion Stock",
-  presence: "Sur le plancher",
   stats: "Équipe",
   recrutements: "Recrutements",
   gestion: "Comptabilité",
@@ -611,7 +609,6 @@ function routeToCurrentPage() {
   if (state.currentUser?.roleName === "Gerant") {
     const allowedRoutes = [
       "tableau",
-      "presence",
       "stats",
       "gestion",
       "recrutements",
@@ -2909,10 +2906,36 @@ function openRecruitmentModal(id) {
   const rec = recruitments.find((r) => r.id === id);
   if (!rec) return;
 
+  let statusText = "En attente d'évaluation";
+  let actionsHtml = `
+    <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
+    <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="offer_interview" style="border-color: var(--teal); color: var(--teal);">Inviter en entrevue</button>
+    <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter direct</button>
+  `;
+
+  if (rec.status === "interview_offered") {
+    statusText = "Entrevue proposée (en attente du candidat)";
+    actionsHtml = `
+      <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Annuler et Refuser</button>
+      <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter direct</button>
+    `;
+  } else if (rec.status === "interview_selected") {
+    statusText = `Le candidat a choisi : ${escapeHtml(rec.interviewSelected)}`;
+    actionsHtml = `
+      <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
+      <button class="success-button resolve-recruitment-btn" data-id="${rec.id}" data-action="confirm_interview">Confirmer l'entrevue</button>
+    `;
+  } else if (rec.status === "interview_confirmed") {
+    statusText = `Entrevue confirmée : ${escapeHtml(rec.interviewSelected)}`;
+    actionsHtml = `
+      <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser (Après entrevue)</button>
+      <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Embaucher</button>
+    `;
+  }
+
   let contentHtml = `
-    <div style="margin-bottom: 1rem;">
-      <label class="input-label">Identite (Nom RP, Age IRL, Tel)</label>
-      <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q1)}</div>
+    <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+      <span class="mini-pill info">${statusText}</span>
     </div>
     <div style="margin-bottom: 1rem;">
       <label class="input-label">Experiences et Competences</label>
@@ -2930,9 +2953,8 @@ function openRecruitmentModal(id) {
       <label class="input-label">Boite a lunch</label>
       <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap;">${escapeHtml(rec.q5)}</div>
     </div>
-    <div class="button-row" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem;">
-      <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
-      <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter</button>
+    <div class="button-row" style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap;">
+      ${actionsHtml}
     </div>
   `;
 
@@ -2943,20 +2965,65 @@ function openRecruitmentModal(id) {
 
 async function resolveRecruitment(id, action) {
   if (state.readOnly) return;
-  const msg =
-    action === "accept"
-      ? "Accepter cette candidature ?"
-      : "Refuser cette candidature (et envoyer le message de refus) ?";
-  if (!window.confirm(msg)) return;
+
+  let bodyPayload = {};
+
+  if (action === "offer_interview") {
+    const datesStr = prompt(
+      "Propose des dates pour l'entrevue séparées par des virgules\nExemple: Mardi 18h, Mercredi 20h, Jeudi 21h",
+    );
+    if (!datesStr) return;
+    const dates = datesStr
+      .split(",")
+      .map((d) => d.trim())
+      .filter(Boolean);
+    if (dates.length === 0) return;
+    bodyPayload = { dates };
+  } else if (action === "accept") {
+    const roleChoice = prompt(
+      "Quel rôle Discord veux-tu lui attribuer ?\n\n1 = Apprenti (Défaut)\n2 = Mécano\n3 = Gérant\n4 = Copatron",
+      "1",
+    );
+    if (!roleChoice) return;
+
+    let selectedRoleId = roleIdMap.Apprenti;
+    let selectedRoleName = "Apprenti";
+
+    if (roleChoice === "2") {
+      selectedRoleId = roleIdMap.Mecano;
+      selectedRoleName = "Mécano";
+    } else if (roleChoice === "3") {
+      selectedRoleId = roleIdMap.Gerant;
+      selectedRoleName = "Gérant";
+    } else if (roleChoice === "4") {
+      selectedRoleId = roleIdMap.Copatron;
+      selectedRoleName = "Copatron";
+    } else if (roleChoice !== "1") {
+      showToast("Choix invalide. Annulé.", true);
+      return;
+    }
+
+    if (
+      !window.confirm(`Confirmer l'embauche en tant que ${selectedRoleName} ?`)
+    )
+      return;
+    bodyPayload = { roleId: selectedRoleId, roleName: selectedRoleName };
+  } else {
+    const msg =
+      action === "reject"
+        ? "Refuser cette candidature (et envoyer le message de refus) ?"
+        : "Confirmer l'entrevue à cette date (et envoyer une notification Discord) ?";
+    if (!window.confirm(msg)) return;
+  }
 
   const response = await fetch(`/api/admin-recruitments/${id}/${action}`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify(bodyPayload),
   });
   if (response.ok) {
-    showToast(
-      action === "accept" ? "Candidature acceptee !" : "Candidature refusee.",
-    );
+    showToast("Action exécutée avec succès.");
     if (elements.recruitmentModal)
       elements.recruitmentModal.style.display = "none";
     await loadAdminDashboard();

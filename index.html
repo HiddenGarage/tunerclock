@@ -150,71 +150,57 @@
       </section>
 
       <section id="page-pointage" class="app-page pointage-page">
-        <article class="card pointage-shell">
-          <div class="pointage-head">
-            <div>
-              <h3>Punch personnel</h3>
-              <p id="shift-message" class="muted">Connecte-toi pour commencer ton quart.</p>
-            </div>
-            <span id="shift-badge" class="mini-pill danger">Hors service</span>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Pointage</h2>
+            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour commencer ton quart.</p>
           </div>
+          <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
+        </div>
 
-          <div class="button-row pointage-buttons">
-            <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
-            <button id="punch-toggle" class="punch-toggle-btn" disabled>Entrer en service</button>
-          </div>
+        <div class="dashboard-grid">
+          <article class="card card-span-2 clock-in-widget" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; text-align: center;">
+            <span id="shift-badge" class="mini-pill danger" style="margin-bottom: 32px; font-size: 0.9rem; padding: 10px 20px;">Hors service</span>
+            
+            <div style="margin-bottom: 40px;">
+              <span class="muted" style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 800;">Temps de la session</span>
+              <h1 id="today-hours" style="font-size: 5rem; margin: 12px 0; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--text); line-height: 1;">0h 00m 00s</h1>
+              <div style="color: var(--teal); font-weight: 800; font-size: 1.4rem;">+ <span id="today-pay">0$</span></div>
+            </div>
 
-          <div class="demo-user">
-            <span class="status-dot"></span>
-            <span id="demo-user-text">Aucun employe connecte</span>
-          </div>
-
-          <div class="pointage-metrics">
-            <div class="pointage-meter pointage-main-meter">
-              <span>Heures en direct</span>
-              <strong id="today-hours">0h 00m</strong>
-            </div>
-            <div class="pointage-meter pointage-main-meter blue-meter">
-              <span>Argent gagne en direct</span>
-              <strong id="today-pay">0$</strong>
-            </div>
-          </div>
-        </article>
-
-        <div id="personal-stats-section" class="dashboard-grid" style="margin-top: 22px; display: none;">
-          <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column;">
-            <div class="card-head" style="margin-bottom: 12px;">
-              <div>
-                <h3>Ma Cagnotte</h3>
-                <p class="muted">Argent en attente de paiement.</p>
-              </div>
-              <span class="mini-pill">À payer</span>
-            </div>
-            <div style="flex-grow: 1;">
-              <span class="muted" style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 4px;">Total Actuel</span>
-              <h3 id="pending-pay" style="font-size: 2.8rem; color: var(--text); margin-bottom: 4px;">0$</h3>
-              <span class="muted" style="font-size: 0.85rem;">Temps cumulé: <strong id="pending-hours" style="color: var(--text);">0h 00m</strong></span>
-            </div>
-            <div style="width: 100%; height: 140px; margin-top: 16px; position: relative;">
-              <canvas id="cagnotte-chart"></canvas>
-            </div>
+            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">ENTRER EN SERVICE</button>
           </article>
 
-          <article class="card card-span-2">
-            <div class="card-head">
-              <div>
-                <h3>Mes derniers shifts</h3>
-                <p class="muted">Historique de tes 5 dernières séances de travail.</p>
+          <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
+            <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column; padding: 24px;">
+              <div class="card-head" style="margin-bottom: 12px;">
+                <div>
+                  <h3 style="font-size: 1.1rem;">Ma Cagnotte</h3>
+                </div>
+                <span class="mini-pill">À payer</span>
               </div>
-              <span class="mini-pill success">Terminés</span>
-            </div>
-            <div class="table-wrap" style="margin-top: 1rem;">
-              <table>
-                <thead><tr><th colspan="3">Date & Heure</th><th>Durée totale</th></tr></thead>
-                <tbody id="personal-history-body"></tbody>
-              </table>
-            </div>
-          </article>
+              <div style="flex-grow: 1;">
+                <h3 id="pending-pay" style="font-size: 2.4rem; color: var(--text); margin: 0 0 4px 0;">0$</h3>
+                <span class="muted" style="font-size: 0.85rem;">Temps cumulé: <strong id="pending-hours" style="color: var(--text);">0h 00m</strong></span>
+              </div>
+              <div style="width: 100%; height: 110px; margin-top: 16px; position: relative;">
+                <canvas id="cagnotte-chart"></canvas>
+              </div>
+            </article>
+
+            <article class="card" style="flex-grow: 1;">
+              <div class="card-head" style="margin-bottom: 12px;">
+                <div>
+                  <h3 style="font-size: 1.1rem;">Derniers shifts</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table style="font-size: 0.85rem;">
+                  <tbody id="personal-history-body"></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
         </div>
       </section>
 

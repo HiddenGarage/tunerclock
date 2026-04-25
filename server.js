@@ -2599,9 +2599,10 @@ app.post("/api/admin-contracts", requireAuth, async (req, res) => {
     const newContract = {
       id: Date.now().toString(),
       name: String(req.body.name || "Inconnu"),
-      discount: String(req.body.discount || "-"),
-      cost: Number(req.body.cost || 0),
       note: String(req.body.note || ""),
+      items: req.body.items || [],
+      totalRegular: Number(req.body.totalRegular || 0),
+      totalDiscounted: Number(req.body.totalDiscounted || 0),
     };
     contracts.push(newContract);
     await upsertSetting(supabase, "contracts_list", contracts);

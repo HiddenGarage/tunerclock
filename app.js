@@ -1518,7 +1518,7 @@ function renderPersonalDashboard() {
   }
 
   if (elements.personalStatsSection)
-    elements.personalStatsSection.style.display = "";
+    elements.personalStatsSection.style.display = "flex";
 
   const unpaidHours =
     (state.currentUser.hours || 0) + (state.currentUser.todayHours || 0);
@@ -1684,8 +1684,8 @@ function renderShiftState() {
     setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
     if (elements.punchToggle) elements.punchToggle.disabled = true;
-    setText(elements.discordLogin, "Se connecter avec Discord");
-    setText(elements.demoUserText, "Aucun employe connecte");
+    if (elements.discordLogin)
+      elements.discordLogin.style.display = "inline-flex";
     stopLiveTimer();
     return;
   }
@@ -1701,20 +1701,12 @@ function renderShiftState() {
     setText(elements.todayHours, "Lecture seule");
     setText(elements.todayPay, "Supervision");
     if (elements.punchToggle) elements.punchToggle.disabled = true;
-    setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
-    setText(
-      elements.demoUserText,
-      `${state.currentUser.name} | Gouvernement | Lecture seule`,
-    );
+    if (elements.discordLogin) elements.discordLogin.style.display = "none";
     stopLiveTimer();
     return;
   }
 
-  setText(elements.discordLogin, `Connecte: ${state.currentUser.name}`);
-  setText(
-    elements.demoUserText,
-    `${state.currentUser.name} | ${state.currentUser.roleName}`,
-  );
+  if (elements.discordLogin) elements.discordLogin.style.display = "none";
 
   if (state.punchedIn) {
     setText(elements.shiftBadge, "En service");

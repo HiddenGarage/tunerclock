@@ -6,6 +6,7 @@ let reminderState = {};
 let contracts = [];
 let inventoryStock = {};
 let recruitments = [];
+let profitEntries = [];
 let activeShiftStartedAt = null;
 let liveTimerId = null;
 let currentNoteId = null;
@@ -964,23 +965,31 @@ function drawPerformanceChart() {
   const canvas = document.getElementById("performance-chart");
   if (!canvas || typeof Chart === "undefined") return;
 
-  const top5 = [...employees].sort((a, b) => b.hours - a.hours).slice(0, 5);
-  const labels = top5.map((e) => e.name);
-  const data = top5.map((e) => e.hours);
+  const top5 = [...employees]
+    .filter((e) => e.hours > 0)
+    .sort((a, b) => b.hours - a.hours)
+    .slice(0, 5);
+  let labels = top5.map((e) => e.name);
+  let data = top5.map((e) => Number(e.hours.toFixed(2)));
+
+  if (top5.length === 0) {
+    labels = ["En attente"];
+    data = [0.1];
+  }
 
   if (!chartState.performance) {
     chartState.performance = new Chart(canvas, {
       type: "bar",
       data: {
-        labels: labels.length ? labels : ["Aucun"],
+        labels,
         datasets: [
           {
-            data: data.length ? data : [0],
+            data,
             backgroundColor: chartPalette.blueSoft,
             hoverBackgroundColor: chartPalette.blue,
             borderRadius: 4,
             borderSkipped: false,
-            barPercentage: 0.5,
+            barPercentage: 0.6,
           },
         ],
       },
@@ -995,8 +1004,8 @@ function drawPerformanceChart() {
       },
     });
   } else {
-    chartState.performance.data.labels = labels.length ? labels : ["Aucun"];
-    chartState.performance.data.datasets[0].data = data.length ? data : [0];
+    chartState.performance.data.labels = labels;
+    chartState.performance.data.datasets[0].data = data;
     chartState.performance.update();
   }
 }
@@ -1214,26 +1223,50 @@ function drawBilanCharts() {
   const revenue = state.weeklyProfit || 0;
   const expenseTotal = getExpenseTotal();
   const currentPayroll = getPayrollTotal();
+  const netProfit = revenue - expenseTotal - currentPayroll;
 
-  // Crypto style Line Chart (Revenus vs Dépenses simulés sur 7 points)
-  const dataRev = [
-    revenue * 0.3,
-    revenue * 0.4,
-    revenue * 0.6,
-    revenue * 0.5,
-    revenue * 0.8,
-    revenue * 0.9,
-    revenue,
-  ];
-  const dataExp = [
-    expenseTotal * 0.2,
-    expenseTotal * 0.3,
-    expenseTotal * 0.4,
-    expenseTotal * 0.6,
-    expenseTotal * 0.7,
-    expenseTotal * 0.8,
-    expenseTotal,
-  ];
+  if (document.getElementById("bilan-tot-rev")) {
+    setText(document.getElementById("bilan-tot-rev"), formatMoney(revenue));
+    setText(
+      document.getElementById("bilan-tot-exp"),
+      formatMoney(expenseTotal),
+    );
+    setText(
+      document.getElementById("bilan-tot-pay"),
+      formatMoney(currentPayroll),
+    );
+    setText(document.getElementById("bilan-tot-net"), formatMoney(netProfit));
+  }
+
+  const getLocalKey = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const daysData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return {
+      dateKey: getLocalKey(d),
+      label: d
+        .toLocaleDateString("fr-CA", { weekday: "short" })
+        .replace(".", ""),
+    };
+  });
+
+  const dataRev = daysData.map((day) => {
+    return profitEntries
+      .filter((p) => p.created_at && p.created_at.startsWith(day.dateKey))
+      .reduce((s, p) => s + Number(p.amount || 0), 0);
+  });
+  const dataExp = daysData.map((day) => {
+    return expenses
+      .filter((e) => e.createdAt && e.createdAt.startsWith(day.dateKey))
+      .reduce((s, e) => s + Number(e.cost || 0), 0);
+  });
+
+  const maxVal = Math.max(...dataRev, ...dataExp);
+  const yMin = maxVal === 0 ? 100 : undefined;
 
   if (!chartState.bilanLine) {
     const ctx = canvasLine.getContext("2d");
@@ -1247,7 +1280,9 @@ function drawBilanCharts() {
     chartState.bilanLine = new Chart(canvasLine, {
       type: "line",
       data: {
-        labels: ["J-6", "J-5", "J-4", "J-3", "J-2", "Hier", "Aujourd'hui"],
+        labels: daysData.map(
+          (d) => d.label.charAt(0).toUpperCase() + d.label.slice(1),
+        ),
         datasets: [
           {
             label: "Revenus",
@@ -1256,7 +1291,8 @@ function drawBilanCharts() {
             backgroundColor: gradRev,
             fill: true,
             tension: 0.4,
-            pointRadius: 0,
+            pointRadius: 2,
+            pointHoverRadius: 5,
           },
           {
             label: "Dépenses",
@@ -1265,7 +1301,8 @@ function drawBilanCharts() {
             backgroundColor: gradExp,
             fill: true,
             tension: 0.4,
-            pointRadius: 0,
+            pointRadius: 2,
+            pointHoverRadius: 5,
           },
         ],
       },
@@ -1276,36 +1313,56 @@ function drawBilanCharts() {
         plugins: { legend: { labels: { color: "#fff" } } },
         scales: {
           x: { grid: { display: false } },
-          y: { grid: { color: "rgba(255,255,255,0.05)" }, min: 0 },
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            min: 0,
+            suggestedMax: yMin,
+          },
         },
       },
     });
   } else {
     chartState.bilanLine.data.datasets[0].data = dataRev;
     chartState.bilanLine.data.datasets[1].data = dataExp;
+    if (yMin) chartState.bilanLine.options.scales.y.suggestedMax = yMin;
     chartState.bilanLine.update();
   }
 
-  // Crypto style Donut Chart (Répartition des coûts)
-  const donutData = [
-    expenses.reduce((s, e) => s + (e.cost || 0), 0),
-    getContractTotal(),
-    currentPayroll,
+  const expByCategory = {};
+  expenses.forEach((e) => {
+    expByCategory[e.category] =
+      (expByCategory[e.category] || 0) + (e.cost || 0);
+  });
+  const contractsTot = getContractTotal();
+  if (contractsTot > 0) expByCategory["Contrats"] = contractsTot;
+  if (currentPayroll > 0) expByCategory["Salaires Dus"] = currentPayroll;
+
+  let donutLabels = Object.keys(expByCategory);
+  let donutValues = Object.values(expByCategory);
+  let bgColors = [
+    chartPalette.orange,
+    chartPalette.blue,
+    chartPalette.red,
+    chartPalette.teal,
+    "#9b5de5",
+    "#f15bb5",
   ];
+
+  if (donutValues.length === 0 || donutValues.every((v) => v === 0)) {
+    donutLabels = ["Aucune donnée"];
+    donutValues = [1];
+    bgColors = ["#2a2b2f"];
+  }
 
   if (!chartState.bilanDonut) {
     chartState.bilanDonut = new Chart(canvasDonut, {
       type: "doughnut",
       data: {
-        labels: ["Pièces", "Contrats", "Salaires Dus"],
+        labels: donutLabels,
         datasets: [
           {
-            data: donutData,
-            backgroundColor: [
-              chartPalette.orange,
-              chartPalette.blue,
-              chartPalette.red,
-            ],
+            data: donutValues,
+            backgroundColor: bgColors,
             borderWidth: 0,
             hoverOffset: 10,
           },
@@ -1324,7 +1381,9 @@ function drawBilanCharts() {
       },
     });
   } else {
-    chartState.bilanDonut.data.datasets[0].data = donutData;
+    chartState.bilanDonut.data.labels = donutLabels;
+    chartState.bilanDonut.data.datasets[0].data = donutValues;
+    chartState.bilanDonut.data.datasets[0].backgroundColor = bgColors;
     chartState.bilanDonut.update();
   }
 }
@@ -2366,6 +2425,7 @@ async function loadAdminDashboard() {
     contracts = data.contracts || [];
     inventoryStock = data.inventoryStock || {};
     recruitments = data.recruitments || [];
+    profitEntries = data.profits || [];
     employees = (data.employees || []).map(normaliseEmployeeRecord);
 
     const latestPayoutByEmployee = new Map();
@@ -2408,6 +2468,7 @@ async function loadAdminDashboard() {
       unitCost: Number(entry.unit_cost || entry.unitCost || entry.cost || 105),
       cost: Number(entry.cost || 105),
       note: entry.note || "-",
+      createdAt: entry.created_at,
     }));
 
     await loadAuditLogs();
@@ -2784,6 +2845,11 @@ async function punchOut() {
   }
   state.punchedIn = false;
   state.currentUser.active = false;
+  employees = employees.map((e) =>
+    e.discordId === state.currentUser.discordId
+      ? { ...e, active: false, todayHours: 0 }
+      : e,
+  );
   stopLiveTimer();
   updateAll();
   const response = await fetch("/api/punch-out", {

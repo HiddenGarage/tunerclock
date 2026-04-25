@@ -34,7 +34,6 @@ const routes = [
   "recrutements",
   "gestion",
   "salaire",
-  "analyse",
   "contrats",
   "logs",
   "inventaire",
@@ -102,7 +101,6 @@ const pageTitles = {
   recrutements: "Recrutements",
   gestion: "Comptabilité",
   salaire: "Salaire",
-  analyse: "Bilan",
   contrats: "Contrats",
   logs: "Registre",
   reboot: "Système",
@@ -463,7 +461,6 @@ function applyAccessControl() {
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
       const hiddenForGerant = [
-        "analyse",
         "logs",
         "reboot",
         "recrutements",
@@ -2399,11 +2396,12 @@ function updateAll() {
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
+  drawPerformanceChart();
   renderPersonalDashboard();
-  renderSimulation();
   startAdminLiveTimer();
   renderRadioPlaylist();
   renderRadioPlaylistsSidebar();
+  renderRebootPage();
   applyAccessControl();
 }
 
@@ -2511,7 +2509,18 @@ async function loadAdminDashboard() {
       const matching = employees.find(
         (employee) => employee.discordId === state.currentUser.discordId,
       );
-      if (matching) state.currentUser = matching;
+          if (matching) {
+            const wasActive = state.currentUser.active;
+            const wasStartedAt = state.currentUser.activeShiftStartedAt;
+            const wasTodayHours = state.currentUser.todayHours;
+            
+            state.currentUser = matching;
+            if (state.punchedIn && !state.currentUser.active) {
+              state.currentUser.active = wasActive;
+              state.currentUser.activeShiftStartedAt = wasStartedAt;
+              state.currentUser.todayHours = wasTodayHours;
+            }
+          }
     }
     if (data.radioPlaylists) {
       radioPlaylists = data.radioPlaylists;
@@ -2986,6 +2995,61 @@ async function rebootData(scope = "all") {
   await loadAdminDashboard();
   await loadAuditLogs();
   updateAll();
+}
+
+function renderRebootPage() {
+  const rebootContainer = document.querySelector("#page-reboot");
+  if (!rebootContainer || !state.isAdmin) return;
+
+  let resetDiv = document.getElementById("reset-employee-container");
+  if (!resetDiv) {
+    resetDiv = document.createElement("div");
+    resetDiv.id = "reset-employee-container";
+    resetDiv.className = "card";
+    resetDiv.style.marginTop = "20px";
+    resetDiv.innerHTML = `
+      <h3 style="color: var(--red); margin-bottom: 10px;">Réinitialiser un Employé</h3>
+      <p class="muted" style="margin-bottom: 15px; font-size: 0.9rem;">Remet à zéro les heures et statistiques d'un employé spécifique.</p>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <select id="reset-employee-select" class="input-field" style="flex: 1; min-width: 200px; background: rgba(0,0,0,0.2); border: 1px solid var(--line); color: var(--text); padding: 0.5rem; border-radius: 4px;">
+          <option value="">-- Choisir un employé --</option>
+        </select>
+        <button id="reset-employee-btn" class="danger-button">Réinitialiser</button>
+      </div>
+    `;
+    rebootContainer.appendChild(resetDiv);
+
+    document.getElementById("reset-employee-btn").addEventListener("click", async () => {
+      const select = document.getElementById("reset-employee-select");
+      const empId = select.value;
+      if (!empId) return showToast("Veuillez sélectionner un employé.", true);
+
+      const emp = employees.find(e => e.id === empId);
+      if (!emp) return;
+
+      if (!window.confirm(`Voulez-vous vraiment réinitialiser toutes les stats de ${emp.name} ?`)) return;
+      const typed = window.prompt("Tapez RESET pour confirmer.");
+      if (typed !== "RESET") return showToast("Annulé.", true);
+
+      const response = await fetch(\`/api/admin-employees/\${empId}/reset\`, { method: "POST", credentials: "include" }).catch(() => null);
+      if (response?.ok) {
+        showToast(\`Stats de \${emp.name} réinitialisées.\`);
+      } else {
+        // Fallback: Reset les heures à 0 avec l'ancienne route si la nouvelle n'est pas encore codée sur ton bot
+        await fetch("/api/admin-adjust-employee-hours", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ employeeId: empId, totalHours: 0 }) });
+        showToast(\`Heures de \${emp.name} remises à 0 (Fallback).\`);
+      }
+      await loadAdminDashboard();
+      updateAll();
+    });
+  }
+  
+  const select = document.getElementById("reset-employee-select");
+  if (select) {
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">-- Choisir un employé --</option>' + employees.map(e => \`<option value="\${e.id}">\${escapeHtml(e.name)} (\${escapeHtml(e.roleName)})\</option>\`).join("");
+    if (employees.find(e => e.id === currentValue)) select.value = currentValue;
+  }
 }
 
 async function openNotesModal(id, name) {

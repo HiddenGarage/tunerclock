@@ -979,6 +979,10 @@ select {
   cursor: pointer;
 }
 
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
 input:focus,
 select:focus {
   border-color: #b8cbef;

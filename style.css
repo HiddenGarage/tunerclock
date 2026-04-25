@@ -1395,17 +1395,12 @@ td {
 }
 
 .mobile-nav-item.active {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  background: rgba(230, 57, 70, 0.2);
+  border-top: 2px solid var(--red);
 }
 
 .mobile-nav-item svg {
   width: 22px;
   height: 22px;
-}
-
-.mobile-nav-item.active {
-  color: #fff;
-  background: rgba(230, 57, 70, 0.2);
-  border-top: 2px solid var(--red);
 }

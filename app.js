@@ -12,6 +12,7 @@ let currentNoteId = null;
 let adminLiveTimerId = null;
 let adminRefreshTimerId = null;
 let myRecentShifts = [];
+let inventoryLogs = [];
 const chartState = {};
 const chartPalette = {
   text: "#e4e7eb",
@@ -27,6 +28,7 @@ const chartPalette = {
 const routes = [
   "tableau",
   "pointage",
+  "historique",
   "presence",
   "stats",
   "recrutements",
@@ -93,6 +95,7 @@ const roleIdMap = {
 const pageTitles = {
   tableau: "Tableau de bord",
   pointage: "Punch",
+  historique: "Historique",
   inventaire: "Gestion Stock",
   presence: "Sur le plancher",
   stats: "Équipe",
@@ -149,6 +152,8 @@ const elements = {
   leaderboardBody: document.getElementById("leaderboard-body"),
   presenceBody: document.getElementById("presence-body"),
   auditBody: document.getElementById("audit-body"),
+  historiqueBody: document.getElementById("historique-body"),
+  inventoryLogsBody: document.getElementById("inventory-logs-body"),
   statsBody: document.getElementById("stats-body"),
   roleRatesBody: document.getElementById("role-rates-body"),
   expenseBody: document.getElementById("expense-body"),
@@ -205,11 +210,6 @@ const elements = {
   consumePartQuantity: document.getElementById("consume-part-quantity"),
   consumePartNote: document.getElementById("consume-part-note"),
   consumeBtn: document.getElementById("consume-btn"),
-  adjustPartName: document.getElementById("adjust-part-name"),
-  btnPickAdjustPart: document.getElementById("btn-pick-adjust-part"),
-  adjustPartAction: document.getElementById("adjust-part-action"),
-  adjustPartQuantity: document.getElementById("adjust-part-quantity"),
-  adjustStockBtn: document.getElementById("adjust-stock-btn"),
   notesModal: document.getElementById("notes-modal"),
   notesModalTitle: document.getElementById("notes-modal-title"),
   notesText: document.getElementById("employee-notes-text"),
@@ -593,6 +593,7 @@ function routeToCurrentPage() {
       "recrutements",
       "pointage",
       "inventaire",
+      "historique",
       "contrats",
       "radio",
     ];
@@ -1207,17 +1208,79 @@ function renderContractsTable() {
   );
 }
 
+function renderHistorique() {
+  if (!elements.historiqueBody) return;
+  if (!shifts || shifts.length === 0) {
+    setHtml(
+      elements.historiqueBody,
+      `<tr><td colspan="5">Aucun historique disponible.</td></tr>`,
+    );
+    return;
+  }
+
+  const getEmpName = (id) => {
+    const emp = employees.find((e) => e.id === id);
+    return emp ? emp.name : "Inconnu";
+  };
+
+  const sortedShifts = [...shifts]
+    .sort((a, b) => new Date(b.punched_in_at) - new Date(a.punched_in_at))
+    .slice(0, 100);
+
+  setHtml(
+    elements.historiqueBody,
+    sortedShifts
+      .map((s) => {
+        const inDate = new Date(s.punched_in_at).toLocaleString("fr-CA");
+        const outDate = s.punched_out_at
+          ? new Date(s.punched_out_at).toLocaleString("fr-CA")
+          : "-";
+        const duration =
+          s.status === "active"
+            ? "En cours..."
+            : formatHoursMinutes(s.duration_hours);
+        const statusPill =
+          s.status === "active"
+            ? `<span class="mini-pill info">En service</span>`
+            : `<span class="mini-pill success">Fermé</span>`;
+
+        return `
+        <tr>
+          <td>${escapeHtml(getEmpName(s.employee_id))}</td>
+          <td>${inDate}</td>
+          <td>${outDate}</td>
+          <td>${duration}</td>
+          <td>${statusPill}</td>
+        </tr>
+      `;
+      })
+      .join(""),
+  );
+}
+
 function renderInventory() {
   if (!elements.inventoryBody) return;
 
   const html = garageParts
     .map((part) => {
       const currentStock = inventoryStock[part.code] || 0;
-      let stockPill = `<span class="mini-pill success">${currentStock}</span>`;
-      if (currentStock === 0)
-        stockPill = `<span class="mini-pill danger">Rupture</span>`;
-      else if (currentStock <= 5)
-        stockPill = `<span class="mini-pill warning">${currentStock} (Bas)</span>`;
+      const isLow = currentStock <= 5;
+      const isZero = currentStock === 0;
+      const colorClass = isZero ? "danger" : isLow ? "warning" : "success";
+      const label = isZero
+        ? "Rupture"
+        : isLow
+          ? `${currentStock} (Bas)`
+          : currentStock;
+      const tag = state.isAdmin && !state.isSupervision ? "button" : "span";
+      const extraClass =
+        state.isAdmin && !state.isSupervision ? "editable-stock-button" : "";
+      const style =
+        state.isAdmin && !state.isSupervision
+          ? "cursor: pointer; padding: 4px 12px; border:none;"
+          : "";
+
+      const stockPill = `<${tag} class="mini-pill ${colorClass} ${extraClass}" data-code="${part.code}" style="${style}" title="${state.isAdmin && !state.isSupervision ? "Modifier le stock" : ""}">${label}</${tag}>`;
 
       return `
       <div class="inventory-item-card">
@@ -1237,6 +1300,70 @@ function renderInventory() {
     html ||
       `<p class="muted" style="grid-column: 1/-1; text-align: center;">Aucune pièce configurée.</p>`,
   );
+}
+
+async function loadInventoryLogs() {
+  try {
+    const response = await fetch("/api/inventory-logs", {
+      credentials: "include",
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    inventoryLogs = data.logs || [];
+  } catch (error) {
+    console.error("Erreur loadInventoryLogs:", error);
+  }
+}
+
+function renderInventoryLogs() {
+  if (!elements.inventoryLogsBody) return;
+  if (!inventoryLogs.length) {
+    setHtml(
+      elements.inventoryLogsBody,
+      `<tr><td colspan="5" style="text-align: center;" class="muted">Aucun mouvement récent.</td></tr>`,
+    );
+    return;
+  }
+
+  const html = inventoryLogs
+    .map((log) => {
+      const d = new Date(log.created_at);
+      const dateStr =
+        d.toLocaleDateString("fr-CA") +
+        " à " +
+        d.toLocaleTimeString("fr-CA", { hour: "2-digit", minute: "2-digit" });
+      const actor = escapeHtml(log.actor_name || "Système");
+      const details = log.details || {};
+      let actionHtml = "";
+      let qtyStr = "";
+      let partName = escapeHtml(
+        details.partName || details.name || details.itemCode || "Pièce",
+      );
+
+      if (log.action === "part_consumed") {
+        if (details.action === "Ajustement direct du stock") {
+          actionHtml = `<span class="mini-pill warning">Ajustement</span>`;
+          qtyStr = `Stock : ${details.newQuantity}`;
+        } else {
+          actionHtml = `<span class="mini-pill danger">Consommé</span>`;
+          qtyStr = `-${details.quantity}`;
+          if (details.note && details.note !== "-") {
+            qtyStr += ` <span class="muted" style="font-size: 0.8rem; margin-left: 8px;">(${escapeHtml(details.note)})</span>`;
+          }
+        }
+      } else if (log.action === "part_order_added") {
+        actionHtml = `<span class="mini-pill success">Acheté (Cmd)</span>`;
+        qtyStr = `+${details.quantity}`;
+      } else if (log.action === "part_order_deleted") {
+        actionHtml = `<span class="mini-pill danger">Annulé (Cmd)</span>`;
+        qtyStr = `-`;
+      }
+
+      return `<tr><td style="white-space: nowrap;">${dateStr}</td><td>${actor}</td><td>${actionHtml}</td><td>${partName}</td><td><strong>${qtyStr}</strong></td></tr>`;
+    })
+    .join("");
+
+  setHtml(elements.inventoryLogsBody, html);
 }
 
 function renderLeaderboard() {
@@ -1441,6 +1568,10 @@ function renderShiftState() {
       elements.shiftMessage,
       "Tu es en service. Ton temps et ton argent montent en direct.",
     );
+    if (elements.punchIn) {
+      elements.punchIn.textContent = "En service";
+      elements.punchIn.classList.add("pulse-active");
+    }
     startLiveTimer();
   } else {
     setText(elements.shiftBadge, "Hors service");
@@ -1449,6 +1580,10 @@ function renderShiftState() {
       elements.shiftMessage,
       "Tu n'es pas en service. Entre en service pour lancer le pointage.",
     );
+    if (elements.punchIn) {
+      elements.punchIn.textContent = "Entrer en service";
+      elements.punchIn.classList.remove("pulse-active");
+    }
     stopLiveTimer();
     updateLivePunchMetrics();
   }
@@ -1782,7 +1917,9 @@ function updateAll() {
   renderAuditLogs();
   renderRecruitmentsTable();
   renderInventory();
+  renderInventoryLogs();
   renderContractsTable();
+  renderHistorique();
   renderShiftState();
   drawShiftDonutChart();
   drawTrendChart();
@@ -2011,6 +2148,7 @@ async function loadAuthSession() {
       syncCurrentUserFromSession(data.user);
       await loadMeState();
       await loadAdminDashboard();
+      await loadInventoryLogs();
       startAdminRefreshLoop();
     } else {
       state.loggedIn = false;
@@ -2346,6 +2484,7 @@ async function addExpense() {
   }
 
   expenses.unshift(nextExpense);
+  await loadInventoryLogs();
   setValue(elements.partName, "");
   setValue(elements.partQuantity, "1");
   setValue(elements.partCategory, "");
@@ -2411,12 +2550,15 @@ async function deleteExpense(expenseIndex) {
 
   if (!response?.ok) {
     expenses.splice(expenseIndex, 0, removed);
+    await loadInventoryLogs();
     updateAll();
     showToast("Impossible de supprimer la commande.", true);
     return;
   }
 
   showToast("Commande supprimee.");
+  await loadInventoryLogs();
+  updateAll();
 }
 
 async function sendPayslipByDiscord(employee) {
@@ -2560,47 +2702,12 @@ async function consumePart() {
   const data = await response.json();
   if (data.stock) inventoryStock = data.stock;
   showToast(`${quantity}x ${partName} consomme(s).`);
+  await loadInventoryLogs();
   if (elements.consumePartQuantity) elements.consumePartQuantity.value = "1";
   if (elements.consumePartNote) elements.consumePartNote.value = "";
   select.value = "";
   if (elements.btnPickConsumePart) {
     elements.btnPickConsumePart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
-  }
-  updateAll();
-}
-
-async function adjustStock() {
-  if (state.readOnly || !state.isAdmin) return;
-  const select = elements.adjustPartName;
-  if (!select || !select.value) {
-    showToast("Selectionne une piece a ajuster.", true);
-    return;
-  }
-
-  const itemCode = select.value;
-  const partObj = garageParts.find((p) => p.code === itemCode);
-  const partName = partObj ? partObj.name : itemCode;
-  const quantity = Math.max(1, Number(elements.adjustPartQuantity?.value || 1));
-  const action = elements.adjustPartAction?.value || "add";
-
-  const response = await fetch("/api/admin-adjust-stock", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ itemCode, partName, quantity, action }),
-  }).catch(() => null);
-
-  if (!response?.ok) return showToast("Erreur lors de l'ajustement.", true);
-
-  const data = await response.json();
-  if (data.stock) inventoryStock = data.stock;
-  showToast(
-    `Stock ajusté (${action === "add" ? "+" : "-"}${quantity} ${partName}).`,
-  );
-  if (elements.adjustPartQuantity) elements.adjustPartQuantity.value = "1";
-  select.value = "";
-  if (elements.btnPickAdjustPart) {
-    elements.btnPickAdjustPart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
   }
   updateAll();
 }
@@ -2811,7 +2918,6 @@ elements.editPartCost?.addEventListener("click", togglePartCostEdit);
 elements.partName?.addEventListener("change", syncSelectedPartCategory);
 elements.partQuantity?.addEventListener("input", renderPartPreview);
 elements.consumeBtn?.addEventListener("click", consumePart);
-elements.adjustStockBtn?.addEventListener("click", adjustStock);
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
 });
@@ -2845,14 +2951,6 @@ elements.btnPickConsumePart?.addEventListener("click", () => {
   if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
 });
 
-elements.btnPickAdjustPart?.addEventListener("click", () => {
-  activePartPickerTarget = "adjust";
-  if (elements.btnPickAll) elements.btnPickAll.style.display = "none";
-  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
-  renderPartPickerGrid("");
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
-});
-
 function selectPartFromPicker(code) {
   const part =
     code === "__all__"
@@ -2864,15 +2962,11 @@ function selectPartFromPicker(code) {
   const btn =
     activePartPickerTarget === "order"
       ? elements.btnPickPart
-      : activePartPickerTarget === "adjust"
-        ? elements.btnPickAdjustPart
-        : elements.btnPickConsumePart;
+      : elements.btnPickConsumePart;
   const input =
     activePartPickerTarget === "order"
       ? elements.partName
-      : activePartPickerTarget === "adjust"
-        ? elements.adjustPartName
-        : elements.consumePartName;
+      : elements.consumePartName;
 
   if (input) input.value = code;
   if (activePartPickerTarget === "order") syncSelectedPartCategory();
@@ -2982,6 +3076,44 @@ elements.presenceBody?.addEventListener("click", (event) => {
   const forceButton = event.target.closest(".force-out-button");
   if (forceButton) {
     forcePunchOut(Number(forceButton.dataset.employeeIndex));
+  }
+});
+
+elements.inventoryBody?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".editable-stock-button");
+  if (btn) {
+    if (!state.isAdmin || state.isSupervision) return;
+    const itemCode = btn.dataset.code;
+    const partObj = garageParts.find((p) => p.code === itemCode);
+    const currentStock = inventoryStock[itemCode] || 0;
+    const input = window.prompt(
+      `Nouveau stock exact pour ${partObj?.name || itemCode} :`,
+      currentStock,
+    );
+    if (input === null) return;
+    const qty = parseInt(input, 10);
+    if (isNaN(qty) || qty < 0) return showToast("Quantité invalide.", true);
+
+    const res = await fetch("/api/admin-set-stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        itemCode,
+        partName: partObj?.name,
+        quantity: qty,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      inventoryStock = data.stock;
+      await loadInventoryLogs();
+      renderInventory();
+      renderInventoryLogs();
+      showToast(`Stock de ${partObj?.name || itemCode} mis à jour (${qty}).`);
+    } else {
+      showToast("Erreur lors de la mise à jour.", true);
+    }
   }
 });
 

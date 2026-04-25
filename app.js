@@ -255,6 +255,18 @@ const elements = {
   stockActionModal: document.getElementById("stock-action-modal"),
   closeStockModalBtn: document.getElementById("close-stock-modal"),
   confirmStockModalBtn: document.getElementById("confirm-stock-modal"),
+  // Interview Modal
+  interviewModal: document.getElementById("interview-modal"),
+  closeInterviewBtn: document.getElementById("close-interview-modal"),
+  confirmInterviewBtn: document.getElementById("confirm-interview-modal"),
+  interviewDate1: document.getElementById("interview-date-1"),
+  interviewDate2: document.getElementById("interview-date-2"),
+  interviewDate3: document.getElementById("interview-date-3"),
+  interviewRecruitmentId: document.getElementById("interview-recruitment-id"),
+  // Role Modal
+  roleModal: document.getElementById("role-modal"),
+  closeRoleModalBtn: document.getElementById("close-role-modal"),
+  roleRecruitmentId: document.getElementById("role-recruitment-id"),
 };
 
 let radioPlaylists = [];
@@ -263,6 +275,12 @@ let currentPlaylistIdPlaying = null;
 let currentTrackIndex = -1;
 let isPlayingWeb = false;
 let currentContractItems = [];
+
+const pagination = {
+  historique: { page: 1, limit: 15 },
+  inventory: { page: 1, limit: 15 },
+  audit: { page: 1, limit: 15 },
+};
 
 const doughnutCenterTextPlugin = {
   id: "doughnutCenterText",
@@ -601,6 +619,11 @@ function applyAccessControl() {
         return;
       element.disabled = state.readOnly;
     });
+
+  const isPatron = ["Patron", "Copatron"].includes(state.currentUser?.roleName);
+  document.querySelectorAll(".patron-only").forEach((el) => {
+    el.classList.toggle("hidden", !isPatron);
+  });
 }
 
 function routeToCurrentPage() {
@@ -1183,17 +1206,24 @@ function renderRecruitmentsTable() {
   setHtml(
     elements.recrutementsBody,
     recruitments
-      .map(
-        (rec) => `
-    <div class="card" style="border: 1px solid var(--line); box-shadow: none; padding: 16px;">
+      .map((rec) => {
+        const isReady = rec.status === "interview_selected";
+        const cardStyle = isReady
+          ? "border: 1px solid var(--teal); background: rgba(48, 196, 163, 0.1);"
+          : "border: 1px solid var(--line);";
+        return `
+    <div class="card" style="${cardStyle} box-shadow: none; padding: 16px;">
       <div style="margin-bottom: 16px;">
-        <h3 style="font-size: 1.1rem; margin: 0 0 4px 0;">${escapeHtml(rec.discordName)}</h3>
+        <div style="display: flex; justify-content: space-between; align-items: start;">
+          <h3 style="font-size: 1.1rem; margin: 0 0 4px 0;">${escapeHtml(rec.discordName)}</h3>
+          ${isReady ? '<span class="status-dot" style="background: var(--teal); box-shadow: 0 0 0 6px rgba(76, 175, 80, 0.12);"></span>' : ""}
+        </div>
         <p class="muted" style="font-size: 0.8rem; margin: 0;">${new Date(rec.date).toLocaleDateString("fr-CA")}</p>
       </div>
       <button class="secondary-button view-recruitment-btn" data-id="${rec.id}" style="width: 100%;">Voir Formulaire</button>
     </div>
-  `,
-      )
+  `;
+      })
       .join(""),
   );
 }
@@ -1276,13 +1306,23 @@ function renderHistorique() {
     return emp ? emp.name : "Inconnu";
   };
 
-  const sortedShifts = [...shifts]
-    .sort((a, b) => new Date(b.punched_in_at) - new Date(a.punched_in_at))
-    .slice(0, 100);
+  const sortedShifts = [...shifts].sort(
+    (a, b) => new Date(b.punched_in_at) - new Date(a.punched_in_at),
+  );
+
+  const totalPages =
+    Math.ceil(sortedShifts.length / pagination.historique.limit) || 1;
+  if (pagination.historique.page > totalPages)
+    pagination.historique.page = totalPages;
+  const start = (pagination.historique.page - 1) * pagination.historique.limit;
+  const pagedShifts = sortedShifts.slice(
+    start,
+    start + pagination.historique.limit,
+  );
 
   setHtml(
     elements.historiqueBody,
-    sortedShifts
+    pagedShifts
       .map((s) => {
         const inDate = formatHistoryDate(s.punched_in_at);
         const outDate = s.punched_out_at
@@ -1371,7 +1411,17 @@ function renderInventoryLogs() {
     return;
   }
 
-  const html = inventoryLogs
+  const totalPages =
+    Math.ceil(inventoryLogs.length / pagination.inventory.limit) || 1;
+  if (pagination.inventory.page > totalPages)
+    pagination.inventory.page = totalPages;
+  const start = (pagination.inventory.page - 1) * pagination.inventory.limit;
+  const pagedLogs = inventoryLogs.slice(
+    start,
+    start + pagination.inventory.limit,
+  );
+
+  const html = pagedLogs
     .map((log) => {
       const d = new Date(log.created_at);
       const dateStr =
@@ -1410,6 +1460,14 @@ function renderInventoryLogs() {
     .join("");
 
   setHtml(elements.inventoryLogsBody, html);
+
+  const info = document.getElementById("inventory-page-info");
+  if (info)
+    info.textContent = `Page ${pagination.inventory.page} / ${totalPages}`;
+  const prevBtn = document.querySelector('.prev-btn[data-target="inventory"]');
+  const nextBtn = document.querySelector('.next-btn[data-target="inventory"]');
+  if (prevBtn) prevBtn.disabled = pagination.inventory.page === 1;
+  if (nextBtn) nextBtn.disabled = pagination.inventory.page === totalPages;
 }
 
 function renderLeaderboard() {
@@ -1487,10 +1545,16 @@ function renderAuditLogs() {
     return;
   }
 
+  const totalPages = Math.ceil(auditLogs.length / pagination.audit.limit) || 1;
+  if (pagination.audit.page > totalPages) pagination.audit.page = totalPages;
+  const start = (pagination.audit.page - 1) * pagination.audit.limit;
+  const pagedLogs = auditLogs.slice(start, start + pagination.audit.limit);
+
   setHtml(
     elements.auditBody,
-    auditLogs
+    pagedLogs
       .map((entry, index) => {
+        const realIndex = start + index;
         return `
       <tr>
         <td>${formatLongDate(entry.created_at)}</td>
@@ -1498,13 +1562,20 @@ function renderAuditLogs() {
         <td>${entry.actor_name || "-"}</td>
         <td>${entry.target_name || entry.target_discord_id || "-"}</td>
         <td>
-          <button class="secondary-button table-button view-audit-btn" data-index="${index}">Détails</button>
+          <button class="secondary-button table-button view-audit-btn" data-index="${realIndex}">Détails</button>
         </td>
       </tr>
     `;
       })
       .join(""),
   );
+
+  const info = document.getElementById("audit-page-info");
+  if (info) info.textContent = `Page ${pagination.audit.page} / ${totalPages}`;
+  const prevBtn = document.querySelector('.prev-btn[data-target="audit"]');
+  const nextBtn = document.querySelector('.next-btn[data-target="audit"]');
+  if (prevBtn) prevBtn.disabled = pagination.audit.page === 1;
+  if (nextBtn) nextBtn.disabled = pagination.audit.page === totalPages;
 }
 
 function renderPersonalDashboard() {
@@ -1661,6 +1732,14 @@ function renderPersonalDashboard() {
       })
       .join(""),
   );
+
+  const info = document.getElementById("historique-page-info");
+  if (info)
+    info.textContent = `Page ${pagination.historique.page} / ${totalPages}`;
+  const prevBtn = document.querySelector('.prev-btn[data-target="historique"]');
+  const nextBtn = document.querySelector('.next-btn[data-target="historique"]');
+  if (prevBtn) prevBtn.disabled = pagination.historique.page === 1;
+  if (nextBtn) nextBtn.disabled = pagination.historique.page === totalPages;
 }
 
 function renderShiftState() {
@@ -2969,45 +3048,17 @@ async function resolveRecruitment(id, action) {
   let bodyPayload = {};
 
   if (action === "offer_interview") {
-    const datesStr = prompt(
-      "Propose des dates pour l'entrevue séparées par des virgules\nExemple: Mardi 18h, Mercredi 20h, Jeudi 21h",
-    );
-    if (!datesStr) return;
-    const dates = datesStr
-      .split(",")
-      .map((d) => d.trim())
-      .filter(Boolean);
-    if (dates.length === 0) return;
-    bodyPayload = { dates };
+    if (elements.interviewRecruitmentId)
+      elements.interviewRecruitmentId.value = id;
+    if (elements.interviewDate1) elements.interviewDate1.value = "";
+    if (elements.interviewDate2) elements.interviewDate2.value = "";
+    if (elements.interviewDate3) elements.interviewDate3.value = "";
+    if (elements.interviewModal) elements.interviewModal.style.display = "flex";
+    return; // On arrête ici, la fenêtre modale s'occupera du reste !
   } else if (action === "accept") {
-    const roleChoice = prompt(
-      "Quel rôle Discord veux-tu lui attribuer ?\n\n1 = Apprenti (Défaut)\n2 = Mécano\n3 = Gérant\n4 = Copatron",
-      "1",
-    );
-    if (!roleChoice) return;
-
-    let selectedRoleId = roleIdMap.Apprenti;
-    let selectedRoleName = "Apprenti";
-
-    if (roleChoice === "2") {
-      selectedRoleId = roleIdMap.Mecano;
-      selectedRoleName = "Mécano";
-    } else if (roleChoice === "3") {
-      selectedRoleId = roleIdMap.Gerant;
-      selectedRoleName = "Gérant";
-    } else if (roleChoice === "4") {
-      selectedRoleId = roleIdMap.Copatron;
-      selectedRoleName = "Copatron";
-    } else if (roleChoice !== "1") {
-      showToast("Choix invalide. Annulé.", true);
-      return;
-    }
-
-    if (
-      !window.confirm(`Confirmer l'embauche en tant que ${selectedRoleName} ?`)
-    )
-      return;
-    bodyPayload = { roleId: selectedRoleId, roleName: selectedRoleName };
+    if (elements.roleRecruitmentId) elements.roleRecruitmentId.value = id;
+    if (elements.roleModal) elements.roleModal.style.display = "flex";
+    return; // La modale s'occupe de l'API
   } else {
     const msg =
       action === "reject"
@@ -3381,6 +3432,86 @@ elements.confirmStockModalBtn?.addEventListener("click", async () => {
   }
 });
 
+elements.closeInterviewBtn?.addEventListener("click", () => {
+  if (elements.interviewModal) elements.interviewModal.style.display = "none";
+});
+
+elements.confirmInterviewBtn?.addEventListener("click", async () => {
+  const id = elements.interviewRecruitmentId?.value;
+  if (!id) return;
+
+  const dates = [
+    elements.interviewDate1?.value,
+    elements.interviewDate2?.value,
+    elements.interviewDate3?.value,
+  ].filter((d) => Boolean(d?.trim()));
+
+  if (dates.length === 0)
+    return showToast("Tu dois proposer au moins une date !", true);
+
+  if (elements.confirmInterviewBtn)
+    elements.confirmInterviewBtn.disabled = true;
+
+  const response = await fetch(
+    `/api/admin-recruitments/${id}/offer_interview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ dates }),
+    },
+  );
+
+  if (elements.confirmInterviewBtn)
+    elements.confirmInterviewBtn.disabled = false;
+
+  if (response.ok) {
+    showToast("Invitation envoyée sur Discord !");
+    if (elements.interviewModal) elements.interviewModal.style.display = "none";
+    if (elements.recruitmentModal)
+      elements.recruitmentModal.style.display = "none";
+    await loadAdminDashboard();
+    updateAll();
+  } else {
+    showToast("Erreur lors de l'envoi.", true);
+  }
+});
+
+elements.closeRoleModalBtn?.addEventListener("click", () => {
+  if (elements.roleModal) elements.roleModal.style.display = "none";
+});
+
+document.getElementById("role-modal")?.addEventListener("click", async (e) => {
+  const btn = e.target.closest(".role-select-btn");
+  if (!btn) return;
+
+  const id = elements.roleRecruitmentId?.value;
+  const roleId = btn.dataset.roleId;
+  const roleName = btn.dataset.roleName;
+  if (!id) return;
+
+  if (!window.confirm(`Confirmer l'embauche en tant que ${roleName} ?`)) return;
+
+  if (elements.roleModal) elements.roleModal.style.display = "none";
+
+  const response = await fetch(`/api/admin-recruitments/${id}/accept`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ roleId, roleName }),
+  });
+
+  if (response.ok) {
+    showToast("Candidat embauché !");
+    if (elements.recruitmentModal)
+      elements.recruitmentModal.style.display = "none";
+    await loadAdminDashboard();
+    updateAll();
+  } else {
+    showToast("Erreur lors de l'embauche.", true);
+  }
+});
+
 elements.auditBody?.addEventListener("click", (event) => {
   const btn = event.target.closest(".view-audit-btn");
   if (btn) {
@@ -3587,6 +3718,47 @@ elements.playerCopyBtn?.addEventListener("click", () => {
     const pl = radioPlaylists.find((p) => p.id === currentPlaylistIdPlaying);
     if (pl) navigator.clipboard.writeText(pl.tracks[currentTrackIndex].link);
     showToast("Lien de la musique copié ! (Prêt pour la radio FiveM)");
+  }
+});
+
+document.addEventListener("click", async (e) => {
+  const prevBtn = e.target.closest(".prev-btn");
+  if (prevBtn) {
+    const target = prevBtn.dataset.target;
+    if (pagination[target].page > 1) {
+      pagination[target].page--;
+      updateAll(); // Update déclenchera les render() nécessaires
+    }
+  }
+  const nextBtn = e.target.closest(".next-btn");
+  if (nextBtn) {
+    const target = nextBtn.dataset.target;
+    pagination[target].page++;
+    updateAll();
+  }
+  const clearBtn = e.target.closest(".clear-logs-btn");
+  if (clearBtn) {
+    if (!["Patron", "Copatron"].includes(state.currentUser?.roleName)) return;
+    if (
+      !window.confirm(
+        "Supprimer TOUT l'historique de cette section ? Action irréversible.",
+      )
+    )
+      return;
+    const target = clearBtn.dataset.type;
+    const res = await fetch(`/api/admin-clear-logs/${target}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (res.ok) {
+      showToast("Historique vidé.");
+      if (target === "historique") await loadAdminDashboard();
+      if (target === "inventory") await loadInventoryLogs();
+      if (target === "audit") await loadAuditLogs();
+      updateAll();
+    } else {
+      showToast("Erreur lors de la suppression.", true);
+    }
   }
 });
 

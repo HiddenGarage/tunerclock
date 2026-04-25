@@ -2856,6 +2856,29 @@ app.post("/api/report-police", requireAuth, async (req, res) => {
   }
 });
 
+app.post("/api/admin-adjust-expense", requireAdmin, async (req, res) => {
+  try {
+    const amount = Number(req.body.amount || 0);
+    if (amount === 0) return res.json({ ok: true });
+
+    const supabase = getSupabase();
+    await supabase.from("expense_logs").insert({
+      name: "Ajustement manuel",
+      item_code: "adjustment",
+      category: "Divers",
+      quantity: 1,
+      unit_cost: amount,
+      cost: amount,
+      note: "Ajustement depuis le Dashboard",
+      created_by_discord_id: req.session.discordId,
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.post("/api/admin-smart-stock", requireAuth, async (req, res) => {
   try {
     const { itemCode, partName, newQuantity, createExpense } = req.body;

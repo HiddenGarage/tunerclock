@@ -827,7 +827,7 @@ function startAdminLiveTimer() {
     return;
   }
   adminLiveTimerId = setInterval(() => {
-    renderPresenceList();
+    updateLiveStatsCells();
     renderOverview();
   }, 1000);
 }
@@ -1014,8 +1014,46 @@ function getLastActiveDays(employeeId) {
   );
 }
 
+function updateLiveStatsCells() {
+  if (!elements.statsBody) return;
+  employees.forEach((employee) => {
+    if (!employee.active) return;
+    const liveHours = getLiveEmployeeHours(employee);
+    const liveStatus = getPresenceStatus(liveHours);
+    const reminder = getReminderInfo(employee);
+
+    const row = document.getElementById(`emp-row-${employee.id}`);
+    if (!row) return;
+
+    const timeCell = row.querySelector(".live-time-cell");
+    if (timeCell) {
+      timeCell.innerHTML = `<span style="color: var(--teal); font-weight: bold;">+${formatHoursMinutesSeconds(liveHours)}</span><br><span class="muted" style="font-size: 0.8rem;">${formatHoursMinutes(employee.hours)} cumules</span>`;
+    }
+
+    const payCell = row.querySelector(".live-pay-cell");
+    if (payCell) {
+      const totalDisplayPay =
+        (employee.hours + liveHours) * employee.hourlyRate;
+      payCell.textContent = formatMoney(totalDisplayPay);
+    }
+
+    const statusCell = row.querySelector(".live-status-cell");
+    if (statusCell) {
+      statusCell.innerHTML = `<span class="mini-pill info">En service</span>
+        <div style="margin-top: 4px; font-size: 0.75rem;"><span class="${liveStatus.className}">${liveStatus.label}</span></div>
+        <div style="margin-top: 4px; font-size: 0.75rem;"><span class="${reminder.className}">${reminder.label}</span></div>`;
+    }
+  });
+}
+
 function renderStatsTables() {
   if (!elements.statsBody || !elements.roleRatesBody) return;
+
+  // Masquer l'ancien bloc de "Presence Live" si présent dans le HTML
+  if (elements.presenceBody) {
+    const presenceCard = elements.presenceBody.closest(".card");
+    if (presenceCard) presenceCard.style.display = "none";
+  }
 
   if (!employees.length) {
     setHtml(
@@ -1023,7 +1061,11 @@ function renderStatsTables() {
       `<tr><td colspan="7">Aucune donnee employe.</td></tr>`,
     );
   } else {
-    const sorted = [...employees].sort((a, b) => b.hours - a.hours);
+    const sorted = [...employees].sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      return b.hours - a.hours;
+    });
+
     setHtml(
       elements.statsBody,
       sorted
@@ -1032,9 +1074,16 @@ function renderStatsTables() {
             (entry) => entry.discordId === employee.discordId,
           );
           const inactivityDays = getLastActiveDays(employee.id);
+          const liveHours = getLiveEmployeeHours(employee);
+          const isLive = employee.active;
+
           let inactivityHtml = '<span class="mini-pill">Inconnu</span>';
-          if (employee.active) {
-            inactivityHtml = '<span class="mini-pill info">En service</span>';
+          if (isLive) {
+            const liveStatus = getPresenceStatus(liveHours);
+            const reminder = getReminderInfo(employee);
+            inactivityHtml = `<div class="live-status-cell"><span class="mini-pill info">En service</span>
+                          <div style="margin-top: 4px; font-size: 0.75rem;"><span class="${liveStatus.className}">${liveStatus.label}</span></div>
+                          <div style="margin-top: 4px; font-size: 0.75rem;"><span class="${reminder.className}">${reminder.label}</span></div></div>`;
           } else if (inactivityDays >= 0) {
             if (inactivityDays <= 1)
               inactivityHtml = `<span class="mini-pill success">${inactivityDays} j</span>`;
@@ -1044,23 +1093,43 @@ function renderStatsTables() {
               inactivityHtml = `<span class="mini-pill danger">${inactivityDays} j</span>`;
           }
 
+          const totalDisplayHours = employee.hours + (isLive ? liveHours : 0);
+          const totalDisplayPay = totalDisplayHours * employee.hourlyRate;
+
+          let actionsHtml = `
+            <div style="position: relative; display: inline-block; text-align: left;" class="action-menu-container">
+              <button class="secondary-button table-button action-menu-btn" data-id="${employee.id}" style="padding: 4px 10px; font-weight: bold; font-size: 1.2rem; background: transparent; border: none; color: var(--text); cursor: pointer;">⋮</button>
+              <div class="action-menu-dropdown hidden" id="menu-${employee.id}" style="position: absolute; right: 0; top: 100%; background: #1d2430; border: 1px solid #3b4b63; border-radius: 6px; padding: 0.5rem; z-index: 1000; min-width: 170px; box-shadow: 0 8px 16px rgba(0,0,0,0.6); display: none; flex-direction: column; gap: 4px;">
+                <button class="menu-item-btn open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}" style="background: transparent; border: none; color: var(--text); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">📂 Dossier</button>
+                <button class="menu-item-btn editable-hours-button" data-employee-index="${employeeIndex}" style="background: transparent; border: none; color: var(--text); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">⏱ Ajuster heures</button>
+          `;
+          if (isLive) {
+            actionsHtml += `
+                <button class="menu-item-btn reminder-button" data-employee-index="${employeeIndex}" style="background: transparent; border: none; color: var(--warning); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🔔 Rappel Discord</button>
+                <button class="menu-item-btn force-out-button" data-employee-index="${employeeIndex}" style="background: transparent; border: none; color: var(--red); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🛑 Forcer sortie</button>
+            `;
+          }
+          actionsHtml += `
+                <div style="height: 1px; background: #3b4b63; margin: 4px 0;"></div>
+                <button class="menu-item-btn fire-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}" style="background: transparent; border: none; color: var(--red); text-align: left; padding: 8px 12px; cursor: pointer; border-radius: 4px; width: 100%; font-family: inherit; font-size: 0.9rem;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">🗑 Congédier</button>
+              </div>
+            </div>
+          `;
+
+          const timeLabel = isLive
+            ? `<div class="live-time-cell"><span style="color: var(--teal); font-weight: bold;">+${formatHoursMinutesSeconds(liveHours)}</span><br><span class="muted" style="font-size: 0.8rem;">${formatHoursMinutes(employee.hours)} cumules</span></div>`
+            : formatHoursMinutes(employee.hours);
+
           return `
-      <tr>
+      <tr id="emp-row-${employee.id}">
         <td>${escapeHtml(employee.name)}</td>
         <td>${escapeHtml(employee.roleName)}</td>
-        <td>
-          <button class="editable-hours-button" data-employee-index="${employeeIndex}" title="Cliquer pour modifier les heures de ${escapeHtml(employee.name)}">
-            ${formatHoursMinutes(employee.hours)}
-          </button>
-        </td>
         <td>${inactivityHtml}</td>
-        <td>${employee.activeDays}</td>
-        <td>${escapeHtml(employee.preferredShift)}</td>
-        <td>${formatMoney(employee.hourlyRate)}</td>
-        <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
-        <td>
-          <button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button>
-          <button class="danger-button table-button fire-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Congédier</button>
+        <td>${timeLabel}</td>
+        <td>${formatMoney(employee.hourlyRate)}/h</td>
+        <td class="live-pay-cell">${formatMoney(totalDisplayPay)}</td>
+        <td style="text-align: right; overflow: visible;">
+          ${actionsHtml}
         </td>
       </tr>
     `;
@@ -1378,51 +1447,6 @@ function drawBilanCharts() {
     chartState.bilanDonut.data.datasets[0].backgroundColor = bgColors;
     chartState.bilanDonut.update();
   }
-}
-
-function renderPresenceList() {
-  if (!elements.presenceBody) return;
-  const activeEmployees = employees.filter((employee) => employee.active);
-  if (!activeEmployees.length) {
-    setHtml(
-      elements.presenceBody,
-      `<tr><td colspan="8">Aucun employe en service.</td></tr>`,
-    );
-    return;
-  }
-
-  setHtml(
-    elements.presenceBody,
-    activeEmployees
-      .map((employee) => {
-        const employeeIndex = employees.findIndex(
-          (entry) => entry.discordId === employee.discordId,
-        );
-        const liveHours = getLiveEmployeeHours(employee);
-        const status = getPresenceStatus(liveHours);
-        const reminder = getReminderInfo(employee);
-        const entryLabel = employee.activeShiftStartedAt
-          ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
-          : "-";
-
-        return `
-      <tr>
-        <td>${employee.name}</td>
-        <td>${employee.roleName}</td>
-        <td>${entryLabel}</td>
-        <td>${formatHoursMinutesSeconds(liveHours)}</td>
-        <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
-        <td><span class="${status.className}">${status.label}</span></td>
-        <td><span class="${reminder.className}">${reminder.label}</span></td>
-        <td>
-          <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
-          <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
-        </td>
-      </tr>
-    `;
-      })
-      .join(""),
-  );
 }
 
 function renderRecruitmentsTable() {
@@ -2380,7 +2404,6 @@ function updateAll() {
   routeToCurrentPage();
   renderOverview();
   renderStatsTables();
-  renderPresenceList();
   renderLeaderboard();
   renderAuditLogs();
   renderRecruitmentsTable();
@@ -2561,11 +2584,36 @@ async function loadMeState() {
     }
 
     if (data.activeShift?.punched_in_at) {
-      activeShiftStartedAt = new Date(data.activeShift.punched_in_at).getTime();
-      state.punchedIn = true;
+      if (localStorage.getItem("tuner_punch_pending") === "out") {
+        // The previous punch out was interrupted! Auto resolve.
+        localStorage.removeItem("tuner_punch_pending");
+        activeShiftStartedAt = null;
+        state.punchedIn = false;
+        fetch("/api/punch-out", {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => null);
+      } else {
+        activeShiftStartedAt = new Date(
+          data.activeShift.punched_in_at,
+        ).getTime();
+        state.punchedIn = true;
+      }
     } else {
-      activeShiftStartedAt = null;
-      state.punchedIn = false;
+      if (localStorage.getItem("tuner_punch_pending") === "in") {
+        // The previous punch in was interrupted! Auto resolve.
+        localStorage.removeItem("tuner_punch_pending");
+        activeShiftStartedAt = Date.now();
+        state.punchedIn = true;
+        if (state.currentUser) state.currentUser.active = true;
+        fetch("/api/punch-in", {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => null);
+      } else {
+        activeShiftStartedAt = null;
+        state.punchedIn = false;
+      }
     }
 
     if (data.contracts) {
@@ -2826,17 +2874,21 @@ async function punchIn() {
   );
   activeShiftStartedAt = Date.now();
   updateAll();
+
+  localStorage.setItem("tuner_punch_pending", "in");
   const response = await fetch("/api/punch-in", {
     method: "POST",
     credentials: "include",
     keepalive: true,
   }).catch(() => null);
   if (!response?.ok) {
+    localStorage.removeItem("tuner_punch_pending");
     state.punchedIn = false;
     state.currentUser.active = false;
     activeShiftStartedAt = null;
     showToast("Erreur pendant l'entree en service.", true);
   } else {
+    localStorage.removeItem("tuner_punch_pending");
     await loadMeState();
   }
   updateAll();
@@ -2856,12 +2908,15 @@ async function punchOut() {
   );
   stopLiveTimer();
   updateAll();
+
+  localStorage.setItem("tuner_punch_pending", "out");
   const response = await fetch("/api/punch-out", {
     method: "POST",
     credentials: "include",
     keepalive: true,
   }).catch(() => null);
   if (response?.ok) {
+    localStorage.removeItem("tuner_punch_pending");
     const data = await response.json();
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
@@ -2869,6 +2924,7 @@ async function punchOut() {
       data.shiftPeriod || state.currentUser.preferredShift;
     await loadMeState();
   } else {
+    localStorage.removeItem("tuner_punch_pending");
     state.currentUser.hours += state.currentUser.todayHours;
     showToast(
       "Sortie de service sauvegardee localement, verifie le serveur.",
@@ -3408,6 +3464,18 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
+  const menuBtn = event.target.closest(".action-menu-btn");
+  if (menuBtn) {
+    event.stopPropagation();
+    const dropdown = document.getElementById(`menu-${menuBtn.dataset.id}`);
+    const isHidden = dropdown.style.display === "none";
+    document
+      .querySelectorAll(".action-menu-dropdown")
+      .forEach((d) => (d.style.display = "none"));
+    if (isHidden) dropdown.style.display = "flex";
+    return;
+  }
+
   const fireBtn = event.target.closest(".fire-btn");
   if (fireBtn) return fireEmployee(fireBtn.dataset.id, fireBtn.dataset.name);
 
@@ -3416,20 +3484,20 @@ elements.statsBody?.addEventListener("click", (event) => {
     return openNotesModal(notesBtn.dataset.id, notesBtn.dataset.name);
 
   const hoursButton = event.target.closest(".editable-hours-button");
-  if (!hoursButton) return;
-  const employeeIndex = Number(hoursButton.dataset.employeeIndex);
-  const employee = employees[employeeIndex];
-  if (!employee) return;
-  const nextValue = window.prompt(
-    `Nouvelles heures totales pour ${employee.name}\nExemples: 2.5 = 2h30, 3 = 3h00`,
-    String(Number(employee.hours || 0).toFixed(2)),
-  );
-  if (nextValue === null) return;
-  const normalizedValue = Number(String(nextValue).replace(",", "."));
-  adjustEmployeeHours(employeeIndex, normalizedValue);
-});
+  if (hoursButton) {
+    const employeeIndex = Number(hoursButton.dataset.employeeIndex);
+    const employee = employees[employeeIndex];
+    if (!employee) return;
+    const nextValue = window.prompt(
+      `Nouvelles heures totales pour ${employee.name}\nExemples: 2.5 = 2h30, 3 = 3h00`,
+      String(Number(employee.hours || 0).toFixed(2)),
+    );
+    if (nextValue === null) return;
+    const normalizedValue = Number(String(nextValue).replace(",", "."));
+    adjustEmployeeHours(employeeIndex, normalizedValue);
+    return;
+  }
 
-elements.presenceBody?.addEventListener("click", (event) => {
   const reminderButton = event.target.closest(".reminder-button");
   if (reminderButton) {
     sendReminder(Number(reminderButton.dataset.employeeIndex));
@@ -3439,6 +3507,7 @@ elements.presenceBody?.addEventListener("click", (event) => {
   const forceButton = event.target.closest(".force-out-button");
   if (forceButton) {
     forcePunchOut(Number(forceButton.dataset.employeeIndex));
+    return;
   }
 });
 
@@ -3892,6 +3961,13 @@ elements.playerCopyBtn?.addEventListener("click", () => {
 });
 
 document.addEventListener("click", async (e) => {
+  // Fermer les menus déroulants si on clique en dehors
+  if (!e.target.closest(".action-menu-container")) {
+    document
+      .querySelectorAll(".action-menu-dropdown")
+      .forEach((d) => (d.style.display = "none"));
+  }
+
   const prevBtn = e.target.closest(".prev-btn");
   if (prevBtn) {
     const target = prevBtn.dataset.target;

@@ -634,6 +634,14 @@ function startDiscordBot() {
     partials: [Partials.Channel],
   });
 
+  // Ajout du mode DEBUG pour voir exactement pourquoi Discord bloque
+  discordClient.on("debug", (info) => {
+    console.log("[DISCORD DEBUG]:", info);
+  });
+  discordClient.on("warn", (info) => {
+    console.warn("[DISCORD WARN]:", info);
+  });
+
   discordClient.once("ready", () => {
     discordBotRuntime.online = true;
     discordBotRuntime.error = null;

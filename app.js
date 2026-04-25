@@ -179,6 +179,7 @@ const elements = {
   partPreview: document.getElementById("part-preview"),
   shiftChart: document.getElementById("shift-chart"),
   analysisChart: document.getElementById("analysis-chart"),
+  cagnotteChartCanvas: document.getElementById("cagnotte-chart"),
   simRevenue: document.getElementById("sim-revenue"),
   simExpenses: document.getElementById("sim-expenses"),
   simTargetProfit: document.getElementById("sim-target-profit"),
@@ -735,6 +736,7 @@ function updateLivePunchMetrics() {
     elements.todayPay,
     formatMoney(elapsedHours * state.currentUser.hourlyRate),
   );
+  renderPersonalDashboard();
 }
 
 async function refreshBotStatus() {
@@ -1518,18 +1520,124 @@ function renderPersonalDashboard() {
   if (elements.personalStatsSection)
     elements.personalStatsSection.style.display = "";
 
-  const unpaidHours = state.currentUser.hours || 0;
+  const unpaidHours =
+    (state.currentUser.hours || 0) + (state.currentUser.todayHours || 0);
   const hourlyRate = state.currentUser.hourlyRate || 0;
   const pendingPay = unpaidHours * hourlyRate;
 
   setText(elements.pendingHours, formatHoursMinutes(unpaidHours));
   setText(elements.pendingPay, formatMoney(pendingPay));
 
-  // Mise à jour de la barre de progression (Basé sur un objectif de 15h)
-  const progressEl = document.getElementById("pending-progress");
-  if (progressEl) {
-    const progress = Math.min(100, (unpaidHours / 15) * 100);
-    progressEl.style.width = `${progress}%`;
+  // Graphique Barres (Style Financial Dashboard)
+  const canvas = elements.cagnotteChartCanvas;
+  if (canvas && typeof Chart !== "undefined") {
+    const getLocalKey = (date) => {
+      const d = new Date(date);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    };
+
+    // Créer les 7 derniers jours
+    const daysData = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      return {
+        dateKey: getLocalKey(d),
+        label: d
+          .toLocaleDateString("fr-CA", { weekday: "short" })
+          .replace(".", ""),
+        amount: 0,
+        isToday: i === 6,
+      };
+    });
+
+    // Récupérer les shifts fermés + le shift actif
+    const allShifts = [...(myRecentShifts || [])];
+    if (state.currentUser?.active) {
+      allShifts.push({
+        punched_in_at: new Date().toISOString(),
+        duration_hours: state.currentUser.todayHours || 0,
+      });
+    }
+
+    // Assigner l'argent gagné au bon jour
+    allShifts.forEach((s) => {
+      if (!s.punched_in_at) return;
+      const shiftDateKey = getLocalKey(s.punched_in_at);
+      const day = daysData.find((d) => d.dateKey === shiftDateKey);
+      if (day) {
+        day.amount += Number(s.duration_hours || 0) * hourlyRate;
+      }
+    });
+
+    const labels = daysData.map(
+      (d) => d.label.charAt(0).toUpperCase() + d.label.slice(1),
+    );
+    const data = daysData.map((d) => d.amount);
+    const bgColors = daysData.map((d) =>
+      d.isToday ? chartPalette.teal : "rgba(255, 255, 255, 0.08)",
+    );
+    const hoverBgColors = daysData.map((d) =>
+      d.isToday ? "#3d8c40" : "rgba(255, 255, 255, 0.15)",
+    );
+
+    if (!chartState.cagnotte) {
+      chartState.cagnotte = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            {
+              data,
+              backgroundColor: bgColors,
+              hoverBackgroundColor: hoverBgColors,
+              borderRadius: 4,
+              borderSkipped: false,
+              barPercentage: 0.6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "#182232",
+              titleColor: "#f8fbff",
+              bodyColor: "#f8fbff",
+              borderColor: "#24364f",
+              borderWidth: 1,
+              padding: 12,
+              cornerRadius: 4,
+              callbacks: {
+                label(context) {
+                  return formatMoney(context.raw);
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false, drawBorder: false },
+              border: { display: false },
+              ticks: {
+                color: chartPalette.muted,
+                font: { family: "Manrope", size: 11, weight: "600" },
+              },
+            },
+            y: { display: false, min: 0 },
+          },
+          layout: { padding: { top: 10 } },
+        },
+      });
+    } else {
+      chartState.cagnotte.data.labels = labels;
+      chartState.cagnotte.data.datasets[0].data = data;
+      chartState.cagnotte.data.datasets[0].backgroundColor = bgColors;
+      chartState.cagnotte.data.datasets[0].hoverBackgroundColor = hoverBgColors;
+      chartState.cagnotte.update();
+    }
   }
 
   if (!elements.personalHistoryBody) return;

@@ -22,8 +22,9 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Punch</div>
+        <div class="nav-category">Pointage</div>
         <a href="#pointage" class="nav-item" data-route="pointage">Punch</a>
+        <a href="#historique" class="nav-item" data-route="historique" data-admin-only="true">Historique</a>
         
         <div class="nav-category">Atelier</div>
         <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
@@ -209,6 +210,34 @@
               <table>
                 <thead><tr><th>Date</th><th>Entrée</th><th>Sortie</th><th>Durée totale</th></tr></thead>
                 <tbody id="personal-history-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-historique" class="app-page historique-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Historique des pointages</h3>
+                <p class="muted">Détails de toutes les entrées et sorties de l'équipe.</p>
+              </div>
+              <span class="mini-pill success">Registres</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Employé</th>
+                    <th>Entrée</th>
+                    <th>Sortie</th>
+                    <th>Durée</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody id="historique-body"></tbody>
               </table>
             </div>
           </article>
@@ -661,27 +690,31 @@
               </div>
               <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
             </div>
-
-            <!-- Ajustement Manuel -->
-            <div data-admin-only="true" style="border-top: 1px solid var(--line); padding-top: 1.5rem; margin-top: 1.5rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="margin: 0; font-size: 0.95rem; color: var(--red);">Ajustement Manuel</h4>
-                <span class="mini-pill danger" style="padding: 4px 8px; min-height: auto; font-size: 0.7rem;">Admin</span>
-              </div>
-              <div class="form-grid" style="grid-template-columns: 1fr;">
-                <div class="field"><label class="input-label">Piece</label>
-                  <input type="hidden" id="adjust-part-name">
-                  <button type="button" id="btn-pick-adjust-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                    <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                  </button>
-                </div>
-                <div class="field"><label class="input-label">Action</label><select id="adjust-part-action"><option value="add">Ajouter au stock (+)</option><option value="remove">Retirer du stock (-)</option></select></div>
-                <div class="field"><label class="input-label">Quantite</label><input id="adjust-part-quantity" type="number" min="1" step="1" value="1"></div>
-              </div>
-              <div class="parts-actions" style="margin-top: 1rem; margin-bottom: 0;"><button id="adjust-stock-btn" class="primary-button" style="width: 100%;">Confirmer l'ajustement</button></div>
-            </div>
           </article>
 
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Historique des mouvements</h3>
+                <p class="muted">Suivi des entrées, sorties et ajustements d'inventaire en direct.</p>
+              </div>
+              <span class="mini-pill">Registre</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Employé</th>
+                    <th>Action</th>
+                    <th>Pièce</th>
+                    <th>Quantité</th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-logs-body"></tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
 

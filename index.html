@@ -29,7 +29,6 @@
         <div class="nav-category">Atelier</div>
         <a href="#tableau" class="nav-item active" data-route="tableau" data-admin-only="true">Tableau de bord</a>
         <a href="#inventaire" class="nav-item" data-route="inventaire">Gestion Stock</a>
-        <a href="#pieces" class="nav-item" data-route="pieces" data-admin-only="true">Fournisseurs</a>
         
         <div class="nav-category" data-admin-only="true">Équipe</div>
         <a href="#stats" class="nav-item" data-route="stats" data-admin-only="true">Équipe</a>
@@ -38,7 +37,6 @@
         <div class="nav-category">Direction</div>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#finance" class="nav-item" data-route="finance" data-admin-only="true">Trésorerie</a>
         <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
@@ -67,25 +65,40 @@
 
       <section id="page-tableau" class="app-page active-page dashboard-page">
         <div class="dashboard-grid dashboard-kpis">
-          <article class="card stat-card metric-card metric-revenue">
-            <p class="section-kicker">Revenus</p>
-            <h3 id="total-income">0$</h3>
-            <p class="muted">Totales de l'entreprise</p>
+          <article class="card stat-card metric-card metric-revenue" style="padding-bottom: 0;">
+            <div class="card-head" style="margin-bottom: 0; position: relative; z-index: 2;">
+              <div><p class="section-kicker">Revenus</p></div>
+              <button id="adjust-revenue-btn" class="secondary-button patron-only" style="padding: 4px 8px; min-height: auto; font-size: 0.75rem;">Ajuster</button>
+            </div>
+            <h3 id="total-income" style="position: relative; z-index: 2;">0$</h3>
+            <p class="muted" style="position: relative; z-index: 2;">Totales de l'entreprise</p>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; z-index: 1;">
+              <canvas id="sparkline-revenue"></canvas>
+            </div>
           </article>
-          <article class="card stat-card metric-card metric-expenses">
-            <p class="section-kicker">Depenses</p>
-            <h3 id="total-expenses">0$</h3>
-            <p class="muted">Pieces, frais atelier et divers</p>
+          <article class="card stat-card metric-card metric-expenses" style="padding-bottom: 0;">
+            <p class="section-kicker" style="position: relative; z-index: 2;">Depenses</p>
+            <h3 id="total-expenses" style="position: relative; z-index: 2;">0$</h3>
+            <p class="muted" style="position: relative; z-index: 2;">Pieces, frais atelier et divers</p>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; z-index: 1;">
+              <canvas id="sparkline-expenses"></canvas>
+            </div>
           </article>
-          <article class="card stat-card metric-card metric-payroll">
-            <p class="section-kicker">Salaires dus</p>
-            <h3 id="total-payroll">0$</h3>
-            <p class="muted">Montant payable a l'équipe</p>
+          <article class="card stat-card metric-card metric-payroll" style="padding-bottom: 0;">
+            <p class="section-kicker" style="position: relative; z-index: 2;">Salaires dus</p>
+            <h3 id="total-payroll" style="position: relative; z-index: 2;">0$</h3>
+            <p class="muted" style="position: relative; z-index: 2;">Montant payable a l'équipe</p>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; z-index: 1;">
+              <canvas id="sparkline-payroll"></canvas>
+            </div>
           </article>
-          <article class="card stat-card metric-card metric-profit">
-            <p class="section-kicker">Profit brut</p>
-            <h3 id="gross-profit">0$</h3>
-            <p class="muted">Resultat brut actuel</p>
+          <article class="card stat-card metric-card metric-profit" style="padding-bottom: 0;">
+            <p class="section-kicker" style="position: relative; z-index: 2;">Profit brut</p>
+            <h3 id="gross-profit" style="position: relative; z-index: 2;">0$</h3>
+            <p class="muted" style="position: relative; z-index: 2;">Resultat brut actuel</p>
+            <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; z-index: 1;">
+              <canvas id="sparkline-profit"></canvas>
+            </div>
           </article>
         </div>
 
@@ -99,18 +112,6 @@
               <span class="mini-pill success">Entreprise</span>
             </div>
             <div class="summary-band enterprise-summary">
-              <div class="summary-item">
-                <span>Marge brute</span>
-                <strong id="gross-margin">0%</strong>
-              </div>
-              <div class="summary-item">
-                <span>Cout total</span>
-                <strong id="total-costs">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Paiements employes</span>
-                <strong id="employee-payments">0$</strong>
-              </div>
               <div class="summary-item">
                 <span>Employes actifs</span>
                 <strong id="active-count">0</strong>
@@ -361,94 +362,6 @@
                   </tr>
                 </thead>
                 <tbody id="role-rates-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="page-finance" class="app-page finance-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Profit du garage</h3>
-                <p class="muted">Toutes les entrees manuelles qui alimentent ensuite le tableau de bord entreprise.</p>
-              </div>
-              <span class="mini-pill">Profit</span>
-            </div>
-            <div class="form-grid finance-form-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
-              <div class="field">
-                <label for="weekly-profit" class="input-label">Profit de la semaine</label>
-                <input id="weekly-profit" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
-                <label for="misc-expenses" class="input-label">Autres depenses garage</label>
-                <input id="misc-expenses" type="number" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="parts-actions">
-              <button id="save-finance" class="primary-button">Enregistrer</button>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="page-pieces" class="app-page parts-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Commandes de pieces</h3>
-                <p class="muted">Selectionne une piece, indique la quantite et le cout total se calcule automatiquement.</p>
-              </div>
-              <span class="mini-pill danger">Atelier</span>
-            </div>
-            <div class="form-grid parts-form-grid">
-              <div class="field">
-                <label for="part-name" class="input-label">Piece</label>
-                <input type="hidden" id="part-name">
-                <button type="button" id="btn-pick-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                  <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                </button>
-              </div>
-              <div class="field">
-                <label for="part-quantity" class="input-label">Nombre de pieces</label>
-                <input id="part-quantity" type="number" min="1" step="1" value="1">
-              </div>
-              <div class="field">
-                <label for="part-cost" class="input-label">Cout unitaire</label>
-                <div class="inline-field">
-                  <input id="part-cost" type="number" value="105" readonly>
-                  <button id="edit-part-cost" class="secondary-button inline-button" type="button">Edit</button>
-                </div>
-              </div>
-              <div class="field">
-                <label for="part-category" class="input-label">Categorie</label>
-                <input id="part-category" type="text" placeholder="Categorie automatique">
-              </div>
-              <div class="field">
-                <label for="part-note" class="input-label">Note</label>
-                <input id="part-note" type="text" placeholder="Urgent, client, stock">
-              </div>
-            </div>
-            <div id="part-preview" class="part-preview"></div>
-            <div class="parts-actions">
-              <button id="add-expense" class="primary-button">Ajouter la commande</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Commande</th>
-                    <th>Categorie</th>
-                    <th>Nombre</th>
-                    <th>Cout total</th>
-                    <th>Note</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="expense-body"></tbody>
               </table>
             </div>
           </article>
@@ -716,7 +629,7 @@
             </div>
             <div class="reboot-grid">
               <button class="danger-button reboot-scope-button" data-reboot-scope="shifts">Reset pointages</button>
-              <button class="danger-button reboot-scope-button" data-reboot-scope="expenses">Reset commandes</button>
+                <button class="danger-button reboot-scope-button" data-reboot-scope="expenses">Reset dépenses</button>
               <button class="danger-button reboot-scope-button" data-reboot-scope="payouts">Reset paies</button>
               <button class="danger-button reboot-scope-button" data-reboot-scope="finance">Reset profit</button>
               <button id="reboot-all" class="danger-button reboot-main-button reboot-scope-button" data-reboot-scope="all">Reboot complet</button>
@@ -881,25 +794,6 @@
         <button class="secondary-button role-select-btn" data-role-id="1487852908077781168" data-role-name="Gérant" style="padding: 16px;">Gérant</button>
         <button class="secondary-button role-select-btn" data-role-id="1487666934412611594" data-role-name="Copatron" style="padding: 16px;">Copatron</button>
       </div>
-    </div>
-  </div>
-
-  <div id="part-picker-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
-    <div class="card" style="width: 100%; max-width: 800px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-      <div class="card-head" style="flex-shrink: 0; margin-bottom: 1rem;">
-        <div>
-          <h3>Catalogue de pièces</h3>
-          <p class="muted">Recherche et sélectionne une pièce avec son image.</p>
-        </div>
-        <button id="close-part-picker" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
-      </div>
-      <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-shrink: 0; align-items: center;">
-        <div class="field" style="flex-grow: 1; margin-bottom: 0;">
-          <input type="text" id="part-picker-search" placeholder="Rechercher une pièce par nom ou catégorie..." style="background: rgba(0,0,0,0.4);">
-        </div>
-        <button id="btn-pick-all" class="primary-button" style="display: none; min-height: 48px; padding: 12px 18px;">Lot Complet</button>
-      </div>
-      <div id="part-picker-grid" class="inventory-card-grid" style="overflow-y: auto; padding-right: 8px; flex-grow: 1; align-content: flex-start;"></div>
     </div>
   </div>
 

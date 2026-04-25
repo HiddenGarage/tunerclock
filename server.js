@@ -19,6 +19,8 @@ const {
   TextInputStyle,
   ChannelType,
   MessageFlags,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } = require("discord.js");
 const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const {
@@ -695,6 +697,30 @@ function startDiscordBot() {
 
   discordClient.on("interactionCreate", async (interaction) => {
     try {
+      // --- GESTION DU CHOIX DE DATE D'ENTREVUE PAR LE CANDIDAT ---
+      if (
+        interaction.isStringSelectMenu() &&
+        interaction.customId.startsWith("tc_interview_select:")
+      ) {
+        const recruitmentId = interaction.customId.split(":")[1];
+        const selectedDate = interaction.values[0];
+        const supabase = getSupabase();
+        const settings = await getSettingsMap(supabase);
+        let recruitments = settings.recruitments_list || [];
+        const recIndex = recruitments.findIndex((r) => r.id === recruitmentId);
+        if (recIndex !== -1) {
+          recruitments[recIndex].status = "interview_selected";
+          recruitments[recIndex].interviewSelected = selectedDate;
+          await upsertSetting(supabase, "recruitments_list", recruitments);
+          await interaction.update({
+            content: `✅ Tu as choisi la date suivante : **${selectedDate}**.\nLa direction a été notifiée et va te confirmer ce rendez-vous sous peu !`,
+            components: [],
+            embeds: [],
+          });
+        }
+        return;
+      }
+
       if (interaction.isChatInputCommand()) {
         const roleDefinition = resolveRoleFromDiscordMember(
           interaction.member,
@@ -2737,12 +2763,56 @@ app.post(
       if (!rec) return res.status(404).send("Candidature introuvable.");
 
       recruitments = recruitments.filter((r) => r.id !== id);
-      await upsertSetting(supabase, "recruitments_list", recruitments);
 
-      if (action === "accept") {
+      if (action === "offer_interview") {
+        rec.status = "interview_offered";
+        rec.interviewDates = req.body.dates;
+        recruitments.push(rec);
+        await upsertSetting(supabase, "recruitments_list", recruitments);
+
+        const select = new StringSelectMenuBuilder()
+          .setCustomId(`tc_interview_select:${rec.id}`)
+          .setPlaceholder("Choisis la date qui te convient...")
+          .addOptions(
+            rec.interviewDates.map((d) =>
+              new StringSelectMenuOptionBuilder().setLabel(d).setValue(d),
+            ),
+          );
+        const row = new ActionRowBuilder().addComponents(select);
+
+        await sendDiscordDmPayload(rec.discordId, {
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("Entrevue - Santos Tuners")
+              .setDescription(
+                "Félicitations, ta candidature a retenu notre attention ! Choisis une date pour ton entrevue en cliquant sur le menu ci-dessous :",
+              )
+              .setColor(0x30c4a3),
+          ],
+          components: [row],
+        });
+        return res.json({ ok: true });
+      }
+
+      if (action === "confirm_interview") {
+        rec.status = "interview_confirmed";
+        recruitments.push(rec);
+        await upsertSetting(supabase, "recruitments_list", recruitments);
         await sendDiscordDm(
           rec.discordId,
-          "🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners. Contacte un membre de la direction au plus vite pour la suite !",
+          `✅ Ton entrevue chez Santos Tuners est officiellement confirmée pour le **${rec.interviewSelected}**. On t'attend au garage !`,
+        );
+        return res.json({ ok: true });
+      }
+
+      if (action === "accept") {
+        const assignedRoleId = req.body.roleId || "1487852702519136496";
+        const assignedRoleName = req.body.roleName || "Apprenti";
+
+        await upsertSetting(supabase, "recruitments_list", recruitments); // Removed from list
+        await sendDiscordDm(
+          rec.discordId,
+          `🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners en tant que **${assignedRoleName}** ! Contacte un membre de la direction au plus vite pour la suite !`,
         );
         try {
           if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
@@ -2754,19 +2824,21 @@ app.post(
                 .fetch(rec.discordId)
                 .catch(() => null);
               if (member) {
-                await member.roles.add("1487852702519136496").catch(() => null);
+                await member.roles.add(assignedRoleId).catch(() => null);
               }
             }
           }
         } catch (err) {
-          console.error("Erreur attribution role apprenti:", err.message);
+          console.error("Erreur attribution role recrue:", err.message);
         }
       }
-      if (action === "reject")
+      if (action === "reject") {
+        await upsertSetting(supabase, "recruitments_list", recruitments); // Removed from list
         await sendDiscordDm(
           rec.discordId,
           "❌ Bonjour, suite a l'etude de ton profil, nous n'avons malheureusement pas retenu ta candidature chez Santos Tuners pour le moment. Bon courage pour la suite !",
         );
+      }
 
       res.json({ ok: true });
     } catch (error) {

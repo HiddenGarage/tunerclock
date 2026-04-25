@@ -161,8 +161,7 @@
 
           <div class="button-row pointage-buttons">
             <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
-            <button id="punch-in" class="success-button" disabled>Entrer en service</button>
-            <button id="punch-out" class="primary-button" disabled>Sortir du service</button>
+            <button id="punch-toggle" class="punch-toggle-btn" disabled>Entrer en service</button>
           </div>
 
           <div class="demo-user">
@@ -208,7 +207,7 @@
             </div>
             <div class="table-wrap" style="margin-top: 1rem;">
               <table>
-                <thead><tr><th>Date</th><th>Entrée</th><th>Sortie</th><th>Durée totale</th></tr></thead>
+                <thead><tr><th colspan="3">Date & Heure</th><th>Durée totale</th></tr></thead>
                 <tbody id="personal-history-body"></tbody>
               </table>
             </div>
@@ -556,24 +555,36 @@
                 <input id="contract-name" type="text" placeholder="Ex: Burgershot">
               </div>
               <div class="field">
-                <label class="input-label">Accord / Rabais</label>
-                <input id="contract-discount" type="text" placeholder="-20% employes">
-              </div>
-              <div class="field">
-                <label class="input-label">Cout assume ($)</label>
-                <input id="contract-cost" type="number" placeholder="0">
-              </div>
-              <div class="field">
                 <label class="input-label">Notes</label>
                 <input id="contract-note" type="text" placeholder="Details">
               </div>
             </div>
-            <div class="parts-actions">
-              <button id="add-contract-btn" class="primary-button">Creer le contrat</button>
+            
+            <div style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--line); background: rgba(0,0,0,0.2); border-radius: 4px;">
+              <h4 style="margin: 0 0 12px 0; color: var(--text);">Ajouter un article au contrat</h4>
+              <div class="form-grid" style="align-items: end;">
+                <div class="field"><label class="input-label">Article</label><input id="contract-item-name" placeholder="Ex: Moteur V8"></div>
+                <div class="field"><label class="input-label">Prix régulier ($)</label><input type="number" id="contract-item-price" min="0" placeholder="0"></div>
+                <div class="field"><label class="input-label">Quantité</label><input type="number" id="contract-item-qty" min="1" value="1"></div>
+                <div class="field"><label class="input-label">Rabais (%)</label><input type="number" id="contract-item-discount" min="0" max="100" value="0"></div>
+                <div class="field"><button id="add-contract-item-btn" class="secondary-button" style="width: 100%;">Ajouter l'article</button></div>
+              </div>
+              <table style="margin-top: 1rem;">
+                <thead><tr><th>Article</th><th>Régulier</th><th>Rabais</th><th>Total Payé</th><th>Action</th></tr></thead>
+                <tbody id="contract-items-body"></tbody>
+              </table>
+              <div style="text-align: right; margin-top: 1rem; font-size: 0.95rem;">
+                <span class="muted">Total Régulier: <strong id="contract-total-reg" style="color: var(--text);">0$</strong></span> | 
+                <span style="color: var(--teal);">Total Remisé: <strong id="contract-total-disc">0$</strong></span>
+              </div>
+            </div>
+
+            <div class="parts-actions" style="margin-top: 1.5rem;">
+              <button id="add-contract-btn" class="primary-button" style="width: 100%;">Sauvegarder le contrat</button>
             </div>
             <div class="table-wrap" style="margin-top: 1.5rem;">
               <table>
-                <thead><tr><th>Entreprise</th><th>Accord</th><th>Cout fixe</th><th>Notes</th><th>Action</th></tr></thead>
+                <thead><tr><th>Entreprise</th><th>Articles / Accord</th><th>Coût fixe total</th><th>Notes</th><th>Action</th></tr></thead>
                 <tbody id="contracts-body"></tbody>
               </table>
             </div>
@@ -665,31 +676,6 @@
               <span class="mini-pill">Inventaire</span>
             </div>
             <div id="inventory-body" class="inventory-card-grid" style="margin-top: 1rem;"></div>
-          </article>
-
-          <article class="card">
-            <div class="card-head">
-              <div>
-                <h3>Actions sur le stock</h3>
-                <p class="muted">Gérer les sorties et ajustements.</p>
-              </div>
-            </div>
-            
-            <!-- Consommer -->
-            <div>
-              <h4 style="margin: 0 0 12px 0; font-size: 0.95rem; color: var(--text);">Consommer une pièce</h4>
-              <div class="form-grid" style="grid-template-columns: 1fr;">
-                <div class="field"><label class="input-label">Piece utilisee</label>
-                  <input type="hidden" id="consume-part-name">
-                  <button type="button" id="btn-pick-consume-part" class="secondary-button" style="width: 100%; justify-content: flex-start; text-align: left; padding: 12px 14px; background: rgba(0,0,0,0.2);">
-                    <span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>
-                  </button>
-                </div>
-                <div class="field"><label class="input-label">Quantite</label><input id="consume-part-quantity" type="number" min="1" step="1" value="1"></div>
-                <div class="field"><label class="input-label">Note / Plaque (Optionnel)</label><input id="consume-part-note" type="text" placeholder="Ex: Client ABC-123"></div>
-              </div>
-              <div class="parts-actions" style="margin-top: 1rem;"><button id="consume-btn" class="primary-button" style="width: 100%;">Confirmer l'utilisation</button></div>
-            </div>
           </article>
 
           <article class="card card-span-3">
@@ -814,6 +800,45 @@
       <div id="audit-modal-content" style="margin-top: 1rem; background: rgba(0,0,0,0.2); border: 1px solid var(--line); padding: 12px; border-radius: 4px; font-size: 0.9rem; white-space: pre-wrap; font-family: monospace; color: #a3b2c7;"></div>
       <div class="button-row" style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
         <button id="close-audit-modal" class="secondary-button">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="stock-action-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 400px; border: 1px solid var(--line);">
+      <div class="card-head" style="margin-bottom: 1rem;">
+        <div>
+          <h3 id="stock-modal-title">Pièce</h3>
+          <p class="muted">Ajuster ou retirer du stock</p>
+        </div>
+      </div>
+      <input type="hidden" id="stock-modal-code">
+      <div class="form-grid" style="grid-template-columns: 1fr; gap: 14px;">
+        <div class="field">
+          <label class="input-label">Action</label>
+          <select id="stock-modal-action">
+            <option value="remove">Retirer (Consommer)</option>
+            <option value="add" data-admin-only="true">Ajouter (Admin)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="input-label">Quantité</label>
+          <input type="number" id="stock-modal-qty" value="1" min="1">
+        </div>
+        <div class="field" id="stock-modal-charge-container">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text); background: rgba(0,0,0,0.2); padding: 12px; border: 1px solid var(--line); border-radius: 4px;">
+            <input type="checkbox" id="stock-modal-charge" style="width:20px; min-height:auto;">
+            Facturer au client (Usage externe)
+          </label>
+        </div>
+        <div class="field" style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 4px;">
+          <label class="input-label" style="margin-bottom: 4px;">Coût estimé (Prix fixe)</label>
+          <strong id="stock-modal-cost" style="font-size: 1.4rem; color: var(--teal);">0$</strong>
+        </div>
+      </div>
+      <div class="button-row" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
+        <button id="close-stock-modal" class="secondary-button">Annuler</button>
+        <button id="confirm-stock-modal" class="primary-button">Confirmer</button>
       </div>
     </div>
   </div>

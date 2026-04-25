@@ -553,14 +553,21 @@ function getTopEmployee() {
 }
 
 function getPayrollTotal() {
-  return employees.reduce(
-    (sum, employee) => sum + employee.hours * employee.hourlyRate,
-    0,
-  );
+  return employees.reduce((sum, employee) => {
+    const liveH = employee.active ? getLiveEmployeeHours(employee) : 0;
+    return (
+      sum +
+      (Number(employee.hours || 0) + liveH) *
+        numberOrDefault(employee.hourlyRate, 0)
+    );
+  }, 0);
 }
 
 function getContractTotal() {
-  return contracts.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+  return contracts.reduce(
+    (sum, entry) => sum + Number(entry.totalDiscounted || entry.cost || 0),
+    0,
+  );
 }
 
 function getExpenseTotal() {
@@ -713,17 +720,17 @@ function startAdminRefreshLoop() {
 }
 
 function renderOverview() {
-  const totalHours = employees.reduce(
-    (sum, employee) => sum + employee.hours,
-    0,
-  );
+  const totalHours = employees.reduce((sum, employee) => {
+    const liveH = employee.active ? getLiveEmployeeHours(employee) : 0;
+    return sum + Number(employee.hours || 0) + liveH;
+  }, 0);
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
   const totalIncome = state.weeklyProfit || 0;
   const totalCosts = getTotalCosts();
-  const grossProfit = totalIncome - totalCosts;
   const payrollTotal = getPayrollTotal();
+  const grossProfit = totalIncome - totalCosts - payrollTotal;
 
   setText(elements.activeCount, String(activeEmployees.length));
   setText(elements.weeklyHours, formatHoursMinutes(totalHours));
@@ -912,15 +919,10 @@ function renderStatsTables() {
 }
 
 function renderSimulation() {
-  const revenue = getNumericValue(elements.weeklyProfit);
+  const revenue = state.weeklyProfit || 0;
   const expenseTotal = getExpenseTotal();
   const paidTotal = getTotalEmployeePayments();
-  const currentPayroll = employees.reduce((sum, employee) => {
-    const payableHours =
-      Number(employee.hours || 0) +
-      (employee.active ? getLiveEmployeeHours(employee) : 0);
-    return sum + payableHours * numberOrDefault(employee.hourlyRate, 0);
-  }, 0);
+  const currentPayroll = getPayrollTotal();
   const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
   const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
   const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;

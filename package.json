@@ -5,7 +5,7 @@
   "description": "TunerClock - Panel de punch custom",
   "scripts": {
     "start": "netlify dev",
-    "render:start": "node server.js",
+    "render:start": "node --dns-result-order=ipv4first server.js",
     "deploy:zip": "powershell -NoProfile -Command \"Compress-Archive -Path index.html,style.css,app.js,logo,netlify.toml,netlify,README_DEPLOY.md,.env.example,supabase,server.js -DestinationPath tunerclock-deploy.zip -Force\""
   },
   "dependencies": {

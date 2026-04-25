@@ -211,7 +211,10 @@
                 <h3>Historique des pointages</h3>
                 <p class="muted">Détails de toutes les entrées et sorties de l'équipe.</p>
               </div>
-              <span class="mini-pill success">Registres</span>
+              <div style="display: flex; gap: 8px;">
+                <span class="mini-pill success">Registres</span>
+                <button class="danger-button patron-only clear-logs-btn" data-type="historique" style="padding: 4px 10px; min-height: auto; font-size: 0.8rem;">Vider</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
@@ -226,6 +229,11 @@
                 </thead>
                 <tbody id="historique-body"></tbody>
               </table>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line);">
+              <button class="secondary-button prev-btn" data-target="historique" style="padding: 6px 12px; min-height: auto;">&larr; Précédent</button>
+              <span class="muted" id="historique-page-info" style="font-size: 0.85rem;">Page 1 / 1</span>
+              <button class="secondary-button next-btn" data-target="historique" style="padding: 6px 12px; min-height: auto;">Suivant &rarr;</button>
             </div>
           </article>
         </div>
@@ -668,7 +676,10 @@
                 <h3>Historique des mouvements</h3>
                 <p class="muted">Suivi des entrées, sorties et ajustements d'inventaire en direct.</p>
               </div>
-              <span class="mini-pill">Registre</span>
+              <div style="display: flex; gap: 8px;">
+                <span class="mini-pill">Registre</span>
+                <button class="danger-button patron-only clear-logs-btn" data-type="inventory" style="padding: 4px 10px; min-height: auto; font-size: 0.8rem;">Vider</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
@@ -683,6 +694,11 @@
                 </thead>
                 <tbody id="inventory-logs-body"></tbody>
               </table>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line);">
+              <button class="secondary-button prev-btn" data-target="inventory" style="padding: 6px 12px; min-height: auto;">&larr; Précédent</button>
+              <span class="muted" id="inventory-page-info" style="font-size: 0.85rem;">Page 1 / 1</span>
+              <button class="secondary-button next-btn" data-target="inventory" style="padding: 6px 12px; min-height: auto;">Suivant &rarr;</button>
             </div>
           </article>
         </div>
@@ -717,7 +733,10 @@
                 <h3>Audit logs</h3>
                 <p class="muted">Historique des actions sensibles: paiements, corrections, rappels, sorties forcees et reboot.</p>
               </div>
-              <span class="mini-pill">Trace</span>
+              <div style="display: flex; gap: 8px;">
+                <span class="mini-pill">Trace</span>
+                <button class="danger-button patron-only clear-logs-btn" data-type="audit" style="padding: 4px 10px; min-height: auto; font-size: 0.8rem;">Vider</button>
+              </div>
             </div>
             <div class="table-wrap">
               <table>
@@ -732,6 +751,11 @@
                 </thead>
                 <tbody id="audit-body"></tbody>
               </table>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line);">
+              <button class="secondary-button prev-btn" data-target="audit" style="padding: 6px 12px; min-height: auto;">&larr; Précédent</button>
+              <span class="muted" id="audit-page-info" style="font-size: 0.85rem;">Page 1 / 1</span>
+              <button class="secondary-button next-btn" data-target="audit" style="padding: 6px 12px; min-height: auto;">Suivant &rarr;</button>
             </div>
           </article>
         </div>
@@ -816,6 +840,46 @@
       <div class="button-row" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
         <button id="close-stock-modal" class="secondary-button">Annuler</button>
         <button id="confirm-stock-modal" class="primary-button">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="interview-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 450px; border: 1px solid var(--line);">
+      <div class="card-head" style="margin-bottom: 1rem;">
+        <div>
+          <h3>Planifier l'entrevue</h3>
+          <p class="muted">Sélectionne jusqu'à 3 créneaux horaires à proposer au candidat.</p>
+        </div>
+      </div>
+      <input type="hidden" id="interview-recruitment-id">
+      <div class="form-grid" style="grid-template-columns: 1fr; gap: 14px;">
+        <div class="field"><label class="input-label">Option 1 (Requise)</label><input type="text" id="interview-date-1" placeholder="Ex: Lundi entre 18h et 21h"></div>
+        <div class="field"><label class="input-label">Option 2 (Facultative)</label><input type="text" id="interview-date-2" placeholder="Ex: Mardi après 17h"></div>
+        <div class="field"><label class="input-label">Option 3 (Facultative)</label><input type="text" id="interview-date-3" placeholder="Ex: N'importe quand mercredi"></div>
+      </div>
+      <div class="button-row" style="margin-top: 1.5rem; justify-content: flex-end; gap: 0.75rem;">
+        <button id="close-interview-modal" class="secondary-button">Annuler</button>
+        <button id="confirm-interview-modal" class="primary-button" style="border-color: var(--teal); background: rgba(48, 196, 163, 0.15); color: var(--teal); box-shadow: none;">Envoyer l'invitation</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="role-modal" style="display: none; position: fixed; inset: 0; background: rgba(11, 17, 32, 0.85); align-items: center; justify-content: center; z-index: 999; padding: 1rem; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 450px; border: 1px solid var(--line);">
+      <div class="card-head" style="margin-bottom: 1rem;">
+        <div>
+          <h3>Attribution du rôle</h3>
+          <p class="muted">Sélectionne le poste à attribuer à cette nouvelle recrue.</p>
+        </div>
+        <button id="close-role-modal" class="secondary-button" style="padding: 6px 12px; min-height: auto;">X</button>
+      </div>
+      <input type="hidden" id="role-recruitment-id">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1rem;">
+        <button class="secondary-button role-select-btn" data-role-id="1487852702519136496" data-role-name="Apprenti" style="padding: 16px;">Apprenti</button>
+        <button class="secondary-button role-select-btn" data-role-id="1487852832643354665" data-role-name="Mécano" style="padding: 16px; border-color: var(--teal); color: var(--teal);">Mécano</button>
+        <button class="secondary-button role-select-btn" data-role-id="1487852908077781168" data-role-name="Gérant" style="padding: 16px;">Gérant</button>
+        <button class="secondary-button role-select-btn" data-role-id="1487666934412611594" data-role-name="Copatron" style="padding: 16px;">Copatron</button>
       </div>
     </div>
   </div>

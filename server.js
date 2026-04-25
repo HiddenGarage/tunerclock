@@ -2053,7 +2053,7 @@ app.get("/api/inventory-logs", requireAuth, async (req, res) => {
       .select("*")
       .in("action", ["part_consumed", "part_order_added", "part_order_deleted"])
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(500);
 
     if (error) {
       return res.status(500).send(error.message);
@@ -2293,7 +2293,7 @@ app.get("/api/admin-audit-logs", requireAdminAccess, async (req, res) => {
       .from("audit_logs")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(150);
+      .limit(500);
 
     if (error) {
       return res.status(500).send(error.message);
@@ -2772,20 +2772,22 @@ app.post(
 
         const select = new StringSelectMenuBuilder()
           .setCustomId(`tc_interview_select:${rec.id}`)
-          .setPlaceholder("Choisis la date qui te convient...")
+          .setPlaceholder("Choisis tes disponibilités...")
           .addOptions(
             rec.interviewDates.map((d) =>
               new StringSelectMenuOptionBuilder().setLabel(d).setValue(d),
             ),
           );
         const row = new ActionRowBuilder().addComponents(select);
+        const adminName =
+          req.session.displayName || req.session.username || "La direction";
 
         await sendDiscordDmPayload(rec.discordId, {
           embeds: [
             new EmbedBuilder()
               .setTitle("Entrevue - Santos Tuners")
               .setDescription(
-                "Félicitations, ta candidature a retenu notre attention ! Choisis une date pour ton entrevue en cliquant sur le menu ci-dessous :",
+                `**${adminName}** de chez Santos Tuners t'invite a un entrevue , choisi tes disponibilité selon l'horaire proposer ci-dessous :`,
               )
               .setColor(0x30c4a3),
           ],
@@ -3358,6 +3360,42 @@ app.post("/api/admin-reboot", requireAdmin, async (req, res) => {
 
     await writeAuditLog(supabase, req, "system_reboot", {
       details: { scope },
+    });
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.delete("/api/admin-clear-logs/:type", requireAdmin, async (req, res) => {
+  try {
+    if (!["Patron", "Copatron"].includes(req.session.roleName)) {
+      return res.status(403).send("Réservé au patron.");
+    }
+    const { type } = req.params;
+    const supabase = getSupabase();
+
+    if (type === "historique") {
+      await supabase.from("shifts").delete().eq("status", "closed");
+    } else if (type === "inventory") {
+      await supabase
+        .from("audit_logs")
+        .delete()
+        .in("action", [
+          "part_consumed",
+          "part_order_added",
+          "part_order_deleted",
+        ]);
+    } else if (type === "audit") {
+      await supabase
+        .from("audit_logs")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+    }
+
+    await writeAuditLog(supabase, req, "system_reboot", {
+      details: { scope: `clear_logs_${type}` },
     });
 
     res.json({ ok: true });

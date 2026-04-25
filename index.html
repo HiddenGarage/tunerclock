@@ -77,7 +77,10 @@
             </div>
           </article>
           <article class="card stat-card metric-card metric-expenses" style="padding-bottom: 0;">
-            <p class="section-kicker" style="position: relative; z-index: 2;">Depenses</p>
+            <div class="card-head" style="margin-bottom: 0; position: relative; z-index: 2;">
+              <div><p class="section-kicker">Depenses</p></div>
+              <button id="adjust-expense-btn" class="secondary-button patron-only" style="padding: 4px 8px; min-height: auto; font-size: 0.75rem;">Ajuster</button>
+            </div>
             <h3 id="total-expenses" style="position: relative; z-index: 2;">0$</h3>
             <p class="muted" style="position: relative; z-index: 2;">Pieces, frais atelier et divers</p>
             <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60px; z-index: 1;">
@@ -103,27 +106,16 @@
         </div>
 
         <div class="dashboard-grid enterprise-grid">
-          <article class="card card-span-2 gradient-card enterprise-hero">
+          <article class="card card-span-2 gradient-card enterprise-hero" style="display: flex; flex-direction: column;">
             <div class="card-head">
               <div>
-                <h3>Performance globale de l'entreprise</h3>
-                <p class="muted">Vue synthese des chiffres utiles: charge salariale, rentabilite, activite et cadence atelier.</p>
+                <h3>Performance Employées</h3>
+                <p class="muted">Top 5 des travailleurs les plus actifs de la semaine.</p>
               </div>
               <span class="mini-pill success">Entreprise</span>
             </div>
-            <div class="summary-band enterprise-summary">
-              <div class="summary-item">
-                <span>Employes actifs</span>
-                <strong id="active-count">0</strong>
-              </div>
-              <div class="summary-item">
-                <span>Heures cumulees</span>
-                <strong id="weekly-hours">0h 00m</strong>
-              </div>
-              <div class="summary-item">
-                <span>Leader activite</span>
-                <strong id="top-worker">-</strong>
-              </div>
+            <div style="flex-grow: 1; min-height: 180px; position: relative;">
+              <canvas id="performance-chart"></canvas>
             </div>
           </article>
 
@@ -370,31 +362,24 @@
 
       <section id="page-analyse" class="app-page analyse-page">
         <div class="dashboard-grid">
-          <article class="card card-span-3">
+          <article class="card card-span-2 chart-card large-chart-card">
             <div class="card-head">
               <div>
-                <h3>Analyse automatique</h3>
-                <p class="muted">Lecture en temps reel des revenus, paies, heures et depenses.</p>
-              </div>
-              <button id="refresh-analysis-btn" class="secondary-button" style="padding: 6px 12px; min-height: auto;">Rafraîchir</button>
-            </div>
-            <div class="analysis-auto-grid">
-              <div class="analysis-auto-item">
-                <span>Source</span>
-                <strong>Stats live</strong>
-                <small>Dashboard + Supabase</small>
-              </div>
-              <div class="analysis-auto-item">
-                <span>Equipe</span>
-                <strong id="sim-role-mix">Chargement...</strong>
-                <small>Roles actuellement enregistres</small>
-              </div>
-              <div class="analysis-auto-item">
-                <span>Regle</span>
-                <strong>Bornes anti-abus</strong>
-                <small>Conseil limite a +/- 20%</small>
+                <h3>Flux Financier (30 Jours)</h3>
+                <p class="muted">Évolution dynamique des revenus et dépenses.</p>
               </div>
             </div>
+            <canvas id="bilan-finance-chart" width="1280" height="300"></canvas>
+          </article>
+
+          <article class="card chart-card large-chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Répartition des dépenses</h3>
+                <p class="muted">Où va l'argent du garage.</p>
+              </div>
+            </div>
+            <canvas id="bilan-donut-chart" width="400" height="300"></canvas>
           </article>
 
           <article class="card stat-card metric-card metric-parts">

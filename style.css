@@ -327,6 +327,24 @@ a {
   background: var(--red-hover);
 }
 
+@keyframes pulse-active {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
+}
+.pulse-active {
+  animation: pulse-active 2s infinite !important;
+  background-color: #3d8c40 !important;
+  color: #ffffff !important;
+  border-color: rgba(76, 175, 80, 0.8) !important;
+}
+
 .success-button {
   color: #ffffff;
   background: var(--teal);
@@ -788,6 +806,7 @@ a {
 
 .pointage-page,
 .presence-page,
+.historique-page,
 .logs-page,
 .stats-page,
 .gestion-page,

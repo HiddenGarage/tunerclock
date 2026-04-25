@@ -118,6 +118,7 @@ const state = {
   weeklyProfit: 0,
   recordedPayouts: 0,
   financeInputsLoaded: false,
+  systemUnlocked: false,
   roleRates: {
     Patron: 60,
     Copatron: 45,
@@ -497,6 +498,22 @@ function applyAccessControl() {
 function routeToCurrentPage() {
   let route = getRequestedRoute();
 
+  if (["logs", "reboot"].includes(route)) {
+    if (!state.systemUnlocked) {
+      const pwd = prompt(
+        "ACCÈS RESTREINT : Veuillez entrer le mot de passe (4 chiffres) :",
+      );
+      if (pwd === "2546") {
+        state.systemUnlocked = true;
+        showToast("Accès Système déverrouillé.");
+      } else {
+        showToast("Mot de passe incorrect.", true);
+        route = "tableau";
+        window.location.hash = "#tableau";
+      }
+    }
+  }
+
   if (state.currentUser?.roleName === "Gerant") {
     const allowedRoutes = [
       "tableau",
@@ -587,6 +604,118 @@ function getTotalEmployeePayments() {
 
 function getTotalCosts() {
   return getExpenseTotal() + getTotalEmployeePayments();
+  const paidTotal = getTotalEmployeePayments();
+  const currentPayroll = getPayrollTotal();
+  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
+  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
+  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
+  const activeEmployees = employees.filter(
+    (employee) => employee.active,
+  ).length;
+  const totalHours = employees.reduce((sum, employee) => {
+    const liveH = employee.active ? getLiveEmployeeHours(employee) : 0;
+    return sum + Number(employee.hours || 0) + liveH;
+  }, 0);
+  const currentMecanoRate = getRoleRate("Mecano");
+  let adjustmentFactor = 1;
+
+  if (revenue <= 0 || totalHours <= 0) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 28) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 38) {
+    adjustmentFactor = 0.9;
+  } else {
+    adjustmentFactor = 0.8;
+  }
+
+  const recommendedRates = Object.fromEntries(
+    roleOrder.map((roleName) => {
+      const currentRate = getRoleRate(roleName);
+      const nextRate =
+        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
+      return [roleName, nextRate];
+    }),
+  );
+  const recommendedMecanoRate =
+    recommendedRates.Mecano ||
+    roundToStep(currentMecanoRate * adjustmentFactor, 25);
+  const roleCounts =
+    roleOrder
+      .map((roleName) => {
+        const count = employees.filter(
+          (employee) => employee.roleName === roleName,
+        ).length;
+        return count ? `${count} ${roleName}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ") || "Aucun employe";
+
+  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
+  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
+  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
+  setText(
+    elements.simRecommendedHourly,
+    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
+  );
+  setText(elements.simEmployeeCount, String(employees.length));
+  setText(elements.simRoleMix, roleCounts);
+  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
+  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
+
+  let headline = "Analyse en attente";
+  let status =
+    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
+  let action = "Aucune modification conseillee pour l'instant.";
+  const rateAdvice = roleOrder
+    .filter((roleName) =>
+      employees.some((employee) => employee.roleName === roleName),
+    )
+    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
+    .join("<br>");
+
+  if (revenue > 0 && totalHours > 0) {
+    if (payrollRatio < 8) {
+      headline = "Marge tres confortable";
+      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
+      action =
+        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
+    } else if (payrollRatio < 15) {
+      headline = "Paie encore tres saine";
+      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 28) {
+      headline = "Equilibre correct";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 38) {
+      headline = "Paie un peu lourde";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
+      action =
+        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
+    } else {
+      headline = "Risque de payer trop cher";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
+      action =
+        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
+    }
+  }
+
+  setHtml(
+    elements.simRecommendation,
+    `
+    <div class="analysis-recommendation-head">
+      <span>${escapeHtml(headline)}</span>
+      <strong>${recommendedMecanoRate}$/h Mecano</strong>
+    </div>
+    <div class="analysis-recommendation-grid">
+      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
+      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
+      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
+      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
+    </div>
+  `,
+  );
 }
 
 function updateLivePunchMetrics() {
@@ -732,16 +861,13 @@ function renderOverview() {
   const payrollTotal = getPayrollTotal();
   const grossProfit = totalIncome - totalCosts - payrollTotal;
 
-  setText(elements.activeCount, String(activeEmployees.length));
-  setText(elements.weeklyHours, formatHoursMinutes(totalHours));
   setText(elements.totalPayroll, formatMoney(payrollTotal));
   setText(elements.totalExpenses, formatMoney(totalExpenses));
   setText(elements.grossProfit, formatMoney(grossProfit));
   setText(elements.totalIncome, formatMoney(totalIncome));
-  setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
 
-  if (elements.activeCount) {
-    const parentCard = elements.activeCount.parentElement;
+  if (document.getElementById("active-count")) {
+    const parentCard = document.getElementById("active-count").parentElement;
     if (activeEmployees.length > 0) {
       parentCard.style.backgroundColor = "rgba(48, 196, 163, 0.15)";
       parentCard.style.borderColor = "rgba(48, 196, 163, 0.5)";
@@ -832,6 +958,42 @@ function drawSparkline(canvasId, colorHex, rgbString, value) {
     chartState[canvasId].data.datasets[0].data = dataPoints;
     chartState[canvasId].update();
   }
+}
+
+function drawPerformanceChart() {
+  const canvas = document.getElementById("performance-chart");
+  if (!canvas || typeof Chart === "undefined") return;
+
+  const top5 = [...employees].sort((a, b) => b.hours - a.hours).slice(0, 5);
+  const labels = top5.map((e) => e.name);
+  const data = top5.map((e) => e.hours);
+
+  destroyChart("performance");
+  chartState.performance = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: labels.length ? labels : ["Aucun"],
+      datasets: [
+        {
+          data: data.length ? data : [0],
+          backgroundColor: chartPalette.blueSoft,
+          hoverBackgroundColor: chartPalette.blue,
+          borderRadius: 4,
+          borderSkipped: false,
+          barPercentage: 0.5,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: chartPalette.muted } },
+        y: { display: false, beginAtZero: true },
+      },
+    },
+  });
 }
 
 function getLastActiveDays(employeeId) {
@@ -1724,6 +1886,7 @@ function drawShiftDonutChart() {
       .reduce((sum, employee) => sum + employee.hours, 0),
   );
   const totalHours = buckets.reduce((sum, value) => sum + value, 0);
+  const displayBuckets = totalHours === 0 ? [1, 1, 1] : buckets;
 
   destroyChart("shift");
   chartState.shift = new Chart(canvas, {
@@ -1733,11 +1896,11 @@ function drawShiftDonutChart() {
       labels: ["Jour", "Soir", "Nuit"],
       datasets: [
         {
-          data: buckets,
+          data: displayBuckets,
           backgroundColor: [
-            chartPalette.teal,
-            chartPalette.red,
-            chartPalette.orange,
+            totalHours === 0 ? "#2a2b2f" : chartPalette.teal,
+            totalHours === 0 ? "#2a2b2f" : chartPalette.red,
+            totalHours === 0 ? "#2a2b2f" : chartPalette.orange,
           ],
           borderColor: "#202124",
           borderWidth: 6,
@@ -3216,6 +3379,32 @@ document
       renderSimulation();
     } else {
       showToast("Erreur lors de l'ajustement.", true);
+    }
+  });
+
+document
+  .getElementById("adjust-expense-btn")
+  ?.addEventListener("click", async () => {
+    if (!state.isAdmin || state.isSupervision) return;
+    const input = prompt("Montant de la dépense à ajouter (ex: 250) :");
+    if (!input) return;
+    const amount = Number(input);
+    if (isNaN(amount) || amount <= 0)
+      return showToast("Montant invalide.", true);
+
+    const res = await fetch("/api/admin-adjust-expense", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ amount }),
+    });
+
+    if (res.ok) {
+      showToast(`Dépense ajoutée (${amount}$).`);
+      await loadAdminDashboard();
+      updateAll();
+    } else {
+      showToast("Erreur lors de l'ajout de la dépense.", true);
     }
   });
 

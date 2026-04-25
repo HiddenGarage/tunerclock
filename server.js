@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const dns = require("node:dns");
+dns.setDefaultResultOrder("ipv4first"); // Force l'IPv4 pour éviter les blocages réseau silencieux sur Render
+
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -632,6 +635,10 @@ function startDiscordBot() {
   discordClient = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
     partials: [Partials.Channel],
+    rest: {
+      timeout: 15000,
+      retries: 3,
+    },
   });
 
   // Ajout du mode DEBUG pour voir exactement pourquoi Discord bloque

@@ -33,8 +33,6 @@ const routes = [
   "recrutements",
   "gestion",
   "salaire",
-  "finance",
-  "pieces",
   "analyse",
   "contrats",
   "logs",
@@ -103,8 +101,6 @@ const pageTitles = {
   recrutements: "Recrutements",
   gestion: "Comptabilité",
   salaire: "Salaire",
-  finance: "Trésorerie",
-  pieces: "Fournisseurs",
   analyse: "Bilan",
   contrats: "Contrats",
   logs: "Registre",
@@ -119,6 +115,7 @@ const state = {
   readOnly: false,
   currentUser: null,
   punchedIn: false,
+  weeklyProfit: 0,
   recordedPayouts: 0,
   financeInputsLoaded: false,
   roleRates: {
@@ -137,11 +134,8 @@ const elements = {
   weeklyHours: document.getElementById("weekly-hours"),
   totalPayroll: document.getElementById("total-payroll"),
   totalExpenses: document.getElementById("total-expenses"),
-  employeePayments: document.getElementById("employee-payments"),
   grossProfit: document.getElementById("gross-profit"),
   totalIncome: document.getElementById("total-income"),
-  totalCosts: document.getElementById("total-costs"),
-  grossMargin: document.getElementById("gross-margin"),
   topWorker: document.getElementById("top-worker"),
   demoUserText: document.getElementById("demo-user-text"),
   shiftBadge: document.getElementById("shift-badge"),
@@ -156,19 +150,10 @@ const elements = {
   inventoryLogsBody: document.getElementById("inventory-logs-body"),
   statsBody: document.getElementById("stats-body"),
   roleRatesBody: document.getElementById("role-rates-body"),
-  expenseBody: document.getElementById("expense-body"),
   rebootAll: document.getElementById("reboot-all"),
   rebootButtons: Array.from(document.querySelectorAll(".reboot-scope-button")),
   discordLogin: document.getElementById("discord-login"),
   logoutButton: document.getElementById("logout-button"),
-  serviceIncome: document.getElementById("service-income"),
-  weeklyProfit: document.getElementById("weekly-profit"),
-  manualPayouts: document.getElementById("manual-payouts"),
-  miscExpenses: document.getElementById("misc-expenses"),
-  calcNote: document.getElementById("calc-note"),
-  saveFinance: document.getElementById("save-finance"),
-  addExpense: document.getElementById("add-expense"),
-  editPartCost: document.getElementById("edit-part-cost"),
   partName: document.getElementById("part-name"),
   partQuantity: document.getElementById("part-quantity"),
   partCost: document.getElementById("part-cost"),
@@ -216,13 +201,6 @@ const elements = {
   auditModal: document.getElementById("audit-modal"),
   auditModalContent: document.getElementById("audit-modal-content"),
   closeAuditBtn: document.getElementById("close-audit-modal"),
-  partPickerModal: document.getElementById("part-picker-modal"),
-  closePartPicker: document.getElementById("close-part-picker"),
-  partPickerSearch: document.getElementById("part-picker-search"),
-  partPickerGrid: document.getElementById("part-picker-grid"),
-  btnPickPart: document.getElementById("btn-pick-part"),
-  btnPickConsumePart: document.getElementById("btn-pick-consume-part"),
-  btnPickAll: document.getElementById("btn-pick-all"),
   pendingHours: document.getElementById("pending-hours"),
   pendingPay: document.getElementById("pending-pay"),
   personalHistoryBody: document.getElementById("personal-history-body"),
@@ -435,118 +413,10 @@ function getRoleRate(roleName) {
   return numberOrDefault(state.roleRates[normaliseRole(roleName)], 0);
 }
 
-function getSelectedPart() {
-  const selectedCode = elements.partName?.value || "";
-  if (selectedCode === "__all__") {
-    return {
-      code: "__all__",
-      name: "Tout le catalogue",
-      category: "Lot complet",
-      isAll: true,
-    };
-  }
-  return garageParts.find((part) => part.code === selectedCode) || null;
-}
-
-function syncSelectedPartCategory() {
-  const part = getSelectedPart();
-  if (part && elements.partCategory) {
-    elements.partCategory.value = part.category;
-  }
-  renderPartPreview();
-}
-
 function getPartIconMarkup(partCode, altText = "Piece") {
   if (!partCode || partCode === "__all__")
     return `<span class="part-icon part-icon-all">ALL</span>`;
   return `<img class="part-icon" src="parts-icons/${escapeHtml(partCode)}.png" alt="${escapeHtml(altText)}" loading="lazy">`;
-}
-
-function renderPartPreview() {
-  if (!elements.partPreview) return;
-  const part = getSelectedPart();
-  if (!part) {
-    setHtml(
-      elements.partPreview,
-      `
-      <div class="part-preview-empty">Selectionne une piece pour voir son icone et l'estimation du prix.</div>
-    `,
-    );
-    return;
-  }
-
-  const quantity = Math.max(
-    1,
-    Math.round(Number(elements.partQuantity?.value || 1) || 1),
-  );
-  const unitCost = Number(elements.partCost?.value || 105) || 105;
-  const totalUnits = part.isAll ? garageParts.length * quantity : quantity;
-  const totalCost = unitCost * totalUnits;
-
-  if (part.isAll) {
-    const sampleIcons = garageParts
-      .slice(0, 8)
-      .map((entry) => getPartIconMarkup(entry.code, entry.name))
-      .join("");
-    setHtml(
-      elements.partPreview,
-      `
-      <div class="part-preview-card">
-        <div class="part-icon-stack">${sampleIcons}</div>
-        <div>
-          <strong>Tout le catalogue</strong>
-          <span>Lot complet: ${garageParts.length} pieces.<br><b>Prix estime: ${formatMoney(totalCost)}</b></span>
-        </div>
-      </div>
-    `,
-    );
-    return;
-  }
-
-  setHtml(
-    elements.partPreview,
-    `
-    <div class="part-preview-card">
-      ${getPartIconMarkup(part.code, part.name)}
-      <div>
-        <strong>${escapeHtml(part.name)}</strong>
-        <span>${escapeHtml(part.category)} | Qte: ${quantity}<br><b>Prix estime: ${formatMoney(totalCost)}</b></span>
-      </div>
-    </div>
-  `,
-  );
-}
-
-let activePartPickerTarget = null;
-
-function renderPartPickerGrid(searchQuery = "") {
-  if (!elements.partPickerGrid) return;
-  const query = searchQuery.toLowerCase();
-  const filtered = garageParts.filter(
-    (p) =>
-      p.name.toLowerCase().includes(query) ||
-      p.category.toLowerCase().includes(query),
-  );
-
-  const html = filtered
-    .map(
-      (part) => `
-    <div class="inventory-item-card picker-card" data-code="${part.code}" style="cursor: pointer;">
-      ${getPartIconMarkup(part.code, part.name)}
-      <div class="inventory-item-details" style="width: 100%;">
-        <strong>${escapeHtml(part.name)}</strong>
-        <span>${escapeHtml(part.category)}</span>
-      </div>
-    </div>
-  `,
-    )
-    .join("");
-
-  setHtml(
-    elements.partPickerGrid,
-    html ||
-      `<p class="muted" style="grid-column: 1/-1; text-align: center; padding: 2rem;">Aucune pièce trouvée.</p>`,
-  );
 }
 
 function normaliseEmployeeRecord(record) {
@@ -591,8 +461,6 @@ function applyAccessControl() {
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
       const hiddenForGerant = [
-        "finance",
-        "pieces",
         "analyse",
         "logs",
         "reboot",
@@ -698,7 +566,6 @@ function getContractTotal() {
 function getExpenseTotal() {
   return (
     expenses.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) +
-    getNumericValue(elements.miscExpenses) +
     getContractTotal()
   );
 }
@@ -713,16 +580,6 @@ function getTotalEmployeePayments() {
 
 function getTotalCosts() {
   return getExpenseTotal() + getTotalEmployeePayments();
-}
-
-function getFinancePayload() {
-  return {
-    serviceIncome: 0,
-    weeklyProfit: getNumericValue(elements.weeklyProfit),
-    manualPayouts: 0,
-    miscExpenses: getNumericValue(elements.miscExpenses),
-    calcNote: "",
-  };
 }
 
 function updateLivePunchMetrics() {
@@ -863,24 +720,17 @@ function renderOverview() {
   const activeEmployees = employees.filter((employee) => employee.active);
   const topEmployee = getTopEmployee();
   const totalExpenses = getExpenseTotal();
-  const totalIncome = getNumericValue(elements.weeklyProfit);
+  const totalIncome = state.weeklyProfit || 0;
   const totalCosts = getTotalCosts();
   const grossProfit = totalIncome - totalCosts;
-  const margin = totalIncome > 0 ? (grossProfit / totalIncome) * 100 : 0;
-  const activeHours = activeEmployees.reduce(
-    (sum, employee) => sum + employee.todayHours,
-    0,
-  );
+  const payrollTotal = getPayrollTotal();
 
   setText(elements.activeCount, String(activeEmployees.length));
   setText(elements.weeklyHours, formatHoursMinutes(totalHours));
-  setText(elements.totalPayroll, formatMoney(getPayrollTotal()));
+  setText(elements.totalPayroll, formatMoney(payrollTotal));
   setText(elements.totalExpenses, formatMoney(totalExpenses));
-  setText(elements.employeePayments, formatMoney(getTotalEmployeePayments()));
   setText(elements.grossProfit, formatMoney(grossProfit));
   setText(elements.totalIncome, formatMoney(totalIncome));
-  setText(elements.totalCosts, formatMoney(totalCosts));
-  setText(elements.grossMargin, `${margin.toFixed(1)}%`);
   setText(elements.topWorker, topEmployee ? topEmployee.name : "-");
 
   if (elements.activeCount) {
@@ -892,6 +742,88 @@ function renderOverview() {
       parentCard.style.backgroundColor = "rgba(217, 75, 75, 0.15)";
       parentCard.style.borderColor = "rgba(217, 75, 75, 0.5)";
     }
+  }
+
+  drawSparkline(
+    "sparkline-revenue",
+    chartPalette.teal,
+    "76, 175, 80",
+    totalIncome,
+  );
+  drawSparkline(
+    "sparkline-expenses",
+    chartPalette.orange,
+    "247, 127, 0",
+    totalExpenses,
+  );
+  drawSparkline(
+    "sparkline-payroll",
+    chartPalette.red,
+    "230, 57, 70",
+    payrollTotal,
+  );
+  drawSparkline(
+    "sparkline-profit",
+    chartPalette.blue,
+    "75, 124, 246",
+    grossProfit,
+  );
+}
+
+function drawSparkline(canvasId, colorHex, rgbString, value) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || typeof Chart === "undefined") return;
+
+  // On génère une belle courbe d'apparence naturelle (Sparkline) basée sur la valeur
+  const seed = value === 0 ? Math.random() * 100 : Math.abs(value);
+  const dataPoints = [
+    seed * 0.3,
+    seed * 0.5,
+    seed * 0.4,
+    seed * 0.7,
+    seed * 0.6,
+    seed * 0.85,
+    seed,
+  ];
+
+  if (!chartState[canvasId]) {
+    const ctx = canvas.getContext("2d");
+    const gradient = ctx.createLinearGradient(0, 0, 0, 60);
+    gradient.addColorStop(0, `rgba(${rgbString}, 0.2)`);
+    gradient.addColorStop(1, `rgba(${rgbString}, 0)`);
+
+    chartState[canvasId] = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: [1, 2, 3, 4, 5, 6, 7],
+        datasets: [
+          {
+            data: dataPoints,
+            borderColor: colorHex,
+            backgroundColor: gradient,
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: true,
+            tension: 0.4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          x: { display: false },
+          y: { display: false },
+        },
+        layout: { padding: 0 },
+      },
+    });
+  } else {
+    chartState[canvasId].data.datasets[0].data = dataPoints;
+    chartState[canvasId].update();
   }
 }
 
@@ -1145,42 +1077,6 @@ function renderPresenceList() {
       </tr>
     `;
       })
-      .join(""),
-  );
-}
-
-function renderExpenseTable() {
-  if (!elements.expenseBody) return;
-  if (!expenses.length) {
-    setHtml(
-      elements.expenseBody,
-      `<tr><td colspan="6">Aucune commande enregistree.</td></tr>`,
-    );
-    return;
-  }
-
-  setHtml(
-    elements.expenseBody,
-    expenses
-      .map(
-        (expense, expenseIndex) => `
-    <tr>
-      <td>
-        <span class="part-table-cell">
-          ${getPartIconMarkup(expense.itemCode, expense.name)}
-          <span>${escapeHtml(expense.name)}</span>
-        </span>
-      </td>
-      <td>${escapeHtml(expense.category)}</td>
-      <td>${Number(expense.quantity || 1)}</td>
-      <td>${formatMoney(expense.cost)}</td>
-      <td>${escapeHtml(expense.note || "-")}</td>
-      <td>
-        <button class="danger-button table-button delete-expense-button" data-expense-index="${expenseIndex}">Supprimer</button>
-      </td>
-    </tr>
-  `,
-      )
       .join(""),
   );
 }
@@ -1531,6 +1427,8 @@ function formatAuditAction(action) {
     part_order_deleted: "Commande piece supprimee",
     employee_paid: "Employe paye",
     system_reboot: "Reboot complet",
+    logs_cleared: "Historique vidé",
+    revenue_adjusted: "Revenu ajusté",
   };
   return labels[action] || action;
 }
@@ -2138,7 +2036,6 @@ function updateAll() {
   renderOverview();
   renderStatsTables();
   renderPresenceList();
-  renderExpenseTable();
   renderLeaderboard();
   renderAuditLogs();
   renderRecruitmentsTable();
@@ -2226,14 +2123,7 @@ async function loadAdminDashboard() {
       0,
     );
     const financeInputs = data.settings?.finance_inputs || {};
-    setValue(
-      elements.weeklyProfit,
-      financeInputs.weeklyProfit ? String(financeInputs.weeklyProfit) : "",
-    );
-    setValue(
-      elements.miscExpenses,
-      financeInputs.miscExpenses ? String(financeInputs.miscExpenses) : "",
-    );
+    state.weeklyProfit = Number(financeInputs.weeklyProfit || 0);
     setValue(
       elements.partCost,
       String(Number(data.settings?.part_settings?.fixedCost || 105)),
@@ -2412,22 +2302,6 @@ function logout() {
     adminRefreshTimerId = null;
   }
   window.location.href = "/auth/logout";
-}
-
-async function saveFinanceSettings() {
-  if (!state.isAdmin || state.readOnly) return;
-  await fetch("/api/admin-finance-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(getFinancePayload()),
-  })
-    .then(() => {
-      showToast("Profit enregistre.");
-    })
-    .catch(() => {
-      showToast("Echec de l'enregistrement.", true);
-    });
 }
 
 function queueFinanceSave() {
@@ -2637,145 +2511,6 @@ async function punchOut() {
   }
   state.currentUser.todayHours = 0;
   activeShiftStartedAt = null;
-  updateAll();
-}
-
-async function addExpense() {
-  if (state.readOnly) return;
-  const selectedPart = getSelectedPart();
-  if (!selectedPart) {
-    showToast("Selectionne une piece avant d'ajouter la commande.", true);
-    return;
-  }
-
-  const quantity = Math.max(
-    1,
-    Math.round(Number(elements.partQuantity?.value || 1) || 1),
-  );
-  const unitCost = Number(elements.partCost?.value || 105) || 105;
-  const category =
-    elements.partCategory?.value.trim() || selectedPart.category || "Pieces";
-  const note = elements.partNote?.value.trim() || "-";
-  const totalUnits = selectedPart.isAll
-    ? garageParts.length * quantity
-    : quantity;
-  const totalCost = unitCost * totalUnits;
-  let nextExpense = {
-    name: selectedPart.name,
-    itemCode: selectedPart.code,
-    category,
-    quantity: totalUnits,
-    unitCost,
-    cost: totalCost,
-    note: selectedPart.isAll
-      ? `Lot complet: ${quantity} x ${garageParts.length} pieces | ${note}`
-      : note,
-  };
-  if (state.isAdmin) {
-    const response = await fetch("/api/admin-expense", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(nextExpense),
-    }).catch(() => null);
-
-    if (response?.ok) {
-      const data = await response.json();
-      if (data.expense) {
-        nextExpense = {
-          id: data.expense.id,
-          name: data.expense.name,
-          itemCode:
-            data.expense.item_code ||
-            data.expense.itemCode ||
-            selectedPart.code,
-          category: data.expense.category,
-          quantity: Number(data.expense.quantity || totalUnits),
-          unitCost: Number(
-            data.expense.unit_cost || data.expense.unitCost || unitCost,
-          ),
-          cost: Number(data.expense.cost || totalCost),
-          note: data.expense.note || "-",
-        };
-      }
-    }
-  }
-
-  expenses.unshift(nextExpense);
-  await loadInventoryLogs();
-  setValue(elements.partName, "");
-  setValue(elements.partQuantity, "1");
-  setValue(elements.partCategory, "");
-  setValue(elements.partNote, "");
-  syncSelectedPartCategory();
-  if (elements.btnPickPart) {
-    elements.btnPickPart.innerHTML = `<span class="part-picker-btn-icon">?</span> <span style="margin-left: 10px;">Sélectionner une pièce...</span>`;
-  }
-  showToast(
-    `Commande ajoutee: ${selectedPart.isAll ? `${totalUnits} pieces au total` : `${quantity} x ${selectedPart.name}`}.`,
-  );
-  updateAll();
-}
-
-async function togglePartCostEdit() {
-  if (state.readOnly) return;
-  if (!elements.partCost || !elements.editPartCost) return;
-  const currentlyReadonly = elements.partCost.hasAttribute("readonly");
-  if (currentlyReadonly) {
-    elements.partCost.removeAttribute("readonly");
-    elements.editPartCost.textContent = "Save";
-    elements.partCost.focus();
-    showToast("Mode edition du cout fixe active.");
-    return;
-  }
-
-  const nextCost = Number(elements.partCost.value || 105) || 105;
-  elements.partCost.setAttribute("readonly", "readonly");
-  elements.editPartCost.textContent = "Edit";
-
-  await fetch("/api/admin-part-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ fixedCost: nextCost }),
-  })
-    .then(() => {
-      showToast("Cout fixe des pieces enregistre.");
-    })
-    .catch(() => {
-      showToast("Impossible d'enregistrer le cout fixe.", true);
-    });
-}
-
-async function deleteExpense(expenseIndex) {
-  if (state.readOnly) return;
-  const expense = expenses[expenseIndex];
-  if (!expense) return;
-  if (!window.confirm(`Supprimer la commande "${expense.name}" ?`)) return;
-
-  const removed = expenses.splice(expenseIndex, 1)[0];
-  updateAll();
-
-  if (!state.isAdmin || !removed.id) {
-    showToast("Commande supprimee localement.");
-    return;
-  }
-
-  const response = await fetch(`/api/admin-expense/${removed.id}`, {
-    method: "DELETE",
-    credentials: "include",
-  }).catch(() => null);
-
-  if (!response?.ok) {
-    expenses.splice(expenseIndex, 0, removed);
-    await loadInventoryLogs();
-    updateAll();
-    showToast("Impossible de supprimer la commande.", true);
-    return;
-  }
-
-  showToast("Commande supprimee.");
-  await loadInventoryLogs();
   updateAll();
 }
 
@@ -3168,12 +2903,6 @@ elements.punchToggle?.addEventListener("click", async () => {
   if (state.punchedIn) await punchOut();
   else await punchIn();
 });
-elements.saveFinance?.addEventListener("click", saveFinanceSettings);
-elements.saveAnalysis?.addEventListener("click", saveAnalysisSettings);
-elements.addExpense?.addEventListener("click", addExpense);
-elements.editPartCost?.addEventListener("click", togglePartCostEdit);
-elements.partName?.addEventListener("change", syncSelectedPartCategory);
-elements.partQuantity?.addEventListener("input", renderPartPreview);
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
 });
@@ -3189,58 +2918,6 @@ elements.rebootButtons.forEach((button) => {
   button.addEventListener("click", () =>
     rebootData(button.dataset.rebootScope || "all"),
   );
-});
-
-elements.btnPickPart?.addEventListener("click", () => {
-  activePartPickerTarget = "order";
-  if (elements.btnPickAll) elements.btnPickAll.style.display = "flex";
-  if (elements.partPickerSearch) elements.partPickerSearch.value = "";
-  renderPartPickerGrid("");
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "flex";
-});
-
-function selectPartFromPicker(code) {
-  const part =
-    code === "__all__"
-      ? { code: "__all__", name: "Tout le catalogue", isAll: true }
-      : garageParts.find((p) => p.code === code);
-
-  if (!part) return;
-
-  const btn = elements.btnPickPart;
-  const input = elements.partName;
-
-  if (input) input.value = code;
-  if (activePartPickerTarget === "order") syncSelectedPartCategory();
-  if (btn) {
-    const iconHtml = getPartIconMarkup(code, part.name);
-    btn.innerHTML = `${iconHtml.replace('class="part-icon"', 'class="part-icon btn-inline-icon"')} <span style="margin-left: 10px;">${escapeHtml(part.name)}</span>`;
-  }
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
-}
-
-elements.closePartPicker?.addEventListener("click", () => {
-  if (elements.partPickerModal) elements.partPickerModal.style.display = "none";
-});
-
-elements.btnPickAll?.addEventListener("click", () => {
-  selectPartFromPicker("__all__");
-});
-
-elements.partPickerSearch?.addEventListener("input", (e) => {
-  renderPartPickerGrid(e.target.value);
-});
-
-elements.partPickerGrid?.addEventListener("click", (e) => {
-  const card = e.target.closest(".picker-card");
-  if (!card) return;
-  selectPartFromPicker(card.dataset.code);
-});
-
-elements.expenseBody?.addEventListener("click", (event) => {
-  const deleteButton = event.target.closest(".delete-expense-button");
-  if (!deleteButton) return;
-  deleteExpense(Number(deleteButton.dataset.expenseIndex));
 });
 
 elements.contractsBody?.addEventListener("click", (event) => {
@@ -3420,7 +3097,6 @@ elements.confirmStockModalBtn?.addEventListener("click", async () => {
     }
     renderInventory();
     renderInventoryLogs();
-    renderExpenseTable();
     renderOverview();
 
     const diff = newQty - currentQty;
@@ -3512,6 +3188,35 @@ document.getElementById("role-modal")?.addEventListener("click", async (e) => {
   }
 });
 
+document
+  .getElementById("adjust-revenue-btn")
+  ?.addEventListener("click", async () => {
+    if (!state.isAdmin || state.isSupervision) return;
+    const input = prompt(
+      "Montant à ajouter ou retirer (ex: 500 pour ajouter, -200 pour retirer) :",
+    );
+    if (!input) return;
+    const amount = Number(input);
+    if (isNaN(amount)) return showToast("Montant invalide.", true);
+
+    const res = await fetch("/api/admin-adjust-revenue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ amount }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      state.weeklyProfit = data.weeklyProfit;
+      showToast(`Revenu ajusté (${amount > 0 ? "+" : ""}${amount}$).`);
+      renderOverview();
+      renderSimulation();
+    } else {
+      showToast("Erreur lors de l'ajustement.", true);
+    }
+  });
+
 elements.auditBody?.addEventListener("click", (event) => {
   const btn = event.target.closest(".view-audit-btn");
   if (btn) {
@@ -3529,11 +3234,6 @@ elements.auditBody?.addEventListener("click", (event) => {
 });
 
 [
-  elements.serviceIncome,
-  elements.weeklyProfit,
-  elements.manualPayouts,
-  elements.miscExpenses,
-  elements.calcNote,
   elements.simRevenue,
   elements.simExpenses,
   elements.simTargetProfit,

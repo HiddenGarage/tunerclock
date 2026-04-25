@@ -100,7 +100,6 @@ const GARAGE_PART_CODES = [
   "spark_plug",
   "brakepad_replacement",
   "suspension_parts",
-  "turbocharger",
   "lighting_controller",
   "cosmetic_part",
   "respray_kit",
@@ -2806,31 +2805,53 @@ app.post("/api/report-police", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/admin-adjust-stock", requireAdmin, async (req, res) => {
+app.post("/api/admin-smart-stock", requireAuth, async (req, res) => {
   try {
-    const { itemCode, action, quantity, partName } = req.body;
-    const qty = Math.max(1, Number(quantity) || 1);
+    const { itemCode, partName, newQuantity, createExpense } = req.body;
+    const newQty = Math.max(0, Number(newQuantity) || 0);
     if (!itemCode) return res.status(400).send("Piece manquante.");
 
     const supabase = getSupabase();
     const settings = await getSettingsMap(supabase);
     const stock = settings.inventory_stock || {};
 
-    const stockBefore = stock[itemCode] || 0;
-    if (action === "add") stock[itemCode] = stockBefore + qty;
-    else stock[itemCode] = Math.max(0, stockBefore - qty);
+    const oldQty = stock[itemCode] || 0;
+    const diff = newQty - oldQty;
 
+    if (diff === 0) return res.json({ ok: true, stock });
+
+    if (diff > 0 && !req.session.isAdmin) {
+      return res.status(403).send("Refusé.");
+    }
+
+    stock[itemCode] = newQty;
     await upsertSetting(supabase, "inventory_stock", stock);
 
-    await writeAuditLog(supabase, req, "part_consumed", {
+    const absDiff = Math.abs(diff);
+
+    if (createExpense) {
+      const partCost = Number(settings.part_settings?.fixedCost || 105);
+      await supabase.from("expense_logs").insert({
+        name: partName || itemCode,
+        item_code: itemCode,
+        category: "Ajustement Inventaire",
+        quantity: absDiff,
+        unit_cost: partCost,
+        cost: absDiff * partCost,
+        note: diff > 0 ? "Ajout manuel facturé" : "Dépense facturée",
+        created_by_discord_id: req.session.discordId,
+      });
+    }
+
+    const actionType = diff > 0 ? "part_order_added" : "part_consumed";
+    await writeAuditLog(supabase, req, actionType, {
       details: {
         itemCode,
         partName: partName || itemCode,
-        action:
-          action === "add"
-            ? "Ajout manuel au stock"
-            : "Retrait manuel du stock",
-        quantity: qty,
+        action: "Ajustement direct du stock",
+        quantity: absDiff,
+        newQuantity: newQty,
+        note: createExpense ? "Facturé / Dépense ajoutée" : "Usage direct",
       },
     });
 
@@ -2851,54 +2872,6 @@ app.post("/api/radio/playlists", requireAuth, async (req, res) => {
     const supabase = getSupabase();
     await upsertSetting(supabase, "radio_playlists", playlists);
     res.json({ ok: true, playlists });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
-app.post("/api/consume-part", requireAuth, async (req, res) => {
-  try {
-    const { itemCode, quantity, note, partName } = req.body;
-    const qty = Math.max(1, Number(quantity) || 1);
-    if (!itemCode) return res.status(400).send("Piece manquante.");
-
-    const supabase = getSupabase();
-    const settings = await getSettingsMap(supabase);
-    const stock = settings.inventory_stock || {};
-
-    const stockBefore = stock[itemCode] || 0;
-    stock[itemCode] = Math.max(0, stockBefore - qty);
-    await upsertSetting(supabase, "inventory_stock", stock);
-
-    await writeAuditLog(supabase, req, "part_consumed", {
-      details: {
-        itemCode,
-        partName: partName || itemCode,
-        quantity: qty,
-        note: note || "-",
-      },
-    });
-
-    if (stockBefore > 5 && stock[itemCode] <= 5) {
-      const embed = new EmbedBuilder()
-        .setColor(0xf4a249)
-        .setTitle("📦 Alerte : Stock Bas")
-        .setDescription(
-          `Le stock de la piece **${partName || itemCode}** vient de tomber a un niveau critique.`,
-        )
-        .addFields(
-          { name: "Piece", value: partName || itemCode, inline: true },
-          { name: "Stock restant", value: `${stock[itemCode]}`, inline: true },
-        )
-        .setTimestamp();
-
-      const bosses = ["893278269170933810", "417605116070461442"];
-      for (const bossId of bosses) {
-        await sendDiscordDmPayload(bossId, { embeds: [embed] });
-      }
-    }
-
-    res.json({ ok: true, stock });
   } catch (error) {
     res.status(500).send(error.message);
   }

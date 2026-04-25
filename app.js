@@ -446,7 +446,7 @@ function normaliseEmployeeRecord(record) {
 
 function getRequestedRoute() {
   const route = window.location.hash.replace("#", "");
-  const fallback = state.isAdmin ? "tableau" : "pointage";
+  const fallback = "pointage";
   return routes.includes(route) ? route : fallback;
 }
 
@@ -968,32 +968,37 @@ function drawPerformanceChart() {
   const labels = top5.map((e) => e.name);
   const data = top5.map((e) => e.hours);
 
-  destroyChart("performance");
-  chartState.performance = new Chart(canvas, {
-    type: "bar",
-    data: {
-      labels: labels.length ? labels : ["Aucun"],
-      datasets: [
-        {
-          data: data.length ? data : [0],
-          backgroundColor: chartPalette.blueSoft,
-          hoverBackgroundColor: chartPalette.blue,
-          borderRadius: 4,
-          borderSkipped: false,
-          barPercentage: 0.5,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { grid: { display: false }, ticks: { color: chartPalette.muted } },
-        y: { display: false, beginAtZero: true },
+  if (!chartState.performance) {
+    chartState.performance = new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: labels.length ? labels : ["Aucun"],
+        datasets: [
+          {
+            data: data.length ? data : [0],
+            backgroundColor: chartPalette.blueSoft,
+            hoverBackgroundColor: chartPalette.blue,
+            borderRadius: 4,
+            borderSkipped: false,
+            barPercentage: 0.5,
+          },
+        ],
       },
-    },
-  });
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: chartPalette.muted } },
+          y: { display: false, beginAtZero: true },
+        },
+      },
+    });
+  } else {
+    chartState.performance.data.labels = labels.length ? labels : ["Aucun"];
+    chartState.performance.data.datasets[0].data = data.length ? data : [0];
+    chartState.performance.update();
+  }
 }
 
 function getLastActiveDays(employeeId) {
@@ -1081,6 +1086,7 @@ function renderStatsTables() {
 }
 
 function renderSimulation() {
+  drawBilanCharts();
   const revenue = state.weeklyProfit || 0;
   const expenseTotal = getExpenseTotal();
   const paidTotal = getTotalEmployeePayments();
@@ -1198,6 +1204,129 @@ function renderSimulation() {
     </div>
   `,
   );
+}
+
+function drawBilanCharts() {
+  const canvasLine = document.getElementById("bilan-finance-chart");
+  const canvasDonut = document.getElementById("bilan-donut-chart");
+  if (!canvasLine || !canvasDonut || typeof Chart === "undefined") return;
+
+  const revenue = state.weeklyProfit || 0;
+  const expenseTotal = getExpenseTotal();
+  const currentPayroll = getPayrollTotal();
+
+  // Crypto style Line Chart (Revenus vs Dépenses simulés sur 7 points)
+  const dataRev = [
+    revenue * 0.3,
+    revenue * 0.4,
+    revenue * 0.6,
+    revenue * 0.5,
+    revenue * 0.8,
+    revenue * 0.9,
+    revenue,
+  ];
+  const dataExp = [
+    expenseTotal * 0.2,
+    expenseTotal * 0.3,
+    expenseTotal * 0.4,
+    expenseTotal * 0.6,
+    expenseTotal * 0.7,
+    expenseTotal * 0.8,
+    expenseTotal,
+  ];
+
+  if (!chartState.bilanLine) {
+    const ctx = canvasLine.getContext("2d");
+    const gradRev = ctx.createLinearGradient(0, 0, 0, 300);
+    gradRev.addColorStop(0, "rgba(76, 175, 80, 0.4)");
+    gradRev.addColorStop(1, "rgba(76, 175, 80, 0)");
+    const gradExp = ctx.createLinearGradient(0, 0, 0, 300);
+    gradExp.addColorStop(0, "rgba(230, 57, 70, 0.4)");
+    gradExp.addColorStop(1, "rgba(230, 57, 70, 0)");
+
+    chartState.bilanLine = new Chart(canvasLine, {
+      type: "line",
+      data: {
+        labels: ["J-6", "J-5", "J-4", "J-3", "J-2", "Hier", "Aujourd'hui"],
+        datasets: [
+          {
+            label: "Revenus",
+            data: dataRev,
+            borderColor: chartPalette.teal,
+            backgroundColor: gradRev,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 0,
+          },
+          {
+            label: "Dépenses",
+            data: dataExp,
+            borderColor: chartPalette.red,
+            backgroundColor: gradExp,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { labels: { color: "#fff" } } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: "rgba(255,255,255,0.05)" }, min: 0 },
+        },
+      },
+    });
+  } else {
+    chartState.bilanLine.data.datasets[0].data = dataRev;
+    chartState.bilanLine.data.datasets[1].data = dataExp;
+    chartState.bilanLine.update();
+  }
+
+  // Crypto style Donut Chart (Répartition des coûts)
+  const donutData = [
+    expenses.reduce((s, e) => s + (e.cost || 0), 0),
+    getContractTotal(),
+    currentPayroll,
+  ];
+
+  if (!chartState.bilanDonut) {
+    chartState.bilanDonut = new Chart(canvasDonut, {
+      type: "doughnut",
+      data: {
+        labels: ["Pièces", "Contrats", "Salaires Dus"],
+        datasets: [
+          {
+            data: donutData,
+            backgroundColor: [
+              chartPalette.orange,
+              chartPalette.blue,
+              chartPalette.red,
+            ],
+            borderWidth: 0,
+            hoverOffset: 10,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "70%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: "#fff", usePointStyle: true, padding: 20 },
+          },
+        },
+      },
+    });
+  } else {
+    chartState.bilanDonut.data.datasets[0].data = donutData;
+    chartState.bilanDonut.update();
+  }
 }
 
 function renderPresenceList() {
@@ -2635,6 +2764,7 @@ async function punchIn() {
   const response = await fetch("/api/punch-in", {
     method: "POST",
     credentials: "include",
+    keepalive: true,
   }).catch(() => null);
   if (!response?.ok) {
     state.punchedIn = false;
@@ -2659,6 +2789,7 @@ async function punchOut() {
   const response = await fetch("/api/punch-out", {
     method: "POST",
     credentials: "include",
+    keepalive: true,
   }).catch(() => null);
   if (response?.ok) {
     const data = await response.json();

@@ -289,7 +289,7 @@ a {
   border: 1px solid var(--line);
   background: rgba(0, 0, 0, 0.2);
   color: var(--text);
-  border-radius: 4px;
+  border-radius: 50px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1324,9 +1324,7 @@ td {
   .simulation-form-grid,
   .simulation-summary,
   .analysis-auto-grid,
-  .analysis-recommendation-grid,
-  .pointage-buttons,
-  .pointage-metrics {
+  .analysis-recommendation-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1832,25 +1830,6 @@ select option {
   height: 330px !important;
   min-height: 330px;
   max-height: 330px;
-}
-
-.pointage-shell {
-  border-top: 4px solid var(--red);
-  background: var(--panel);
-}
-
-.pointage-main-meter {
-  background: rgba(0, 0, 0, 0.2);
-  border-left: 4px solid var(--teal);
-}
-
-.blue-meter {
-  background: rgba(0, 0, 0, 0.2);
-  border-left-color: var(--red);
-}
-
-.pointage-main-meter strong {
-  letter-spacing: -0.05em;
 }
 
 table {

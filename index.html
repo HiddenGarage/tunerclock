@@ -114,7 +114,7 @@
               </div>
               <span class="mini-pill success">Entreprise</span>
             </div>
-            <div style="flex-grow: 1; min-height: 180px; position: relative;">
+            <div style="flex-grow: 1; min-height: 240px; height: 100%; position: relative; width: 100%;">
               <canvas id="performance-chart"></canvas>
             </div>
           </article>
@@ -362,6 +362,29 @@
 
       <section id="page-analyse" class="app-page analyse-page">
         <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Aperçu Financier (En direct)</h3>
+                <p class="muted">Bilan de la trésorerie actuelle.</p>
+              </div>
+            </div>
+            <div class="summary-band" style="grid-template-columns: repeat(4, 1fr); margin-top: 0;">
+              <div class="summary-item">
+                <span>Revenus totaux</span><strong id="bilan-tot-rev" style="color: var(--teal);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Dépenses totales</span><strong id="bilan-tot-exp" style="color: var(--orange);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Salaires Dus</span><strong id="bilan-tot-pay" style="color: var(--red);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Profit Net</span><strong id="bilan-tot-net" style="color: var(--blue);">0$</strong>
+              </div>
+            </div>
+          </article>
+
           <article class="card card-span-2 chart-card large-chart-card">
             <div class="card-head">
               <div>
@@ -384,27 +407,6 @@
             <div style="position: relative; height: 300px; width: 100%;">
               <canvas id="bilan-donut-chart"></canvas>
             </div>
-          </article>
-
-          <article class="card stat-card metric-card metric-parts">
-            <p class="section-kicker">Paie estimee</p>
-            <h3 id="sim-possible-payroll">0$</h3>
-            <p class="muted">Salaires dus</p>
-          </article>
-          <article class="card stat-card metric-card metric-revenue">
-            <p class="section-kicker">Taux horaire conseille</p>
-            <h3 id="sim-recommended-hourly">0$</h3>
-            <p class="muted">Base Mecano conseillee</p>
-          </article>
-          <article class="card stat-card metric-card metric-profit">
-            <p class="section-kicker">Profit net actuel</p>
-            <h3 id="sim-remaining-profit">0$</h3>
-            <p class="muted">Revenus moins paies, paiements et depenses.</p>
-          </article>
-          <article class="card stat-card metric-card metric-payroll">
-            <p class="section-kicker">Nombre d'employes</p>
-            <h3 id="sim-employee-count">0</h3>
-            <p class="muted">Effectif actuel</p>
           </article>
 
           <article class="card card-span-3 analysis-advice-card">

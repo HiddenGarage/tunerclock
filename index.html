@@ -22,8 +22,8 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Mise en service</div>
-        <a href="#pointage" class="nav-item" data-route="pointage">Mise en service</a>
+        <div class="nav-category">Profil</div>
+        <a href="#pointage" class="nav-item" data-route="pointage">Profil</a>
         <a href="#historique" class="nav-item" data-route="historique" data-admin-only="true">Historique</a>
         
         <div class="nav-category">Atelier</div>
@@ -36,8 +36,6 @@
         
         <div class="nav-category">Direction</div>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
-        <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
         <div class="nav-category">Détente</div>
@@ -141,58 +139,67 @@
         </div>
       </section>
 
-      <section id="page-pointage" class="app-page pointage-page">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <section id="page-pointage" class="app-page pointage-page">
+        <div class="profile-head">
           <div>
-            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Mise en service</h2>
-            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour commencer ton quart.</p>
+            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Profil</h2>
+            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour voir ton profil en direct.</p>
           </div>
-          <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
+          <button id="discord-login" class="secondary-button">Connexion Discord</button>
         </div>
 
-        <div class="dashboard-grid">
-          <article class="card card-span-2 clock-in-widget" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; text-align: center;">
-            <span id="shift-badge" class="mini-pill danger" style="margin-bottom: 32px; font-size: 0.9rem; padding: 10px 20px;">Hors service</span>
-            
-            <div style="margin-bottom: 40px;">
-              <span class="muted" style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 800;">Temps de la session</span>
-              <h1 id="today-hours" style="font-size: 5rem; margin: 12px 0; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--text); line-height: 1;">0h 00m 00s</h1>
-              <div style="color: var(--teal); font-weight: 800; font-size: 1.4rem;">+ <span id="today-pay">0$</span></div>
+        <div class="dashboard-grid profile-grid">
+          <article class="card card-span-2 profile-session-card">
+            <div class="profile-session-head">
+              <span id="shift-badge" class="mini-pill danger">Hors service</span>
+              <span class="mini-pill">Profil live</span>
             </div>
-
-            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">ENTRER EN SERVICE</button>
+            <div class="profile-session-main">
+              <span class="muted profile-label">Temps de la session</span>
+              <h1 id="today-hours">0h 00m 00s</h1>
+              <p class="profile-inline-value">Paie session live: <strong id="today-pay">0$</strong></p>
+            </div>
+            <div class="profile-session-footer">
+              <div class="profile-stat">
+                <span>Ma cagnotte</span>
+                <strong id="pending-pay">0$</strong>
+              </div>
+              <div class="profile-stat">
+                <span>Temps cumule</span>
+                <strong id="pending-hours">0h 00m</strong>
+              </div>
+              <div class="profile-stat">
+                <span>Dernier shift</span>
+                <strong id="last-shift-duration">-</strong>
+                <small id="last-shift-ended" class="muted">Aucun shift termine</small>
+              </div>
+            </div>
           </article>
 
-          <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
-            <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column; padding: 24px;">
-              <div class="card-head" style="margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 1.1rem;">Ma Cagnotte</h3>
-                </div>
-                <span class="mini-pill">À payer</span>
+          <article class="card profile-chart-card">
+            <div class="card-head" style="margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 1.1rem;">Graphique temps de session</h3>
+                <p class="muted">Evolution des heures sur les 7 derniers jours.</p>
               </div>
-              <div style="flex-grow: 1;">
-                <h3 id="pending-pay" style="font-size: 2.4rem; color: var(--text); margin: 0 0 4px 0;">0$</h3>
-                <span class="muted" style="font-size: 0.85rem;">Temps cumulé: <strong id="pending-hours" style="color: var(--text);">0h 00m</strong></span>
-              </div>
-              <div style="width: 100%; height: 110px; margin-top: 16px; position: relative;">
-                <canvas id="cagnotte-chart"></canvas>
-              </div>
-            </article>
+            </div>
+            <div style="width: 100%; height: 220px; position: relative;">
+              <canvas id="cagnotte-chart"></canvas>
+            </div>
+          </article>
 
-            <article class="card" style="flex-grow: 1;">
-              <div class="card-head" style="margin-bottom: 12px;">
-                <div>
-                  <h3 style="font-size: 1.1rem;">Derniers shifts</h3>
-                </div>
+          <article id="personal-stats-section" class="card card-span-3 profile-history-card" style="display: none;">
+            <div class="card-head" style="margin-bottom: 12px;">
+              <div>
+                <h3 style="font-size: 1.1rem;">Derniers shifts</h3>
               </div>
-              <div class="table-wrap">
-                <table style="font-size: 0.85rem;">
-                  <tbody id="personal-history-body"></tbody>
-                </table>
-              </div>
-            </article>
-          </div>
+            </div>
+            <div class="table-wrap">
+              <table style="font-size: 0.85rem;">
+                <tbody id="personal-history-body"></tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -261,30 +268,14 @@
             </div>
           </article>
 
-          <article class="card card-span-3">
+                    <article class="card card-span-3">
             <div class="card-head">
               <div>
-                <h3>Presence live</h3>
-                <p class="muted">Controle des employes actuellement en service, rappels Discord et fermeture forcee des shifts oublies.</p>
+                <h3>Activite</h3>
+                <p class="muted">Blocs live par employe: vert actif, rouge inactif, avec rappel et actions direction.</p>
               </div>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Employe</th>
-                    <th>Role</th>
-                    <th>Entree</th>
-                    <th>Duree live</th>
-                    <th>Cout live</th>
-                    <th>Statut</th>
-                    <th>Rappel</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="presence-body"></tbody>
-              </table>
-            </div>
+            <div id="activity-grid" class="activity-grid"></div>
           </article>
         </div>
       </section>
@@ -333,107 +324,7 @@
         </div>
       </section>
 
-      <section id="page-salaire" class="app-page salaire-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux.</p>
-              </div>
-              <span class="mini-pill">Roles</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Taux actuel</th>
-                    <th>Nouveau taux</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="role-rates-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="page-analyse" class="app-page analyse-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Aperçu Financier (En direct)</h3>
-                <p class="muted">Bilan de la trésorerie actuelle.</p>
-              </div>
-            </div>
-            <div class="summary-band" style="grid-template-columns: repeat(4, 1fr); margin-top: 0;">
-              <div class="summary-item">
-                <span>Revenus totaux</span><strong id="bilan-tot-rev" style="color: var(--teal);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Dépenses totales</span><strong id="bilan-tot-exp" style="color: var(--orange);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Salaires Dus</span><strong id="bilan-tot-pay" style="color: var(--red);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Profit Net</span><strong id="bilan-tot-net" style="color: var(--blue);">0$</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="card card-span-2 chart-card large-chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Flux Financier (30 Jours)</h3>
-                <p class="muted">Évolution dynamique des revenus et dépenses.</p>
-              </div>
-            </div>
-            <div style="position: relative; height: 300px; width: 100%;">
-              <canvas id="bilan-finance-chart"></canvas>
-            </div>
-          </article>
-
-          <article class="card chart-card large-chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Répartition des dépenses</h3>
-                <p class="muted">Où va l'argent du garage.</p>
-              </div>
-            </div>
-            <div style="position: relative; height: 300px; width: 100%;">
-              <canvas id="bilan-donut-chart"></canvas>
-            </div>
-          </article>
-
-          <article class="card card-span-3 analysis-advice-card">
-            <div class="card-head">
-              <div>
-                <h3>Conseil final</h3>
-                <p class="muted">Recommandation lisible selon les donnees actuelles, sans toucher aux taux officiels.</p>
-              </div>
-            </div>
-            <div class="summary-band simulation-summary">
-              <div class="summary-item">
-                <span>Marge actuelle</span>
-                <strong id="sim-profit-target">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Salaires actuellement dus</span>
-                <strong id="sim-current-payroll">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Ratio salaires / revenus</span>
-                <strong id="sim-payroll-gap">0%</strong>
-              </div>
-            </div>
-            <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
-          </article>
-        </div>
-      </section>
+      
 
       <section id="page-contrats" class="app-page contrats-page">
         <div class="dashboard-grid">
@@ -791,7 +682,7 @@
   <nav class="mobile-nav">
     <a href="#pointage" class="mobile-nav-item" data-route="pointage">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-      <span>Punch</span>
+      <span>Profil</span>
     </a>
     <a href="#tableau" class="mobile-nav-item active" data-route="tableau" data-admin-only="true">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -836,3 +727,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

@@ -2190,6 +2190,39 @@ app.get("/api/admin-audit-logs", requireAdminAccess, async (req, res) => {
   }
 });
 
+app.get("/api/admin-debug-state", requireAdminAccess, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const { data: employees, error: employeesError } = await supabase
+      .from("employees")
+      .select("id, discord_id, discord_name, role, hourly_rate, is_active");
+    const { data: activeShifts, error: shiftsError } = await supabase
+      .from("shifts")
+      .select("id, employee_id, punched_in_at, status")
+      .eq("status", "active")
+      .order("punched_in_at", { ascending: false });
+
+    if (employeesError) throw employeesError;
+    if (shiftsError) throw shiftsError;
+
+    res.json({
+      roleRates: settings.role_rates || null,
+      employees: employees || [],
+      activeShifts: activeShifts || [],
+      session: {
+        discordId: req.session.discordId,
+        displayName: req.session.displayName,
+        roleName: req.session.roleName,
+        isAdmin: req.session.isAdmin,
+        canManage: req.session.canManage,
+      },
+    });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
 app.get("/api/admin-notes/:id", requireAdminAccess, async (req, res) => {
   try {
     const supabase = getSupabase();

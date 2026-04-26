@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { required } = require("../netlify/functions/lib/env");
-const { getSession } = require("../auth");
 const {
+  getSession,
   refreshDiscordSession,
   writeSessionCookie,
-} = require("../discord-session");
+} = require("../auth");
 
 router.get("/discord/login", (req, res) => {
   const url = new URL("https://discord.com/api/oauth2/authorize");

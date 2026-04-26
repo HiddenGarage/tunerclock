@@ -94,6 +94,7 @@ const ROLE_DEFINITIONS = [
     isAdmin: false,
   },
 ];
+const DISCORD_MANAGEMENT_ROLES = ["Patron", "Copatron", "Gerant"];
 const GARAGE_PART_CODES = [
   "engine_oil",
   "tyre_replacement",
@@ -407,12 +408,38 @@ function resolveRoleFromDiscordMember(member, discordId) {
   );
 }
 
+function canManageFromDiscordRole(roleName) {
+  return DISCORD_MANAGEMENT_ROLES.includes(roleName);
+}
+
+async function writeDiscordAuditLog(
+  supabase,
+  actorDiscordId,
+  actorName,
+  action,
+  options = {},
+) {
+  const payload = {
+    action,
+    actor_discord_id: actorDiscordId || null,
+    actor_name: actorName || "Systeme",
+    target_employee_id: options.targetEmployeeId || null,
+    target_discord_id: options.targetDiscordId || null,
+    target_name: options.targetName || null,
+    details: options.details || {},
+  };
+  await supabase.from("audit_logs").insert(payload).catch(() => null);
+}
+
 function getLogoPath() {
   return path.join(__dirname, "logo", "TurboPunch.png");
 }
 
 async function syncDiscordCommands() {
   if (!discordClient?.application) return;
+  const roleChoices = ROLE_DEFINITIONS.filter(
+    (role) => role.name !== "Gouvernement",
+  ).map((role) => ({ name: role.name, value: role.name }));
   const commands = [
     { name: "in", description: "Punch In" },
     { name: "out", description: "Punch Out" },
@@ -448,6 +475,44 @@ async function syncDiscordCommands() {
         },
       ],
     },
+    {
+      name: "salaire",
+      description: "Modifier le salaire horaire d'un role (Direction)",
+      options: [
+        {
+          name: "role",
+          description: "Role a modifier",
+          type: 3,
+          required: true,
+          choices: roleChoices,
+        },
+        {
+          name: "salaire",
+          description: "Nouveau salaire horaire",
+          type: 10,
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "embauche",
+      description: "Attribuer un role a un employe (Direction)",
+      options: [
+        {
+          name: "user",
+          description: "Employe a embaucher",
+          type: 6,
+          required: true,
+        },
+        {
+          name: "role",
+          description: "Role a attribuer",
+          type: 3,
+          required: true,
+          choices: roleChoices,
+        },
+      ],
+    },
   ];
 
   try {
@@ -455,7 +520,9 @@ async function syncDiscordCommands() {
       commands,
       process.env.DISCORD_GUILD_ID || undefined,
     );
-    console.log("Commandes Discord synchronisees: /in /out /paye");
+    console.log(
+      "Commandes Discord synchronisees: /in /out /paye /finance /salaire /embauche",
+    );
   } catch (error) {
     console.error(
       "Synchronisation commandes Discord impossible:",
@@ -486,6 +553,16 @@ function buildEmployeeGuideEmbed() {
         name: "/paye",
         value:
           "Affiche tes heures actuelles, ton taux horaire et l'argent gagne jusqu'a maintenant. Le resultat est prive: seulement toi peux voir ton solde.",
+      },
+      {
+        name: "/salaire role salaire",
+        value:
+          "Direction seulement (Patron, Copatron, Gerant): met a jour le taux horaire d'un role en direct.",
+      },
+      {
+        name: "/embauche user role",
+        value:
+          "Direction seulement (Patron, Copatron, Gerant): attribue rapidement un role Discord a un employe.",
       },
       {
         name: "Panel web",
@@ -810,6 +887,149 @@ function startDiscordBot() {
           } catch (err) {
             await interaction.editReply(
               `Erreur lors de l'opération : ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "salaire") {
+          if (!canManageFromDiscordRole(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant uniquement.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const targetRoleName = interaction.options.getString("role", true);
+          const nextRate = Number(interaction.options.getNumber("salaire", true));
+          if (!Number.isFinite(nextRate) || nextRate < 0) {
+            await interaction.reply({
+              content: "Salaire invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const roleRates = await getRoleRates(supabase);
+            const merged = { ...roleRates, [targetRoleName]: nextRate };
+            await upsertSetting(supabase, "role_rates", merged);
+
+            await supabase
+              .from("employees")
+              .update({ hourly_rate: nextRate })
+              .eq("role", targetRoleName);
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "role_rates_updated",
+              {
+                details: {
+                  roleRates: merged,
+                  source: "discord_command",
+                },
+              },
+            );
+
+            await interaction.editReply(
+              `Salaire mis a jour: **${targetRoleName}** est maintenant a **${Math.round(nextRate)}$/h**.`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Impossible de mettre a jour le salaire: ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "embauche") {
+          if (!canManageFromDiscordRole(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant uniquement.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const user = interaction.options.getUser("user", true);
+          const assignedRoleName = interaction.options.getString("role", true);
+          const assignedRole = ROLE_DEFINITIONS.find(
+            (role) => role.name === assignedRoleName,
+          );
+          if (!assignedRole?.id) {
+            await interaction.reply({
+              content: "Role invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const guild = discordClient.guilds.cache.get(
+              process.env.DISCORD_GUILD_ID,
+            );
+            if (!guild) {
+              await interaction.editReply("Serveur Discord introuvable.");
+              return;
+            }
+            const member = await guild.members.fetch(user.id).catch(() => null);
+            if (!member) {
+              await interaction.editReply("Utilisateur introuvable sur le serveur.");
+              return;
+            }
+
+            const roleIdsToClean = ROLE_DEFINITIONS.filter(
+              (role) => role.name !== "Gouvernement",
+            ).map((role) => role.id);
+            await member.roles.remove(roleIdsToClean).catch(() => null);
+            await member.roles.add(assignedRole.id).catch(() => null);
+
+            const supabase = getSupabase();
+            const roleRates = await getRoleRates(supabase);
+            const roleRate = numberOrDefault(
+              roleRates[assignedRole.name],
+              assignedRole.hourlyRate,
+            );
+            await supabase.from("employees").upsert(
+              {
+                discord_id: user.id,
+                discord_name: user.globalName || user.username,
+                role: assignedRole.name,
+                hourly_rate: roleRate,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "discord_id" },
+            );
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "employee_hired_discord",
+              {
+                targetDiscordId: user.id,
+                targetName: user.globalName || user.username,
+                details: {
+                  roleName: assignedRole.name,
+                  source: "discord_command",
+                },
+              },
+            );
+
+            await interaction.editReply(
+              `Embauche confirmee: <@${user.id}> est maintenant **${assignedRole.name}**.`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Impossible d'embaucher cet utilisateur: ${err.message}`,
             );
           }
           return;

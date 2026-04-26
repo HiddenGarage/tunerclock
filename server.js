@@ -3007,6 +3007,11 @@ app.post(
         return res.json({ ok: true });
       }
 
+      if (action === "remove") {
+        await upsertSetting(supabase, "recruitments_list", recruitments); // Removed from list without DM
+        return res.json({ ok: true });
+      }
+
       if (action === "accept") {
         const assignedRoleId = req.body.roleId || "1487852702519136496";
         const assignedRoleName = req.body.roleName || "Apprenti";

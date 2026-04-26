@@ -2223,6 +2223,8 @@ async function updateRoleRate(roleName, nextRate) {
           ...data.roleRates,
         };
       }
+      await loadAdminDashboard();
+      updateAll();
       showToast(`Salaire ${roleName} mis a jour.`);
     } else {
       throw new Error("API Error");

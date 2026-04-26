@@ -6,12 +6,28 @@ const {
   refreshDiscordSession,
   writeSessionCookie,
 } = require("../auth");
+const { buildCookie } = require("../netlify/functions/lib/session");
+
+function getRequestOrigin(req) {
+  const proto =
+    req.headers["x-forwarded-proto"] ||
+    req.protocol ||
+    "http";
+  return `${proto}://${req.get("host")}`;
+}
+
+function resolveDiscordRedirectUri(req) {
+  return (
+    process.env.DISCORD_REDIRECT_URI ||
+    `${getRequestOrigin(req)}/auth/discord/callback`
+  );
+}
 
 router.get("/discord/login", (req, res) => {
   const url = new URL("https://discord.com/api/oauth2/authorize");
   url.searchParams.set("client_id", required("DISCORD_CLIENT_ID"));
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
+  url.searchParams.set("redirect_uri", resolveDiscordRedirectUri(req));
   url.searchParams.set("scope", "identify");
   url.searchParams.set("prompt", "consent");
   res.redirect(url.toString());
@@ -32,7 +48,7 @@ router.get("/discord/callback", async (req, res) => {
         client_secret: required("DISCORD_CLIENT_SECRET"),
         grant_type: "authorization_code",
         code,
-        redirect_uri: required("DISCORD_REDIRECT_URI"),
+        redirect_uri: resolveDiscordRedirectUri(req),
       }),
     });
 
@@ -71,7 +87,7 @@ router.get("/discord/callback", async (req, res) => {
     const session = await refreshDiscordSession(baseSession);
 
     writeSessionCookie(res, session);
-    res.redirect("/");
+    res.redirect("/#pointage");
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -93,10 +109,7 @@ router.get("/me", async (req, res) => {
   res.json({ user: refreshedSession });
 });
 router.get("/logout", (req, res) => {
-  res.setHeader(
-    "Set-Cookie",
-    "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
-  );
+  res.setHeader("Set-Cookie", buildCookie("tunershub_session", "", 0));
   res.redirect("/");
 });
 

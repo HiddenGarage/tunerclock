@@ -1595,12 +1595,16 @@ function renderPersonalDashboard() {
 
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
+  const identityText =
+    state.loggedIn && state.currentUser
+      ? `${state.currentUser.name} | ${roleText}`
+      : "Connexion securisee";
   setText(
     elements.topbarRolePill,
     state.isSupervision
       ? "Bienvenue Gouvernement | Lecture seule"
       : state.loggedIn
-        ? roleText
+        ? identityText
         : "Connexion securisee",
   );
 
@@ -2227,11 +2231,15 @@ async function updateRoleRate(roleName, nextRate) {
       updateAll();
       showToast(`Salaire ${roleName} mis a jour.`);
     } else {
-      throw new Error("API Error");
+      const message = await res.text().catch(() => "API Error");
+      throw new Error(message || "API Error");
     }
   } catch (e) {
     state.roleRates = previousRates;
-    showToast("Impossible de sauvegarder le salaire du role.", true);
+    showToast(
+      `Impossible de sauvegarder le salaire du role. ${e?.message || ""}`.trim(),
+      true,
+    );
     await loadAdminDashboard();
     updateAll();
   }
@@ -2400,8 +2408,9 @@ async function punchOut() {
     localStorage.removeItem("tuner_punch_pending");
     localStorage.setItem("tuner_intended_punch_state", "in"); // Si échec, l'intention est "in"
     state.currentUser.hours += state.currentUser.todayHours;
+    const serverMessage = response ? await response.text().catch(() => "") : "";
     showToast(
-      "Sortie de service sauvegardee localement, verifie le serveur.",
+      `Sortie de service impossible sur le serveur. ${serverMessage || "Verifie le compte Discord connecte sur le web."}`.trim(),
       true,
     );
   }

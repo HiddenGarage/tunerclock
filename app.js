@@ -162,6 +162,7 @@ const elements = {
   partPreview: document.getElementById("part-preview"),
   shiftChart: document.getElementById("shift-chart"),
   analysisChart: document.getElementById("analysis-chart"),
+  profileStatusChartCanvas: document.getElementById("profile-status-chart"),
   cagnotteChartCanvas: document.getElementById("cagnotte-chart"),
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
@@ -1678,6 +1679,67 @@ function renderShiftState() {
   }
 }
 
+function renderProfileStatusChart() {
+  const canvas = elements.profileStatusChartCanvas;
+  if (!canvas || typeof Chart === "undefined") return;
+
+  const isActive = Boolean(state.loggedIn && state.currentUser && state.punchedIn);
+  const liveHours = isActive ? getLiveEmployeeHours(state.currentUser) : 0;
+  const progressHours = Math.min(Math.max(liveHours, 0), 8);
+  const remainingHours = Math.max(0.25, 8 - progressHours);
+  const dataset = isActive ? [progressHours || 0.15, remainingHours] : [1];
+
+  destroyChart("profileStatus");
+  chartState.profileStatus = new Chart(canvas, {
+    type: "doughnut",
+    plugins: [doughnutCenterTextPlugin],
+    data: {
+      labels: isActive ? ["Session", "Reste"] : ["Hors service"],
+      datasets: [
+        {
+          data: dataset,
+          backgroundColor: isActive
+            ? [chartPalette.teal, "rgba(255, 255, 255, 0.08)"]
+            : ["rgba(255, 255, 255, 0.08)"],
+          borderColor: "#202124",
+          borderWidth: 6,
+          borderRadius: 6,
+          spacing: 4,
+          hoverOffset: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      cutout: "76%",
+      plugins: {
+        doughnutCenterText: {
+          value: isActive ? formatCompactHours(liveHours) : "OFF",
+          label: isActive ? "Session live" : "Profil",
+        },
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#182232",
+          titleColor: "#f8fbff",
+          bodyColor: "#f8fbff",
+          borderColor: "#24364f",
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 4,
+          callbacks: {
+            label(context) {
+              if (!isActive) return "Utilise /in sur Discord";
+              return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 function drawShiftDonutChart() {
   const canvas = elements.shiftChart;
   if (!canvas || typeof Chart === "undefined") return;
@@ -2010,6 +2072,7 @@ function updateAll() {
   renderContractsTable();
   renderHistorique();
   renderShiftState();
+  renderProfileStatusChart();
   drawShiftDonutChart();
   drawTrendChart();
   drawPerformanceChart();

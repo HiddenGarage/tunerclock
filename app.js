@@ -2229,7 +2229,9 @@ async function updateRoleRate(roleName, nextRate) {
       }
       await loadAdminDashboard();
       updateAll();
-      showToast(`Salaire ${roleName} mis a jour.`);
+      showToast(
+        `Salaire ${roleName} mis a jour a ${state.roleRates[roleName]}$.`,
+      );
     } else {
       const message = await res.text().catch(() => "API Error");
       throw new Error(message || "API Error");
@@ -2883,6 +2885,12 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
 elements.punchToggle?.addEventListener("click", async () => {
   if (state.punchedIn) await punchOut();
   else await punchIn();
+});
+elements.discordLogin?.addEventListener("click", () => {
+  window.location.href = "/auth/discord/login";
+});
+elements.logoutButton?.addEventListener("click", () => {
+  window.location.href = "/auth/logout";
 });
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";

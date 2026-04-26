@@ -1335,7 +1335,21 @@ async function closeActiveShiftForEmployee(
     throw shiftError;
   }
   if (!shift) {
-    throw new Error("Aucun shift actif a fermer.");
+    const { error: staleEmployeeError } = await supabase
+      .from("employees")
+      .update({ is_active: false })
+      .eq("id", employee.id);
+    if (staleEmployeeError) {
+      throw staleEmployeeError;
+    }
+    await updateServiceRole(employee.discord_id, false);
+    return {
+      durationHours: 0,
+      shiftPeriod: null,
+      punchedInAt: null,
+      punchedOutAt: new Date(),
+      shiftId: null,
+    };
   }
 
   const punchedOutAt = new Date();
@@ -1800,13 +1814,23 @@ async function buildEmployeeSnapshots(supabase) {
         )
       : 0;
 
+    const computedIsActive = Boolean(activeShift);
+    if (Boolean(employee.is_active) !== computedIsActive) {
+      supabase
+        .from("employees")
+        .update({ is_active: computedIsActive })
+        .eq("id", employee.id)
+        .then(() => updateServiceRole(employee.discord_id, computedIsActive))
+        .catch(() => null);
+    }
+
     return {
       ...employee,
       active_days: Number(employee.active_days || activeDays || 0),
       today_hours: todayHours,
       preferred_shift: preferredShift,
       total_hours: Number(employee.total_hours || 0),
-      is_active: Boolean(activeShift || employee.is_active),
+      is_active: computedIsActive,
       active_shift_id: activeShift?.id || null,
       active_shift_started_at: activeShift?.punched_in_at || null,
     };

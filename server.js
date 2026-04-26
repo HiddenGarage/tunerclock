@@ -316,6 +316,42 @@ async function getRoleRates(supabase) {
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
 }
 
+async function saveSingleRoleRate(supabase, roleName, nextRate) {
+  const roleDefinition = ROLE_DEFINITIONS.find((role) => role.name === roleName);
+  if (!roleDefinition) {
+    throw new Error("Role invalide.");
+  }
+
+  const numericRate = Number(nextRate);
+  if (!Number.isFinite(numericRate) || numericRate < 0) {
+    throw new Error("Montant invalide.");
+  }
+
+  const currentRates = await getRoleRates(supabase);
+  const updatedRates = {
+    ...currentRates,
+    [roleName]: numericRate,
+  };
+
+  await upsertSetting(supabase, "role_rates", updatedRates);
+
+  const confirmedRates = await getRoleRates(supabase);
+  const confirmedRate = Number(confirmedRates[roleName]);
+  if (!Number.isFinite(confirmedRate) || confirmedRate !== numericRate) {
+    throw new Error("Verification base de donnees echouee.");
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({ hourly_rate: confirmedRate })
+    .eq("role", roleName);
+  if (error) {
+    throw error;
+  }
+
+  return confirmedRates;
+}
+
 async function setDiscordServiceRoleByApi(discordId, roleId, shouldHaveRole) {
   if (!discordId || !roleId || !process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_GUILD_ID) {
     return;
@@ -2286,34 +2322,50 @@ app.post("/api/admin-global-rate", requireAdmin, async (req, res) => {
 app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
   try {
     const incoming = req.body?.roleRates || {};
-    const merged = { ...getDefaultRoleRates() };
-    ROLE_DEFINITIONS.forEach((role) => {
-      const nextValue = Number(incoming[role.name]);
-      merged[role.name] = Number.isFinite(nextValue)
-        ? nextValue
-        : merged[role.name];
-    });
-
     const supabase = getSupabase();
-    await upsertSetting(supabase, "role_rates", merged);
-    const savedRates = await getRoleRates(supabase);
+    let latestRates = await getRoleRates(supabase);
 
     for (const role of ROLE_DEFINITIONS) {
-      const { error } = await supabase
-        .from("employees")
-        .update({ hourly_rate: savedRates[role.name] })
-        .eq("role", role.name);
-
-      if (error) {
-        throw error;
+      if (Number.isFinite(Number(incoming[role.name]))) {
+        latestRates = await saveSingleRoleRate(
+          supabase,
+          role.name,
+          Number(incoming[role.name]),
+        );
       }
     }
 
     await writeAuditLog(supabase, req, "role_rates_updated", {
-      details: { roleRates: savedRates },
+      details: { roleRates: latestRates },
     });
 
-    res.json({ ok: true, roleRates: savedRates });
+    res.json({ ok: true, roleRates: latestRates });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.post("/api/admin-role-rate", requireAdmin, async (req, res) => {
+  try {
+    const roleName = String(req.body?.roleName || "");
+    const nextRate = req.body?.rate;
+    if (!roleName) {
+      return res.status(400).send("Role manquant.");
+    }
+
+    const supabase = getSupabase();
+    const confirmedRates = await saveSingleRoleRate(supabase, roleName, nextRate);
+
+    await writeAuditLog(supabase, req, "role_rate_updated", {
+      details: { roleName, rate: confirmedRates[roleName] },
+    });
+
+    res.json({
+      ok: true,
+      roleName,
+      rate: confirmedRates[roleName],
+      roleRates: confirmedRates,
+    });
   } catch (error) {
     res.status(500).send(error.message);
   }

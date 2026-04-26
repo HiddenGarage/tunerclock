@@ -833,13 +833,12 @@ a {
 
 .profile-hero-card {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 60px 24px;
-  text-align: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 28px;
+  align-items: start;
+  padding: 42px 28px;
+  border-radius: 0;
   overflow: hidden;
   background:
     radial-gradient(circle at top, rgba(230, 57, 70, 0.18), transparent 34%),
@@ -851,9 +850,8 @@ a {
 .profile-hero-card::before {
   content: "";
   position: absolute;
-  inset: 16px;
+  inset: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 18px;
   pointer-events: none;
 }
 
@@ -864,21 +862,29 @@ a {
   height: 220px;
   top: -90px;
   right: -70px;
-  border-radius: 50%;
   background: radial-gradient(circle, rgba(230, 57, 70, 0.12), transparent 68%);
   pointer-events: none;
 }
 
+.profile-hero-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .profile-shift-badge {
-  margin-bottom: 30px;
+  margin-bottom: 26px;
   font-size: 0.9rem;
   padding: 10px 20px;
+  border-radius: 0;
 }
 
 .profile-session-block {
   position: relative;
-  z-index: 1;
-  margin-bottom: 36px;
+  margin-bottom: 18px;
+  text-align: left;
 }
 
 .profile-session-label {
@@ -896,7 +902,6 @@ a {
   letter-spacing: -0.04em;
   color: var(--text);
   line-height: 1;
-  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
 .profile-session-pay {
@@ -910,20 +915,18 @@ a {
   z-index: 1;
   width: 100%;
   max-width: 340px;
+  justify-self: end;
 }
 
 .profile-status-ring {
   position: relative;
   height: 240px;
-  padding: 16px;
-  border-radius: 24px;
+  padding: 14px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background:
     radial-gradient(circle at center, rgba(255, 255, 255, 0.03), transparent 58%),
     rgba(0, 0, 0, 0.18);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 18px 40px rgba(0, 0, 0, 0.22);
 }
 
 .profile-status-ring canvas {
@@ -933,7 +936,7 @@ a {
 
 .profile-status-notes {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 14px;
@@ -945,7 +948,7 @@ a {
   justify-content: center;
   min-height: 32px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   color: #c8d0db;
@@ -955,9 +958,9 @@ a {
 
 .profile-discord-hint {
   position: relative;
-  z-index: 1;
-  margin: 16px 0 0;
+  margin: 8px 0 0;
   font-size: 0.9rem;
+  text-align: left;
 }
 
 .profile-discord-hint strong {
@@ -1509,12 +1512,16 @@ td {
   }
 
   .profile-hero-card {
-    padding: 42px 18px;
+    grid-template-columns: 1fr;
+    padding: 32px 18px;
   }
 
   .profile-status-ring {
     height: 220px;
-    border-radius: 20px;
+  }
+
+  .profile-status-visual {
+    justify-self: start;
   }
 
   .topbar-tools {

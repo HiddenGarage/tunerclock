@@ -48,6 +48,8 @@ const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID =
   process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1495989501166747669";
 const DISCORD_RECRUITMENT_CHANNEL_ID =
   process.env.DISCORD_RECRUITMENT_CHANNEL_ID || "1496506153922859079";
+const DISCORD_STAFF_GUIDE_CHANNEL_ID =
+  process.env.DISCORD_STAFF_GUIDE_CHANNEL_ID || "1497649359221952592";
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -459,6 +461,111 @@ function getLogoPath() {
   return path.join(__dirname, "logo", "TurboPunch.png");
 }
 
+function getConfigurableRoleDefinitions() {
+  return ROLE_DEFINITIONS.filter((role) => role.name !== "Gouvernement");
+}
+
+function getStaffCommandRoleChoices() {
+  return getConfigurableRoleDefinitions().map((role) => ({
+    name: role.name,
+    value: role.name,
+  }));
+}
+
+function canUseStaffCommand(roleName) {
+  return ["Patron", "Copatron", "Gerant"].includes(roleName);
+}
+
+async function hireDiscordUser(
+  discordId,
+  roleName,
+  hiredByLabel = "Direction Discord",
+) {
+  const roleDefinition = getConfigurableRoleDefinitions().find(
+    (role) => role.name === roleName,
+  );
+  if (!roleDefinition) {
+    throw new Error("Role invalide.");
+  }
+
+  const supabase = getSupabase();
+  const roleRates = await getRoleRates(supabase);
+  const roleRate = numberOrDefault(roleRates[roleName], DEFAULT_HOURLY_RATE);
+
+  let member = null;
+  if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
+    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+    member = await guild?.members.fetch(discordId).catch(() => null);
+  }
+
+  const displayName =
+    member?.displayName ||
+    member?.user?.globalName ||
+    member?.user?.username ||
+    `Employe ${discordId}`;
+
+  const { data: existingEmployee, error: existingEmployeeError } =
+    await supabase
+      .from("employees")
+      .select("*")
+      .eq("discord_id", discordId)
+      .maybeSingle();
+
+  if (existingEmployeeError) {
+    throw existingEmployeeError;
+  }
+
+  const payload = {
+    discord_id: discordId,
+    discord_name: displayName,
+    role: roleName,
+    role_id: roleDefinition.id || null,
+    hourly_rate: roleRate,
+    is_active: false,
+  };
+
+  const employeeQuery = existingEmployee
+    ? supabase
+        .from("employees")
+        .update(payload)
+        .eq("id", existingEmployee.id)
+        .select()
+        .single()
+    : supabase.from("employees").insert(payload).select().single();
+
+  const { data: employee, error: employeeError } = await employeeQuery;
+  if (employeeError) {
+    throw employeeError;
+  }
+
+  if (member) {
+    const managedRoleIds = getConfigurableRoleDefinitions()
+      .map((role) => role.id)
+      .filter(Boolean);
+    const roleIdsToRemove = managedRoleIds.filter(
+      (roleId) => roleId !== roleDefinition.id && member.roles.cache.has(roleId),
+    );
+    if (roleIdsToRemove.length) {
+      await member.roles.remove(roleIdsToRemove).catch(() => null);
+    }
+    if (roleDefinition.id && !member.roles.cache.has(roleDefinition.id)) {
+      await member.roles.add(roleDefinition.id).catch(() => null);
+    }
+  }
+
+  await updateServiceRole(discordId, false).catch(() => null);
+  await sendDiscordDm(
+    discordId,
+    `Bienvenue chez Santos Tuners. Tu as ete embauche comme **${roleName}** par **${hiredByLabel}**.`,
+  ).catch(() => null);
+
+  return {
+    employee,
+    roleDefinition,
+    memberFound: Boolean(member),
+  };
+}
+
 async function syncDiscordCommands() {
   if (!discordClient?.application) return;
   const commands = [
@@ -496,6 +603,44 @@ async function syncDiscordCommands() {
         },
       ],
     },
+    {
+      name: "salaire",
+      description: "Modifier le salaire horaire d'un role",
+      options: [
+        {
+          name: "role",
+          description: "Role a modifier",
+          type: 3,
+          required: true,
+          choices: getStaffCommandRoleChoices(),
+        },
+        {
+          name: "salaire",
+          description: "Nouveau salaire horaire",
+          type: 10,
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "embauche",
+      description: "Embaucher un joueur et lui attribuer un role",
+      options: [
+        {
+          name: "id",
+          description: "ID Discord du joueur",
+          type: 3,
+          required: true,
+        },
+        {
+          name: "role",
+          description: "Role a attribuer",
+          type: 3,
+          required: true,
+          choices: getStaffCommandRoleChoices(),
+        },
+      ],
+    },
   ];
 
   try {
@@ -503,7 +648,9 @@ async function syncDiscordCommands() {
       commands,
       process.env.DISCORD_GUILD_ID || undefined,
     );
-    console.log("Commandes Discord synchronisees: /in /out /paye");
+    console.log(
+      "Commandes Discord synchronisees: /in /out /paye /finance /salaire /embauche",
+    );
   } catch (error) {
     console.error(
       "Synchronisation commandes Discord impossible:",
@@ -555,6 +702,51 @@ function buildEmployeeGuideEmbed() {
     .setTimestamp();
 }
 
+function buildStaffGuideEmbed() {
+  return new EmbedBuilder()
+    .setColor(0xe63946)
+    .setTitle("TunersHub | Guide staff")
+    .setDescription(
+      "Commandes staff du bot pour la direction et la gestion de l'equipe Santos Tuners.",
+    )
+    .addFields(
+      {
+        name: "/in",
+        value: "Entre en service et demarre ton quart.",
+      },
+      {
+        name: "/out",
+        value: "Ferme ton quart et sauvegarde tes heures.",
+      },
+      {
+        name: "/paye",
+        value: "Affiche tes heures et ton argent gagne en prive.",
+      },
+      {
+        name: "/salaire [role] [salaire]",
+        value:
+          "Accessible a **Patron**, **Copatron** et **Gerant**. Modifie le taux horaire du role choisi.",
+      },
+      {
+        name: "/embauche [id] [role]",
+        value:
+          "Accessible a **Patron**, **Copatron** et **Gerant**. Cree ou met a jour l'employe, applique le role Discord et prepare le compte TunersHub.",
+      },
+      {
+        name: "/finance",
+        value:
+          "Accessible a **Patron** et **Copatron** seulement. Sert a ajuster la tresorerie du garage.",
+      },
+      {
+        name: "Notes",
+        value:
+          "Les punchs se font sur Discord. Le panel web sert surtout au suivi, a la gestion et aux corrections.",
+      },
+    )
+    .setFooter({ text: "Santos Tuners Inc | Staff Bot" })
+    .setTimestamp();
+}
+
 async function publishEmployeeGuideEmbed() {
   if (!discordClient?.isReady?.() || !DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID) return;
 
@@ -593,6 +785,47 @@ async function publishEmployeeGuideEmbed() {
     });
   } catch (error) {
     console.error("Publication guide employe impossible:", error.message);
+  }
+}
+
+async function publishStaffGuideEmbed() {
+  if (!discordClient?.isReady?.() || !DISCORD_STAFF_GUIDE_CHANNEL_ID) return;
+
+  try {
+    const supabase = getSupabase();
+    const settings = await getSettingsMap(supabase);
+    const guideState = settings.discord_staff_guide || {};
+    const channel = await discordClient.channels
+      .fetch(DISCORD_STAFF_GUIDE_CHANNEL_ID)
+      .catch(() => null);
+
+    if (!channel?.isTextBased?.()) {
+      console.error("Salon guide staff introuvable ou non textuel.");
+      return;
+    }
+
+    const payload = { embeds: [buildStaffGuideEmbed()] };
+    let message = null;
+
+    if (guideState.messageId) {
+      message = await channel.messages
+        .fetch(guideState.messageId)
+        .catch(() => null);
+    }
+
+    if (message) {
+      await message.edit(payload);
+    } else {
+      message = await channel.send(payload);
+    }
+
+    await upsertSetting(supabase, "discord_staff_guide", {
+      channelId: DISCORD_STAFF_GUIDE_CHANNEL_ID,
+      messageId: message.id,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Publication guide staff impossible:", error.message);
   }
 }
 
@@ -716,6 +949,7 @@ function startDiscordBot() {
       });
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
+      publishStaffGuideEmbed();
       publishRecruitmentEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
@@ -866,6 +1100,81 @@ function startDiscordBot() {
           } catch (err) {
             await interaction.editReply(
               `Erreur lors de l'opération : ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "salaire") {
+          if (!canUseStaffCommand(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const roleName = interaction.options.getString("role");
+          const nextRate = interaction.options.getNumber("salaire");
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+          try {
+            const supabase = getSupabase();
+            const roleRates = await saveSingleRoleRate(
+              supabase,
+              roleName,
+              nextRate,
+            );
+            await interaction.editReply(
+              `Salaire mis a jour pour **${roleName}**: **${formatRpMoney(roleRates[roleName])}/h**.`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Erreur salaire: ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "embauche") {
+          if (!canUseStaffCommand(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const discordId = interaction.options.getString("id");
+          const targetRole = interaction.options.getString("role");
+          const hiredByLabel =
+            interaction.member?.displayName ||
+            interaction.user.globalName ||
+            interaction.user.username;
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const result = await hireDiscordUser(
+              discordId,
+              targetRole,
+              hiredByLabel,
+            );
+
+            await interaction.editReply(
+              [
+                `Employe prepare pour TunersHub: <@${discordId}>`,
+                `Role attribue: **${targetRole}**`,
+                `Taux horaire: **${formatRpMoney(result.employee.hourly_rate)}/h**`,
+                result.memberFound
+                  ? "Role Discord applique avec succes."
+                  : "Compte TunersHub cree, mais le membre Discord n'a pas ete trouve dans le serveur pour l'attribution du role.",
+              ].join("\n"),
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Erreur embauche: ${err.message}`,
             );
           }
           return;
@@ -2842,19 +3151,11 @@ app.post(
           `🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners en tant que **${assignedRoleName}** ! Contacte un membre de la direction au plus vite pour la suite !`,
         );
         try {
-          if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
-            const guild = discordClient.guilds.cache.get(
-              process.env.DISCORD_GUILD_ID,
-            );
-            if (guild) {
-              const member = await guild.members
-                .fetch(rec.discordId)
-                .catch(() => null);
-              if (member) {
-                await member.roles.add(assignedRoleId).catch(() => null);
-              }
-            }
-          }
+          await hireDiscordUser(
+            rec.discordId,
+            assignedRoleName,
+            req.session.displayName || req.session.username || "Direction",
+          );
         } catch (err) {
           console.error("Erreur attribution role recrue:", err.message);
         }

@@ -22,14 +22,14 @@ const {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } = require("discord.js");
-const { required, getAdminIds } = require("./netlify/functions/lib/env");
-const {
-  encodeSession,
-  decodeSession,
-  parseCookies,
-  buildCookie,
-} = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
+const {
+  ROLE_DEFINITIONS,
+  resolveRoleFromDiscordMember,
+  getDefaultRoleRates,
+} = require("./roles");
+const { requireAuth, requireAdminAccess, requireAdmin } = require("./auth");
+const authRoutes = require("./routes/auth.routes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -57,43 +57,8 @@ const discordBotRuntime = {
   tag: null,
   error: null,
 };
-const ADMIN_ROLE_FALLBACKS = {
-  "417605116070461442": "Patron",
-  "893278269170933810": "Copatron",
-};
 const PAYSLIP_SIGNATURE =
   "Signé Léo Belleamy et Niko Walker | Santos Tuners Inc";
-const ROLE_DEFINITIONS = [
-  { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
-  {
-    name: "Copatron",
-    id: "1487666934412611594",
-    hourlyRate: 45,
-    isAdmin: true,
-  },
-  {
-    name: "Gerant",
-    id: "1487852908077781168",
-    hourlyRate: 35,
-    isAdmin: true,
-    canManage: false,
-  },
-  {
-    name: "Gouvernement",
-    id: "1494749026694987816",
-    hourlyRate: 0,
-    isAdmin: true,
-    canManage: false,
-    isSupervision: true,
-  },
-  { name: "Mecano", id: "1487852832643354665", hourlyRate: 25, isAdmin: false },
-  {
-    name: "Apprenti",
-    id: "1487852702519136496",
-    hourlyRate: 18,
-    isAdmin: false,
-  },
-];
 const GARAGE_PART_CODES = [
   "engine_oil",
   "tyre_replacement",
@@ -220,6 +185,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
+app.use("/auth", authRoutes);
+
 // Middleware global pour traquer si l'API prend plus de 5 secondes à répondre
 app.use((req, res, next) => {
   const start = Date.now();
@@ -253,38 +220,6 @@ app.get("/api/health", (req, res) => {
     time: new Date().toISOString(),
   });
 });
-
-function getSession(req) {
-  const cookies = parseCookies(req.headers.cookie || "");
-  return decodeSession(cookies.tunershub_session, required("SESSION_SECRET"));
-}
-
-function requireAuth(req, res, next) {
-  const session = getSession(req);
-  if (!session) {
-    return res.status(401).send("Non autorise.");
-  }
-  req.session = session;
-  next();
-}
-
-function requireAdminAccess(req, res, next) {
-  const session = getSession(req);
-  if (!session || !session.isAdmin) {
-    return res.status(403).send("Acces refuse.");
-  }
-  req.session = session;
-  next();
-}
-
-function requireAdmin(req, res, next) {
-  const session = getSession(req);
-  if (!session || !session.isAdmin || session.canManage === false) {
-    return res.status(403).send("Acces lecture seule.");
-  }
-  req.session = session;
-  next();
-}
 
 function getShiftPeriod(dateLike) {
   const date = new Date(dateLike);
@@ -363,12 +298,6 @@ async function writeAuditLog(supabase, req, action, options = {}) {
   }
 }
 
-function getDefaultRoleRates() {
-  return Object.fromEntries(
-    ROLE_DEFINITIONS.map((role) => [role.name, role.hourlyRate]),
-  );
-}
-
 function formatRpMoney(value) {
   return `${Math.round(Number(value || 0))}$`;
 }
@@ -382,29 +311,6 @@ function numberOrDefault(value, fallback) {
 async function getRoleRates(supabase) {
   const settings = await getSettingsMap(supabase);
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
-}
-
-function resolveMemberRole(memberRoles) {
-  return (
-    ROLE_DEFINITIONS.find((role) => memberRoles.includes(role.id)) ||
-    ROLE_DEFINITIONS[3]
-  );
-}
-
-function getAdminFallbackRole(discordId) {
-  const roleName = ADMIN_ROLE_FALLBACKS[discordId];
-  return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
-}
-
-function resolveRoleFromDiscordMember(member, discordId) {
-  const roleIds = Array.isArray(member?.roles)
-    ? member.roles
-    : Array.from(member?.roles?.cache?.keys?.() || []);
-  return (
-    resolveMemberRole(roleIds) ||
-    getAdminFallbackRole(discordId) ||
-    ROLE_DEFINITIONS[3]
-  );
 }
 
 function getLogoPath() {
@@ -620,6 +526,41 @@ async function updateServiceRole(discordId, isActive) {
   }
 }
 
+
+async function getDiscordMemberRole(discordId) {
+  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID || !discordId) return null;
+  const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+  if (!guild) return null;
+  const member = await guild.members.fetch(discordId).catch(() => null);
+  if (!member) return null;
+  return resolveRoleFromDiscordMember(member, discordId);
+}
+
+async function syncEmployeeRoleFromDiscord(supabase, employee, roleRates = null) {
+  const resolvedRole = await getDiscordMemberRole(employee.discord_id).catch(() => null);
+  if (!resolvedRole?.name || resolvedRole.name === employee.role) return employee;
+  const rates = roleRates || (await getRoleRates(supabase));
+  const hourlyRate = numberOrDefault(rates[resolvedRole.name], DEFAULT_HOURLY_RATE);
+  const patch = { role: resolvedRole.name, hourly_rate: hourlyRate };
+  const { error } = await supabase.from("employees").update(patch).eq("id", employee.id);
+  if (error) throw error;
+  return { ...employee, ...patch };
+}
+
+async function setEmployeeDiscordRole(discordId, roleName) {
+  const roleDef = ROLE_DEFINITIONS.find((role) => role.name === roleName);
+  if (!roleDef?.id) throw new Error("Role invalide.");
+  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return false;
+  const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+  if (!guild) return false;
+  const member = await guild.members.fetch(discordId).catch(() => null);
+  if (!member) return false;
+  const managedRoleIds = ROLE_DEFINITIONS.map((role) => role.id).filter(Boolean);
+  await member.roles.remove(managedRoleIds.filter((id) => id !== roleDef.id)).catch(() => null);
+  await member.roles.add(roleDef.id);
+  return true;
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -631,7 +572,7 @@ function startDiscordBot() {
   }
 
   discordClient = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.DirectMessages],
     partials: [Partials.Channel],
   });
 
@@ -1736,9 +1677,13 @@ async function buildEmployeeSnapshots(supabase) {
   if (employeesError) throw employeesError;
   if (shiftsError) throw shiftsError;
 
+  const roleRates = await getRoleRates(supabase);
+  const syncedEmployees = await Promise.all(
+    (employees || []).map((employee) => syncEmployeeRoleFromDiscord(supabase, employee, roleRates)),
+  );
   const shiftsByEmployee = groupBy(shifts || [], (shift) => shift.employee_id);
 
-  return (employees || []).map((employee) => {
+  return syncedEmployees.map((employee) => {
     const employeeShifts = shiftsByEmployee.get(employee.id) || [];
     const closedShifts = employeeShifts.filter(
       (shift) => shift.status === "closed",
@@ -1850,138 +1795,6 @@ function buildPayslipPdf(res, payload) {
   doc.text(PAYSLIP_SIGNATURE, 48, 548);
   doc.end();
 }
-
-app.get("/auth/discord/login", (req, res) => {
-  const url = new URL("https://discord.com/api/oauth2/authorize");
-  url.searchParams.set("client_id", required("DISCORD_CLIENT_ID"));
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
-  url.searchParams.set("scope", "identify");
-  url.searchParams.set("prompt", "consent");
-  res.redirect(url.toString());
-});
-
-app.get("/auth/discord/callback", async (req, res) => {
-  try {
-    const code = req.query.code;
-    if (!code) {
-      return res.status(400).send("Code Discord manquant.");
-    }
-
-    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: required("DISCORD_CLIENT_ID"),
-        client_secret: required("DISCORD_CLIENT_SECRET"),
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: required("DISCORD_REDIRECT_URI"),
-      }),
-    });
-
-    if (!tokenResponse.ok) {
-      return res
-        .status(500)
-        .send(`Echec echange token Discord: ${await tokenResponse.text()}`);
-    }
-
-    const tokenData = await tokenResponse.json();
-    const profileResponse = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-
-    if (!profileResponse.ok) {
-      return res
-        .status(500)
-        .send(
-          `Echec recuperation profil Discord: ${await profileResponse.text()}`,
-        );
-    }
-
-    const profile = await profileResponse.json();
-    let displayName = profile.global_name || profile.username;
-    let roleName = "Mecano";
-    let roleId = null;
-    let isAdmin = getAdminIds().includes(profile.id);
-    let canManage = true;
-
-    if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
-      const memberResponse = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`,
-        {
-          headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
-        },
-      );
-
-      if (memberResponse.ok) {
-        const member = await memberResponse.json();
-        displayName =
-          member.nick ||
-          member.user?.global_name ||
-          member.user?.username ||
-          displayName;
-        const resolvedRole = resolveMemberRole(member.roles || []);
-        roleName = resolvedRole.name;
-        roleId = resolvedRole.id;
-        isAdmin = isAdmin || resolvedRole.isAdmin;
-        canManage = resolvedRole.canManage !== false;
-      } else {
-        const fallbackRole = getAdminFallbackRole(profile.id);
-        if (fallbackRole) {
-          roleName = fallbackRole.name;
-          roleId = fallbackRole.id;
-          isAdmin = true;
-          canManage = true;
-        }
-      }
-    } else {
-      const fallbackRole = getAdminFallbackRole(profile.id);
-      if (fallbackRole) {
-        roleName = fallbackRole.name;
-        roleId = fallbackRole.id;
-        isAdmin = true;
-        canManage = true;
-      }
-    }
-
-    const session = {
-      discordId: profile.id,
-      username: profile.username,
-      displayName,
-      roleName,
-      roleId,
-      avatar: profile.avatar,
-      isAdmin,
-      canManage,
-      isSupervision: roleName === "Gouvernement",
-      readOnly: isAdmin && canManage === false,
-    };
-
-    res.setHeader(
-      "Set-Cookie",
-      buildCookie(
-        "tunershub_session",
-        encodeSession(session, required("SESSION_SECRET")),
-      ),
-    );
-    res.redirect("/");
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
-app.get("/auth/me", (req, res) => {
-  res.json({ user: getSession(req) || null });
-});
-
-app.get("/auth/logout", (req, res) => {
-  res.setHeader(
-    "Set-Cookie",
-    "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
-  );
-  res.redirect("/");
-});
 
 app.get("/api/me-state", requireAuth, async (req, res) => {
   try {
@@ -2625,6 +2438,48 @@ app.delete("/api/admin-contracts/:id", requireAuth, async (req, res) => {
     contracts = contracts.filter((c) => c.id !== req.params.id);
     await upsertSetting(supabase, "contracts_list", contracts);
     res.json({ ok: true });
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+
+app.post("/api/admin-employees/:id/role", requireAdmin, async (req, res) => {
+  try {
+    if (req.session.isSupervision) return res.status(403).send("Lecture seule.");
+    const roleName = String(req.body?.roleName || "");
+    const roleDef = ROLE_DEFINITIONS.find((role) => role.name === roleName);
+    if (!roleDef) return res.status(400).send("Role invalide.");
+
+    const supabase = getSupabase();
+    const { data: employee, error: employeeError } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", req.params.id)
+      .single();
+    if (employeeError) return res.status(404).send(employeeError.message);
+
+    const roleRates = await getRoleRates(supabase);
+    const hourlyRate = numberOrDefault(roleRates[roleName], roleDef.hourlyRate || DEFAULT_HOURLY_RATE);
+    const { error } = await supabase
+      .from("employees")
+      .update({ role: roleName, hourly_rate: hourlyRate })
+      .eq("id", employee.id);
+    if (error) return res.status(500).send(error.message);
+
+    const discordUpdated = await setEmployeeDiscordRole(employee.discord_id, roleName).catch((err) => {
+      console.error("Erreur changement role Discord:", err.message);
+      return false;
+    });
+
+    await writeAuditLog(supabase, req, "employee_role_updated", {
+      targetEmployeeId: employee.id,
+      targetDiscordId: employee.discord_id,
+      targetName: employee.discord_name,
+      details: { previousRole: employee.role, nextRole: roleName, discordUpdated },
+    });
+
+    res.json({ ok: true, roleName, hourlyRate, discordUpdated });
   } catch (error) {
     res.status(500).send(error.message);
   }

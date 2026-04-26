@@ -12,7 +12,6 @@ let liveTimerId = null;
 let currentNoteId = null;
 let adminLiveTimerId = null;
 let adminRefreshTimerId = null;
-let meStateRefreshTimerId = null;
 let myRecentShifts = [];
 let inventoryLogs = [];
 const chartState = {};
@@ -34,6 +33,8 @@ const routes = [
   "stats",
   "recrutements",
   "gestion",
+  "salaire",
+  "analyse",
   "contrats",
   "logs",
   "inventaire",
@@ -94,17 +95,19 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord",
-  pointage: "Profil",
+  pointage: "Mise en service",
   historique: "Historique",
   inventaire: "Gestion Stock",
   stats: "Équipe",
   recrutements: "Recrutements",
+  gestion: "Comptabilité",
+  salaire: "Salaire",
+  analyse: "Bilan",
   contrats: "Contrats",
   logs: "Registre",
   reboot: "Système",
   radio: "Musique",
 };
-const WEB_PUNCH_ENABLED = false;
 
 const state = {
   loggedIn: false,
@@ -161,8 +164,22 @@ const elements = {
   partPreview: document.getElementById("part-preview"),
   shiftChart: document.getElementById("shift-chart"),
   analysisChart: document.getElementById("analysis-chart"),
-  profileStatusChartCanvas: document.getElementById("profile-status-chart"),
   cagnotteChartCanvas: document.getElementById("cagnotte-chart"),
+  simRevenue: document.getElementById("sim-revenue"),
+  simExpenses: document.getElementById("sim-expenses"),
+  simTargetProfit: document.getElementById("sim-target-profit"),
+  simRoleMix: document.getElementById("sim-role-mix"),
+  simResalePrice: document.getElementById("sim-resale-price"),
+  simWeeklyParts: document.getElementById("sim-weekly-parts"),
+  simPossiblePayroll: document.getElementById("sim-possible-payroll"),
+  simCurrentPayroll: document.getElementById("sim-current-payroll"),
+  simRemainingProfit: document.getElementById("sim-remaining-profit"),
+  simRecommendedHourly: document.getElementById("sim-recommended-hourly"),
+  simEmployeeCount: document.getElementById("sim-employee-count"),
+  simProfitTarget: document.getElementById("sim-profit-target"),
+  simPayrollGap: document.getElementById("sim-payroll-gap"),
+  simRecommendation: document.getElementById("sim-recommendation"),
+  saveAnalysis: document.getElementById("save-analysis"),
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item, .nav-category")),
@@ -445,7 +462,13 @@ function applyAccessControl() {
 
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
-      const hiddenForGerant = ["logs", "reboot", "recrutements"];
+      const hiddenForGerant = [
+        "analyse",
+        "logs",
+        "reboot",
+        "recrutements",
+        "salaire",
+      ];
       if (
         hiddenForGerant.includes(item.dataset.route) ||
         item.dataset.hiddenGerant === "true"
@@ -454,7 +477,7 @@ function applyAccessControl() {
       }
     }
   });
-  elements.logoutButton?.classList.add("hidden"); // Toujours caché car pas de déconnexion
+  elements.logoutButton?.classList.toggle("hidden", !state.loggedIn);
   document.body.classList.toggle("read-only-mode", state.readOnly);
   document
     .querySelectorAll(
@@ -462,7 +485,8 @@ function applyAccessControl() {
     )
     .forEach((element) => {
       if (element.id === "logout-button") return;
-      if (element.id === "punch-toggle") return;
+      if (element.id === "logout-button" || element.id === "punch-toggle")
+        return;
       element.disabled = state.readOnly;
     });
 
@@ -581,6 +605,118 @@ function getTotalEmployeePayments() {
 
 function getTotalCosts() {
   return getExpenseTotal() + getTotalEmployeePayments();
+  const paidTotal = getTotalEmployeePayments();
+  const currentPayroll = getPayrollTotal();
+  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
+  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
+  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
+  const activeEmployees = employees.filter(
+    (employee) => employee.active,
+  ).length;
+  const totalHours = employees.reduce((sum, employee) => {
+    const liveH = employee.active ? getLiveEmployeeHours(employee) : 0;
+    return sum + Number(employee.hours || 0) + liveH;
+  }, 0);
+  const currentMecanoRate = getRoleRate("Mecano");
+  let adjustmentFactor = 1;
+
+  if (revenue <= 0 || totalHours <= 0) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 28) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 38) {
+    adjustmentFactor = 0.9;
+  } else {
+    adjustmentFactor = 0.8;
+  }
+
+  const recommendedRates = Object.fromEntries(
+    roleOrder.map((roleName) => {
+      const currentRate = getRoleRate(roleName);
+      const nextRate =
+        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
+      return [roleName, nextRate];
+    }),
+  );
+  const recommendedMecanoRate =
+    recommendedRates.Mecano ||
+    roundToStep(currentMecanoRate * adjustmentFactor, 25);
+  const roleCounts =
+    roleOrder
+      .map((roleName) => {
+        const count = employees.filter(
+          (employee) => employee.roleName === roleName,
+        ).length;
+        return count ? `${count} ${roleName}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ") || "Aucun employe";
+
+  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
+  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
+  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
+  setText(
+    elements.simRecommendedHourly,
+    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
+  );
+  setText(elements.simEmployeeCount, String(employees.length));
+  setText(elements.simRoleMix, roleCounts);
+  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
+  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
+
+  let headline = "Analyse en attente";
+  let status =
+    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
+  let action = "Aucune modification conseillee pour l'instant.";
+  const rateAdvice = roleOrder
+    .filter((roleName) =>
+      employees.some((employee) => employee.roleName === roleName),
+    )
+    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
+    .join("<br>");
+
+  if (revenue > 0 && totalHours > 0) {
+    if (payrollRatio < 8) {
+      headline = "Marge tres confortable";
+      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
+      action =
+        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
+    } else if (payrollRatio < 15) {
+      headline = "Paie encore tres saine";
+      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 28) {
+      headline = "Equilibre correct";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 38) {
+      headline = "Paie un peu lourde";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
+      action =
+        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
+    } else {
+      headline = "Risque de payer trop cher";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
+      action =
+        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
+    }
+  }
+
+  setHtml(
+    elements.simRecommendation,
+    `
+    <div class="analysis-recommendation-head">
+      <span>${escapeHtml(headline)}</span>
+      <strong>${recommendedMecanoRate}$/h Mecano</strong>
+    </div>
+    <div class="analysis-recommendation-grid">
+      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
+      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
+      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
+      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
+    </div>
+  `,
+  );
 }
 
 function updateLivePunchMetrics() {
@@ -604,7 +740,6 @@ function updateLivePunchMetrics() {
           )
         : "0$",
     );
-    renderProfileStatusChart();
     return;
   }
 
@@ -615,7 +750,6 @@ function updateLivePunchMetrics() {
     elements.todayPay,
     formatMoney(elapsedHours * state.currentUser.hourlyRate),
   );
-  renderProfileStatusChart();
   renderPersonalDashboard();
 }
 
@@ -713,33 +847,6 @@ function startAdminRefreshLoop() {
     await loadAdminDashboard();
     updateAll();
   }, 30000);
-}
-
-function startMeStateRefreshLoop() {
-  if (meStateRefreshTimerId || !state.loggedIn) return;
-  meStateRefreshTimerId = setInterval(async () => {
-    if (!state.loggedIn) return;
-    const previousPunchedIn = state.punchedIn;
-    const previousStartedAt = activeShiftStartedAt;
-    const previousRole = state.currentUser?.roleName || null;
-
-    await loadMeState();
-
-    if (
-      previousPunchedIn !== state.punchedIn ||
-      previousStartedAt !== activeShiftStartedAt ||
-      previousRole !== state.currentUser?.roleName
-    ) {
-      updateAll();
-      return;
-    }
-
-    if (state.currentUser?.active || state.punchedIn) {
-      renderShiftState();
-      renderProfileStatusChart();
-      renderPersonalDashboard();
-    }
-  }, 5000);
 }
 
 function renderOverview() {
@@ -916,38 +1023,15 @@ function getLastActiveDays(employeeId) {
 }
 
 function renderStatsTables() {
-  if (!elements.statsBody) return;
-
-  if (elements.presenceBody) {
-    const presenceCard = elements.presenceBody.closest(".card");
-    if (presenceCard) presenceCard.style.display = "";
-  }
-
-  const thead = elements.statsBody.previousElementSibling;
-  if (thead && thead.tagName === "THEAD") {
-    thead.innerHTML = `
-      <tr>
-        <th>Employé</th>
-        <th>Rôle</th>
-        <th>Heures</th>
-        <th>Inactivité</th>
-        <th>Jours</th>
-        <th>Quart</th>
-        <th>Taux</th>
-        <th>Salaire</th>
-        <th>Actions</th>
-      </tr>
-    `;
-  }
+  if (!elements.statsBody || !elements.roleRatesBody) return;
 
   if (!employees.length) {
     setHtml(
       elements.statsBody,
-      `<tr><td colspan="9">Aucune donnee employe.</td></tr>`,
+      `<tr><td colspan="7">Aucune donnee employe.</td></tr>`,
     );
   } else {
     const sorted = [...employees].sort((a, b) => b.hours - a.hours);
-
     setHtml(
       elements.statsBody,
       sorted
@@ -956,7 +1040,6 @@ function renderStatsTables() {
             (entry) => entry.discordId === employee.discordId,
           );
           const inactivityDays = getLastActiveDays(employee.id);
-
           let inactivityHtml = '<span class="mini-pill">Inconnu</span>';
           if (employee.active) {
             inactivityHtml = '<span class="mini-pill info">En service</span>';
@@ -972,15 +1055,7 @@ function renderStatsTables() {
           return `
       <tr>
         <td>${escapeHtml(employee.name)}</td>
-        <td>
-          ${
-            state.isAdmin && !state.readOnly
-              ? `<select class="role-select" data-id="${employee.id}" style="min-height: 32px; padding: 4px; font-size: 0.85rem; width: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: var(--text); border-radius: 4px;">
-              ${roleOrder.map((r) => `<option value="${r}" ${employee.roleName === r ? "selected" : ""}>${r}</option>`).join("")}
-            </select>`
-              : escapeHtml(employee.roleName)
-          }
-        </td>
+        <td>${escapeHtml(employee.roleName)}</td>
         <td>
           <button class="editable-hours-button" data-employee-index="${employeeIndex}" title="Cliquer pour modifier les heures de ${escapeHtml(employee.name)}">
             ${formatHoursMinutes(employee.hours)}
@@ -989,7 +1064,7 @@ function renderStatsTables() {
         <td>${inactivityHtml}</td>
         <td>${employee.activeDays}</td>
         <td>${escapeHtml(employee.preferredShift)}</td>
-        <td>${formatMoney(employee.hourlyRate)}/h</td>
+        <td>${formatMoney(employee.hourlyRate)}</td>
         <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
         <td>
           <button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button>
@@ -1002,22 +1077,314 @@ function renderStatsTables() {
     );
   }
 
-  if (elements.roleRatesBody) {
-    setHtml(
-      elements.roleRatesBody,
-      roleOrder
-        .map(
-          (roleName) => `
-      <tr>
-        <td>${roleName}</td>
-        <td>${formatMoney(getRoleRate(roleName))}</td>
-        <td><input class="role-rate-input" data-role-name="${roleName}" type="number" min="0" step="1" placeholder="${getRoleRate(roleName)}"></td>
-        <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
-      </tr>
-    `,
-        )
-        .join(""),
+  setHtml(
+    elements.roleRatesBody,
+    roleOrder
+      .map(
+        (roleName) => `
+    <tr>
+      <td>${roleName}</td>
+      <td>${formatMoney(getRoleRate(roleName))}</td>
+      <td><input class="role-rate-input" data-role-name="${roleName}" type="number" min="0" step="1" placeholder="${getRoleRate(roleName)}"></td>
+      <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
+    </tr>
+  `,
+      )
+      .join(""),
+  );
+}
+
+function renderSimulation() {
+  drawBilanCharts();
+  const revenue = state.weeklyProfit || 0;
+  const expenseTotal = getExpenseTotal();
+  const paidTotal = getTotalEmployeePayments();
+  const currentPayroll = getPayrollTotal();
+  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
+  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
+  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
+  const activeEmployees = employees.filter(
+    (employee) => employee.active,
+  ).length;
+  const totalHours = employees.reduce(
+    (sum, employee) =>
+      sum +
+      Number(employee.hours || 0) +
+      (employee.active ? getLiveEmployeeHours(employee) : 0),
+    0,
+  );
+  const currentMecanoRate = getRoleRate("Mecano");
+  let adjustmentFactor = 1;
+
+  if (revenue <= 0 || totalHours <= 0) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 28) {
+    adjustmentFactor = 1;
+  } else if (payrollRatio <= 38) {
+    adjustmentFactor = 0.9;
+  } else {
+    adjustmentFactor = 0.8;
+  }
+
+  const recommendedRates = Object.fromEntries(
+    roleOrder.map((roleName) => {
+      const currentRate = getRoleRate(roleName);
+      const nextRate =
+        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
+      return [roleName, nextRate];
+    }),
+  );
+  const recommendedMecanoRate =
+    recommendedRates.Mecano ||
+    roundToStep(currentMecanoRate * adjustmentFactor, 25);
+  const roleCounts =
+    roleOrder
+      .map((roleName) => {
+        const count = employees.filter(
+          (employee) => employee.roleName === roleName,
+        ).length;
+        return count ? `${count} ${roleName}` : null;
+      })
+      .filter(Boolean)
+      .join(" | ") || "Aucun employe";
+
+  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
+  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
+  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
+  setText(
+    elements.simRecommendedHourly,
+    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
+  );
+  setText(elements.simEmployeeCount, String(employees.length));
+  setText(elements.simRoleMix, roleCounts);
+  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
+  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
+
+  let headline = "Analyse en attente";
+  let status =
+    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
+  let action = "Aucune modification conseillee pour l'instant.";
+  const rateAdvice = roleOrder
+    .filter((roleName) =>
+      employees.some((employee) => employee.roleName === roleName),
+    )
+    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
+    .join("<br>");
+
+  if (revenue > 0 && totalHours > 0) {
+    if (payrollRatio < 8) {
+      headline = "Marge tres confortable";
+      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
+      action =
+        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
+    } else if (payrollRatio < 15) {
+      headline = "Paie encore tres saine";
+      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 28) {
+      headline = "Equilibre correct";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
+      action = "Conseil prudent: garde les taux actuels.";
+    } else if (payrollRatio <= 38) {
+      headline = "Paie un peu lourde";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
+      action =
+        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
+    } else {
+      headline = "Risque de payer trop cher";
+      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
+      action =
+        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
+    }
+  }
+
+  setHtml(
+    elements.simRecommendation,
+    `
+    <div class="analysis-recommendation-head">
+      <span>${escapeHtml(headline)}</span>
+      <strong>${recommendedMecanoRate}$/h Mecano</strong>
+    </div>
+    <div class="analysis-recommendation-grid">
+      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
+      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
+      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
+      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
+    </div>
+  `,
+  );
+}
+
+function drawBilanCharts() {
+  const canvasLine = document.getElementById("bilan-finance-chart");
+  const canvasDonut = document.getElementById("bilan-donut-chart");
+  if (!canvasLine || !canvasDonut || typeof Chart === "undefined") return;
+
+  const revenue = state.weeklyProfit || 0;
+  const expenseTotal = getExpenseTotal();
+  const currentPayroll = getPayrollTotal();
+  const netProfit = revenue - expenseTotal - currentPayroll;
+
+  if (document.getElementById("bilan-tot-rev")) {
+    setText(document.getElementById("bilan-tot-rev"), formatMoney(revenue));
+    setText(
+      document.getElementById("bilan-tot-exp"),
+      formatMoney(expenseTotal),
     );
+    setText(
+      document.getElementById("bilan-tot-pay"),
+      formatMoney(currentPayroll),
+    );
+    setText(document.getElementById("bilan-tot-net"), formatMoney(netProfit));
+  }
+
+  const getLocalKey = (date) => {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const daysData = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return {
+      dateKey: getLocalKey(d),
+      label: d
+        .toLocaleDateString("fr-CA", { weekday: "short" })
+        .replace(".", ""),
+    };
+  });
+
+  const dataRev = daysData.map((day) => {
+    return profitEntries
+      .filter((p) => p.created_at && p.created_at.startsWith(day.dateKey))
+      .reduce((s, p) => s + Number(p.amount || 0), 0);
+  });
+  const dataExp = daysData.map((day) => {
+    return expenses
+      .filter((e) => e.createdAt && e.createdAt.startsWith(day.dateKey))
+      .reduce((s, e) => s + Number(e.cost || 0), 0);
+  });
+
+  const maxVal = Math.max(...dataRev, ...dataExp);
+  const yMin = maxVal === 0 ? 100 : undefined;
+
+  if (!chartState.bilanLine) {
+    const ctx = canvasLine.getContext("2d");
+    const gradRev = ctx.createLinearGradient(0, 0, 0, 300);
+    gradRev.addColorStop(0, "rgba(76, 175, 80, 0.4)");
+    gradRev.addColorStop(1, "rgba(76, 175, 80, 0)");
+    const gradExp = ctx.createLinearGradient(0, 0, 0, 300);
+    gradExp.addColorStop(0, "rgba(230, 57, 70, 0.4)");
+    gradExp.addColorStop(1, "rgba(230, 57, 70, 0)");
+
+    chartState.bilanLine = new Chart(canvasLine, {
+      type: "line",
+      data: {
+        labels: daysData.map(
+          (d) => d.label.charAt(0).toUpperCase() + d.label.slice(1),
+        ),
+        datasets: [
+          {
+            label: "Revenus",
+            data: dataRev,
+            borderColor: chartPalette.teal,
+            backgroundColor: gradRev,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+          },
+          {
+            label: "Dépenses",
+            data: dataExp,
+            borderColor: chartPalette.red,
+            backgroundColor: gradExp,
+            fill: true,
+            tension: 0.4,
+            pointRadius: 2,
+            pointHoverRadius: 5,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { labels: { color: "#fff" } } },
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            grid: { color: "rgba(255,255,255,0.05)" },
+            min: 0,
+            suggestedMax: yMin,
+          },
+        },
+      },
+    });
+  } else {
+    chartState.bilanLine.data.datasets[0].data = dataRev;
+    chartState.bilanLine.data.datasets[1].data = dataExp;
+    if (yMin) chartState.bilanLine.options.scales.y.suggestedMax = yMin;
+    chartState.bilanLine.update();
+  }
+
+  const expByCategory = {};
+  expenses.forEach((e) => {
+    expByCategory[e.category] =
+      (expByCategory[e.category] || 0) + (e.cost || 0);
+  });
+  const contractsTot = getContractTotal();
+  if (contractsTot > 0) expByCategory["Contrats"] = contractsTot;
+  if (currentPayroll > 0) expByCategory["Salaires Dus"] = currentPayroll;
+
+  let donutLabels = Object.keys(expByCategory);
+  let donutValues = Object.values(expByCategory);
+  let bgColors = [
+    chartPalette.orange,
+    chartPalette.blue,
+    chartPalette.red,
+    chartPalette.teal,
+    "#9b5de5",
+    "#f15bb5",
+  ];
+
+  if (donutValues.length === 0 || donutValues.every((v) => v === 0)) {
+    donutLabels = ["Aucune donnée"];
+    donutValues = [1];
+    bgColors = ["#2a2b2f"];
+  }
+
+  if (!chartState.bilanDonut) {
+    chartState.bilanDonut = new Chart(canvasDonut, {
+      type: "doughnut",
+      data: {
+        labels: donutLabels,
+        datasets: [
+          {
+            data: donutValues,
+            backgroundColor: bgColors,
+            borderWidth: 0,
+            hoverOffset: 10,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "70%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: "#fff", usePointStyle: true, padding: 20 },
+          },
+        },
+      },
+    });
+  } else {
+    chartState.bilanDonut.data.labels = donutLabels;
+    chartState.bilanDonut.data.datasets[0].data = donutValues;
+    chartState.bilanDonut.data.datasets[0].backgroundColor = bgColors;
+    chartState.bilanDonut.update();
   }
 }
 
@@ -1048,8 +1415,8 @@ function renderPresenceList() {
 
         return `
       <tr>
-        <td>${escapeHtml(employee.name)}</td>
-        <td>${escapeHtml(employee.roleName)}</td>
+        <td>${employee.name}</td>
+        <td>${employee.roleName}</td>
         <td>${entryLabel}</td>
         <td>${formatHoursMinutesSeconds(liveHours)}</td>
         <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
@@ -1469,7 +1836,7 @@ function renderPersonalDashboard() {
   }
 
   if (elements.personalStatsSection)
-    elements.personalStatsSection.style.display = "contents";
+    elements.personalStatsSection.style.display = "flex";
 
   const unpaidHours =
     (state.currentUser.hours || 0) + (state.currentUser.todayHours || 0);
@@ -1627,33 +1994,22 @@ function renderPersonalDashboard() {
 
 function renderShiftState() {
   const roleText = state.currentUser?.roleName || "Connexion securisee";
-  const identityText =
-    state.loggedIn && state.currentUser
-      ? `${state.currentUser.name} | ${roleText}`
-      : "Connexion securisee";
   setText(
     elements.topbarRolePill,
     state.isSupervision
       ? "Bienvenue Gouvernement | Lecture seule"
       : state.loggedIn
-        ? identityText
+        ? roleText
         : "Connexion securisee",
   );
 
   if (!state.loggedIn || !state.currentUser) {
     setText(elements.shiftBadge, "Hors service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
-    setText(
-      elements.shiftMessage,
-      "Connecte-toi pour voir ton profil. Les punchs se font uniquement sur Discord avec /in et /out.",
-    );
+    setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
     setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
-    if (elements.punchToggle) {
-      elements.punchToggle.textContent = "UTILISE /in ET /out SUR DISCORD";
-      elements.punchToggle.classList.remove("active");
-      elements.punchToggle.disabled = true;
-    }
+    if (elements.punchToggle) elements.punchToggle.disabled = true;
     if (elements.discordLogin)
       elements.discordLogin.style.display = "inline-flex";
     stopLiveTimer();
@@ -1684,12 +2040,12 @@ function renderShiftState() {
       elements.shiftBadge.className = "mini-pill success";
     setText(
       elements.shiftMessage,
-      "Tu es en service via Discord. Ton profil affiche ton temps et ton argent en direct.",
+      "Tu es en service. Ton temps et ton argent montent en direct.",
     );
     if (elements.punchToggle) {
-      elements.punchToggle.textContent = "UTILISE /out SUR DISCORD";
-      elements.punchToggle.classList.remove("active");
-      elements.punchToggle.disabled = true;
+      elements.punchToggle.textContent = "SORTIR DU SERVICE";
+      elements.punchToggle.classList.add("active");
+      elements.punchToggle.disabled = false;
     }
     startLiveTimer();
   } else {
@@ -1697,77 +2053,16 @@ function renderShiftState() {
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
     setText(
       elements.shiftMessage,
-      "Tu n'es pas en service. Utilise /in sur Discord pour entrer en service.",
+      "Tu n'es pas en service. Entre en service pour lancer le pointage.",
     );
     if (elements.punchToggle) {
-      elements.punchToggle.textContent = "UTILISE /in SUR DISCORD";
+      elements.punchToggle.textContent = "ENTRER EN SERVICE";
       elements.punchToggle.classList.remove("active");
-      elements.punchToggle.disabled = true;
+      elements.punchToggle.disabled = false;
     }
     stopLiveTimer();
     updateLivePunchMetrics();
   }
-}
-
-function renderProfileStatusChart() {
-  const canvas = elements.profileStatusChartCanvas;
-  if (!canvas || typeof Chart === "undefined") return;
-
-  const isActive = Boolean(state.loggedIn && state.currentUser && state.punchedIn);
-  const liveHours = isActive ? getLiveEmployeeHours(state.currentUser) : 0;
-  const progressHours = Math.min(Math.max(liveHours, 0), 8);
-  const remainingHours = Math.max(0.25, 8 - progressHours);
-  const dataset = isActive ? [Math.max(progressHours, 0.12), remainingHours] : [1];
-  const labels = isActive ? ["Session", "Reste"] : ["Hors service"];
-  const backgroundColor = isActive
-    ? [chartPalette.teal, "rgba(255, 255, 255, 0.08)"]
-    : ["rgba(255, 255, 255, 0.08)"];
-
-  if (!chartState.profileStatus) {
-    chartState.profileStatus = new Chart(canvas, {
-      type: "doughnut",
-      plugins: [doughnutCenterTextPlugin],
-      data: {
-        labels,
-        datasets: [
-          {
-            data: dataset,
-            backgroundColor,
-            borderColor: "#202124",
-            borderWidth: 3,
-            borderRadius: 0,
-            spacing: 2,
-            hoverOffset: 0,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: { duration: 0 },
-        events: [],
-        cutout: "80%",
-        plugins: {
-          doughnutCenterText: {
-            value: isActive ? formatCompactHours(liveHours) : "OFF",
-            label: isActive ? "Session live" : "Profil",
-          },
-          legend: { display: false },
-          tooltip: { enabled: false },
-        },
-      },
-    });
-    return;
-  }
-
-  chartState.profileStatus.data.labels = labels;
-  chartState.profileStatus.data.datasets[0].data = dataset;
-  chartState.profileStatus.data.datasets[0].backgroundColor = backgroundColor;
-  chartState.profileStatus.options.plugins.doughnutCenterText = {
-    value: isActive ? formatCompactHours(liveHours) : "OFF",
-    label: isActive ? "Session live" : "Profil",
-  };
-  chartState.profileStatus.update("none");
 }
 
 function drawShiftDonutChart() {
@@ -2102,13 +2397,11 @@ function updateAll() {
   renderContractsTable();
   renderHistorique();
   renderShiftState();
-  renderProfileStatusChart();
   drawShiftDonutChart();
   drawTrendChart();
-  drawPerformanceChart();
   renderPersonalDashboard();
+  renderSimulation();
   startAdminLiveTimer();
-  renderRebootPage();
   renderRadioPlaylist();
   renderRadioPlaylistsSidebar();
   applyAccessControl();
@@ -2190,27 +2483,35 @@ async function loadAdminDashboard() {
       elements.partCost,
       String(Number(data.settings?.part_settings?.fixedCost || 105)),
     );
+    const analysisSettings = data.settings?.analysis_settings || {};
+    setValue(
+      elements.simRevenue,
+      analysisSettings.revenue ? String(analysisSettings.revenue) : "",
+    );
+    setValue(
+      elements.simExpenses,
+      analysisSettings.expenses ? String(analysisSettings.expenses) : "",
+    );
+    setValue(
+      elements.simTargetProfit,
+      analysisSettings.targetProfitPercent
+        ? String(analysisSettings.targetProfitPercent)
+        : "",
+    );
+    setValue(
+      elements.simResalePrice,
+      analysisSettings.resalePrice ? String(analysisSettings.resalePrice) : "",
+    );
+    setValue(
+      elements.simWeeklyParts,
+      analysisSettings.weeklyParts ? String(analysisSettings.weeklyParts) : "",
+    );
 
     if (state.currentUser) {
       const matching = employees.find(
         (employee) => employee.discordId === state.currentUser.discordId,
       );
-      if (matching) {
-        const wasActive = state.currentUser.active;
-        const wasStartedAt = state.currentUser.activeShiftStartedAt;
-        const wasTodayHours = state.currentUser.todayHours;
-
-        state.currentUser = matching;
-        if (state.punchedIn && !state.currentUser.active) {
-          state.currentUser.active = wasActive;
-          state.currentUser.activeShiftStartedAt = wasStartedAt;
-          state.currentUser.todayHours = wasTodayHours;
-        } else if (state.currentUser.activeShiftStartedAt) {
-          activeShiftStartedAt = new Date(
-            state.currentUser.activeShiftStartedAt,
-          ).getTime();
-        }
-      }
+      if (matching) state.currentUser = matching;
     }
     if (data.radioPlaylists) {
       radioPlaylists = data.radioPlaylists;
@@ -2236,42 +2537,51 @@ async function loadAuditLogs() {
 }
 
 async function loadMeState() {
-  if (!state.loggedIn || !state.currentUser?.discordId) return;
+  try {
+    const response = await fetch("/api/me-state", { credentials: "include" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.employee || !state.currentUser) return;
 
-  const response = await fetch("/api/me-state", {
-    credentials: "include",
-  }).catch(() => null);
-  if (!response?.ok) return;
+    const current = normaliseEmployeeRecord(data.employee);
+    current.name = state.currentUser.name;
+    state.currentUser = current;
 
-  const data = await response.json().catch(() => null);
-  if (!data) return;
-
-  const hasActiveShift = Boolean(data.activeShift);
-  if (data.employee) {
-    const employee = normaliseEmployeeRecord(data.employee);
-    if (hasActiveShift) employee.active = true;
-
-    state.currentUser = employee;
-    const existingIndex = employees.findIndex(
-      (entry) => entry.discordId === employee.discordId,
-    );
-    if (existingIndex !== -1) {
-      employees[existingIndex] = employee;
+    if (!state.isAdmin) {
+      employees = [current];
     } else {
-      employees.push(employee);
+      const existing = employees.filter(
+        (employee) => employee.discordId !== current.discordId,
+      );
+      employees = [current, ...existing];
     }
-  }
 
-  state.punchedIn = hasActiveShift || Boolean(data.employee?.is_active);
-  activeShiftStartedAt = data.activeShift?.punched_in_at
-    ? new Date(data.activeShift.punched_in_at).getTime()
-    : data.employee?.active_shift_started_at
-      ? new Date(data.employee.active_shift_started_at).getTime()
-      : null;
-  myRecentShifts = data.recentShifts || [];
-  contracts = data.contracts || [];
-  inventoryStock = data.inventoryStock || {};
-  if (data.radioPlaylists) radioPlaylists = data.radioPlaylists;
+    if (data.activeShift?.punched_in_at) {
+      activeShiftStartedAt = new Date(data.activeShift.punched_in_at).getTime();
+      state.punchedIn = true;
+    } else {
+      activeShiftStartedAt = null;
+      state.punchedIn = false;
+    }
+
+    if (data.contracts) {
+      contracts = data.contracts;
+    }
+    if (data.inventoryStock) {
+      inventoryStock = data.inventoryStock;
+    }
+    if (data.recentShifts) {
+      myRecentShifts = data.recentShifts;
+    }
+    if (data.radioPlaylists) {
+      radioPlaylists = data.radioPlaylists;
+      if (!activePlaylistId && radioPlaylists.length > 0) {
+        activePlaylistId = radioPlaylists[0].id;
+      }
+    }
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function syncCurrentUserFromSession(sessionUser) {
@@ -2300,11 +2610,87 @@ function syncCurrentUserFromSession(sessionUser) {
   }
 }
 
+async function loadAuthSession() {
+  try {
+    const response = await fetch("/auth/me", { credentials: "include" });
+    const data = await response.json();
+
+    if (data.user) {
+      syncCurrentUserFromSession(data.user);
+      await loadMeState();
+      await loadAdminDashboard();
+      await loadInventoryLogs();
+      startAdminRefreshLoop();
+    } else {
+      state.loggedIn = false;
+      state.isAdmin = false;
+      state.canManage = false;
+      state.readOnly = false;
+      state.currentUser = null;
+      state.punchedIn = false;
+      if (adminRefreshTimerId) {
+        clearInterval(adminRefreshTimerId);
+        adminRefreshTimerId = null;
+      }
+      employees = [];
+      expenses = [];
+      shifts = [];
+      myRecentShifts = [];
+      state.recordedPayouts = 0;
+      setStatusDot(false);
+    }
+  } catch (error) {
+    setText(elements.demoUserText, "Connexion Discord indisponible");
+    setStatusDot(false);
+  }
+  await refreshBotStatus();
+  updateAll();
+}
+
+function loginWithDiscord() {
+  if (!state.loggedIn) window.location.href = "/auth/discord/login";
+}
+
+function logout() {
+  if (adminRefreshTimerId) {
+    clearInterval(adminRefreshTimerId);
+    adminRefreshTimerId = null;
+  }
+  window.location.href = "/auth/logout";
+}
+
+function queueFinanceSave() {
+  updateAll();
+}
+
+async function saveAnalysisSettings() {
+  if (!state.isAdmin || state.readOnly) return;
+  const payload = {
+    revenue: getNumericValue(elements.simRevenue),
+    expenses: getNumericValue(elements.simExpenses),
+    targetProfitPercent: getNumericValue(elements.simTargetProfit),
+    resalePrice: getNumericValue(elements.simResalePrice),
+    weeklyParts: getNumericValue(elements.simWeeklyParts),
+  };
+
+  const response = await fetch("/api/admin-analysis-settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  }).catch(() => null);
+
+  if (!response?.ok) {
+    showToast("Impossible d'enregistrer l'analyse.", true);
+    return;
+  }
+
+  showToast("Analyse enregistree.");
+}
+
 async function updateRoleRate(roleName, nextRate) {
   if (state.readOnly) return;
-  if (!Number.isFinite(nextRate) || nextRate <= 0) return; // Empêche de sauvegarder "0" par inadvertance
-
-  const previousRates = { ...state.roleRates };
+  if (!Number.isFinite(nextRate) || nextRate < 0) return;
   state.roleRates[roleName] = nextRate;
   employees = employees.map((employee) =>
     employee.roleName === roleName
@@ -2317,39 +2703,18 @@ async function updateRoleRate(roleName, nextRate) {
   updateAll();
 
   if (!state.isAdmin) return;
-  try {
-    const res = await fetch("/api/admin-role-rate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ roleName, rate: nextRate }),
+  await fetch("/api/admin-role-rates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ roleRates: state.roleRates }),
+  })
+    .then(() => {
+      showToast(`Salaire ${roleName} mis a jour.`);
+    })
+    .catch(() => {
+      showToast("Impossible de sauvegarder le salaire du role.", true);
     });
-    if (res.ok) {
-      const data = await res.json().catch(() => null);
-      if (data?.roleRates) {
-        state.roleRates = {
-          ...state.roleRates,
-          ...data.roleRates,
-        };
-      }
-      await loadAdminDashboard();
-      updateAll();
-      showToast(
-        `Salaire ${roleName} mis a jour a ${state.roleRates[roleName]}$.`,
-      );
-    } else {
-      const message = await res.text().catch(() => "API Error");
-      throw new Error(message || "API Error");
-    }
-  } catch (e) {
-    state.roleRates = previousRates;
-    showToast(
-      `Impossible de sauvegarder le salaire du role. ${e?.message || ""}`.trim(),
-      true,
-    );
-    await loadAdminDashboard();
-    updateAll();
-  }
 }
 
 async function adjustEmployeeHours(employeeIndex, hoursValue) {
@@ -2457,24 +2822,17 @@ async function punchIn() {
   );
   activeShiftStartedAt = Date.now();
   updateAll();
-
-  localStorage.setItem("tuner_punch_pending", "in");
-  localStorage.setItem("tuner_intended_punch_state", "in");
   const response = await fetch("/api/punch-in", {
     method: "POST",
     credentials: "include",
     keepalive: true,
   }).catch(() => null);
   if (!response?.ok) {
-    localStorage.removeItem("tuner_punch_pending");
-    localStorage.setItem("tuner_intended_punch_state", "out"); // Si échec, l'intention est "out"
     state.punchedIn = false;
     state.currentUser.active = false;
     activeShiftStartedAt = null;
     showToast("Erreur pendant l'entree en service.", true);
   } else {
-    localStorage.removeItem("tuner_punch_pending");
-    localStorage.setItem("tuner_intended_punch_state", "in"); // Si succès, l'intention est "in"
     await loadMeState();
   }
   updateAll();
@@ -2494,17 +2852,12 @@ async function punchOut() {
   );
   stopLiveTimer();
   updateAll();
-
-  localStorage.setItem("tuner_punch_pending", "out");
-  localStorage.setItem("tuner_intended_punch_state", "out");
   const response = await fetch("/api/punch-out", {
     method: "POST",
     credentials: "include",
     keepalive: true,
   }).catch(() => null);
   if (response?.ok) {
-    localStorage.removeItem("tuner_punch_pending");
-    localStorage.setItem("tuner_intended_punch_state", "out"); // Si succès, l'intention est "out"
     const data = await response.json();
     state.currentUser.hours += Number(data.durationHours || 0);
     state.currentUser.activeDays += 1;
@@ -2512,12 +2865,9 @@ async function punchOut() {
       data.shiftPeriod || state.currentUser.preferredShift;
     await loadMeState();
   } else {
-    localStorage.removeItem("tuner_punch_pending");
-    localStorage.setItem("tuner_intended_punch_state", "in"); // Si échec, l'intention est "in"
     state.currentUser.hours += state.currentUser.todayHours;
-    const serverMessage = response ? await response.text().catch(() => "") : "";
     showToast(
-      `Sortie de service impossible sur le serveur. ${serverMessage || "Verifie le compte Discord connecte sur le web."}`.trim(),
+      "Sortie de service sauvegardee localement, verifie le serveur.",
       true,
     );
   }
@@ -2636,84 +2986,6 @@ async function rebootData(scope = "all") {
   await loadAdminDashboard();
   await loadAuditLogs();
   updateAll();
-}
-
-function renderRebootPage() {
-  const rebootContainer = document.querySelector("#page-reboot");
-  if (!rebootContainer || !state.isAdmin) return;
-
-  let resetDiv = document.getElementById("reset-employee-container");
-  if (!resetDiv) {
-    resetDiv = document.createElement("div");
-    resetDiv.id = "reset-employee-container";
-    resetDiv.className = "card";
-    resetDiv.style.marginTop = "20px";
-    resetDiv.innerHTML = `
-      <h3 style="color: var(--red); margin-bottom: 10px;">Réinitialiser un Employé</h3>
-      <p class="muted" style="margin-bottom: 15px; font-size: 0.9rem;">Remet à zéro les heures et statistiques d'un employé spécifique.</p>
-      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <select id="reset-employee-select" class="input-field" style="flex: 1; min-width: 200px; background: rgba(0,0,0,0.2); border: 1px solid var(--line); color: var(--text); padding: 0.5rem; border-radius: 4px;">
-          <option value="">-- Choisir un employé --</option>
-        </select>
-        <button id="reset-employee-btn" class="danger-button">Réinitialiser</button>
-      </div>
-    `;
-    rebootContainer.appendChild(resetDiv);
-
-    document
-      .getElementById("reset-employee-btn")
-      .addEventListener("click", async () => {
-        const select = document.getElementById("reset-employee-select");
-        const empId = select.value;
-        if (!empId) return showToast("Veuillez sélectionner un employé.", true);
-
-        const emp = employees.find((e) => e.id === empId);
-        if (!emp) return;
-
-        if (
-          !window.confirm(
-            `Voulez-vous vraiment réinitialiser toutes les stats de ${emp.name} ?`,
-          )
-        )
-          return;
-        const typed = window.prompt("Tapez RESET pour confirmer.");
-        if (typed !== "RESET") return showToast("Annulé.", true);
-
-        const response = await fetch(`/api/admin-employees/${empId}/reset`, {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => null);
-        if (response?.ok) {
-          showToast(`Stats de ${emp.name} réinitialisées.`);
-        } else {
-          // Fallback: Reset les heures à 0 avec l'ancienne route si la nouvelle n'est pas encore codée sur ton bot
-          await fetch("/api/admin-adjust-employee-hours", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ employeeId: empId, totalHours: 0 }),
-          });
-          showToast(`Heures de ${emp.name} remises à 0 (Fallback).`);
-        }
-        await loadAdminDashboard();
-        updateAll();
-      });
-  }
-
-  const select = document.getElementById("reset-employee-select");
-  if (select) {
-    const currentValue = select.value;
-    select.innerHTML =
-      '<option value="">-- Choisir un employé --</option>' +
-      employees
-        .map(
-          (e) =>
-            `<option value="${e.id}">${escapeHtml(e.name)} (${escapeHtml(e.roleName)})</option>`,
-        )
-        .join("");
-    if (employees.find((e) => e.id === currentValue))
-      select.value = currentValue;
-  }
 }
 
 async function openNotesModal(id, name) {
@@ -2987,19 +3259,11 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
   }
 });
 
+elements.discordLogin?.addEventListener("click", loginWithDiscord);
+elements.logoutButton?.addEventListener("click", logout);
 elements.punchToggle?.addEventListener("click", async () => {
-  if (!WEB_PUNCH_ENABLED) {
-    showToast("Les punchs se font uniquement sur Discord avec /in et /out.", true);
-    return;
-  }
   if (state.punchedIn) await punchOut();
   else await punchIn();
-});
-elements.discordLogin?.addEventListener("click", () => {
-  window.location.href = "/auth/discord/login";
-});
-elements.logoutButton?.addEventListener("click", () => {
-  window.location.href = "/auth/logout";
 });
 elements.closeNotesBtn?.addEventListener("click", () => {
   if (elements.notesModal) elements.notesModal.style.display = "none";
@@ -3009,7 +3273,7 @@ elements.closeAuditBtn?.addEventListener("click", () => {
 });
 elements.refreshAnalysisBtn?.addEventListener("click", () => {
   updateAll();
-  showToast("Tableau rafraichi.");
+  showToast("Bilan rafraichi.");
 });
 elements.saveNotesBtn?.addEventListener("click", saveNotes);
 elements.rebootButtons.forEach((button) => {
@@ -3061,29 +3325,6 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
-elements.statsBody?.addEventListener("change", async (event) => {
-  const select = event.target.closest(".role-select");
-  if (select) {
-    const empId = select.dataset.id;
-    const newRole = select.value;
-    if (!empId) return;
-
-    const res = await fetch(`/api/admin-employees/${empId}/role`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ role: newRole }),
-    });
-    if (res.ok) {
-      showToast(`Rôle mis à jour: ${newRole}.`);
-      await loadAdminDashboard();
-      updateAll();
-    } else {
-      showToast("Erreur lors du changement de rôle.", true);
-    }
-  }
-});
-
 elements.statsBody?.addEventListener("click", (event) => {
   const fireBtn = event.target.closest(".fire-btn");
   if (fireBtn) return fireEmployee(fireBtn.dataset.id, fireBtn.dataset.name);
@@ -3112,10 +3353,10 @@ elements.presenceBody?.addEventListener("click", (event) => {
     sendReminder(Number(reminderButton.dataset.employeeIndex));
     return;
   }
+
   const forceButton = event.target.closest(".force-out-button");
   if (forceButton) {
     forcePunchOut(Number(forceButton.dataset.employeeIndex));
-    return;
   }
 });
 
@@ -3331,6 +3572,8 @@ document
       const data = await res.json();
       state.weeklyProfit = data.weeklyProfit;
       showToast(`Revenu ajusté (${amount > 0 ? "+" : ""}${amount}$).`);
+      renderOverview();
+      renderSimulation();
     } else {
       showToast("Erreur lors de l'ajustement.", true);
     }
@@ -3376,6 +3619,16 @@ elements.auditBody?.addEventListener("click", (event) => {
       if (elements.auditModal) elements.auditModal.style.display = "flex";
     }
   }
+});
+
+[
+  elements.simRevenue,
+  elements.simExpenses,
+  elements.simTargetProfit,
+  elements.simResalePrice,
+  elements.simWeeklyParts,
+].forEach((element) => {
+  element?.addEventListener("input", queueFinanceSave);
 });
 
 async function saveRadioPlaylists() {
@@ -3599,74 +3852,5 @@ document.addEventListener("click", async (e) => {
 
 window.addEventListener("hashchange", routeToCurrentPage);
 
-async function loadAuthSession() {
-  try {
-    const authRes = await fetch("/auth/me", { credentials: "include" });
-    if (!authRes.ok) throw new Error("Auth failed");
-    const authData = await authRes.json();
-
-    if (authData.user) {
-      syncCurrentUserFromSession(authData.user);
-
-      const stateRes = await fetch("/api/me-state", { credentials: "include" });
-      if (stateRes.ok) {
-        const stateData = await stateRes.json();
-        const hasActiveShift = Boolean(stateData.activeShift);
-        if (stateData.employee) {
-          const emp = normaliseEmployeeRecord(stateData.employee);
-          state.currentUser = emp;
-          const existingIndex = employees.findIndex(
-            (e) => e.discordId === emp.discordId,
-          );
-          if (existingIndex !== -1) employees[existingIndex] = emp;
-          else employees.push(emp);
-
-          state.punchedIn = hasActiveShift || emp.active;
-          if (hasActiveShift) state.currentUser.active = true;
-          activeShiftStartedAt = (
-            stateData.activeShift?.punched_in_at || emp.activeShiftStartedAt
-          )
-            ? new Date(
-                stateData.activeShift?.punched_in_at ||
-                  emp.activeShiftStartedAt,
-              ).getTime()
-            : null;
-          myRecentShifts = stateData.recentShifts || [];
-          contracts = stateData.contracts || [];
-          inventoryStock = stateData.inventoryStock || {};
-          if (stateData.radioPlaylists)
-            radioPlaylists = stateData.radioPlaylists;
-        } else {
-          state.punchedIn = hasActiveShift;
-          activeShiftStartedAt = stateData.activeShift?.punched_in_at
-            ? new Date(stateData.activeShift.punched_in_at).getTime()
-            : null;
-          myRecentShifts = stateData.recentShifts || [];
-          contracts = stateData.contracts || [];
-          inventoryStock = stateData.inventoryStock || {};
-          if (stateData.radioPlaylists)
-            radioPlaylists = stateData.radioPlaylists;
-        }
-      }
-
-      if (state.isAdmin) {
-        await loadAdminDashboard();
-        startAdminRefreshLoop();
-      }
-
-      await loadInventoryLogs();
-      startMeStateRefreshLoop();
-    } else {
-      state.loggedIn = false;
-      state.currentUser = null;
-    }
-  } catch (err) {
-    console.error(err);
-    state.loggedIn = false;
-  }
-
-  refreshBotStatus();
-  updateAll();
-}
-
+updateAll();
 loadAuthSession();

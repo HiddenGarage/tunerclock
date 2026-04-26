@@ -22,8 +22,8 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Profil</div>
-        <a href="#pointage" class="nav-item" data-route="pointage">Profil</a>
+        <div class="nav-category">Mise en service</div>
+        <a href="#pointage" class="nav-item" data-route="pointage">Mise en service</a>
         <a href="#historique" class="nav-item" data-route="historique" data-admin-only="true">Historique</a>
         
         <div class="nav-category">Atelier</div>
@@ -36,6 +36,8 @@
         
         <div class="nav-category">Direction</div>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
+        <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
+        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
         <div class="nav-category">Détente</div>
@@ -142,38 +144,26 @@
       <section id="page-pointage" class="app-page pointage-page">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
           <div>
-            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Profil</h2>
-            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour voir ton profil et utilise Discord pour tes punchs.</p>
+            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Mise en service</h2>
+            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour commencer ton quart.</p>
           </div>
           <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
         </div>
 
-        <div class="dashboard-grid profile-layout-grid">
-          <article class="card clock-in-widget profile-hero-card">
-            <div class="profile-hero-copy">
-              <span id="shift-badge" class="mini-pill danger profile-shift-badge">Hors service</span>
-
-              <div class="profile-session-block">
-                <span class="profile-session-label">Temps de la session</span>
-                <h1 id="today-hours" class="profile-session-hours">0h 00m 00s</h1>
-                <div class="profile-session-pay">+ <span id="today-pay">0$</span></div>
-              </div>
-
-              <p class="muted profile-discord-hint">Les punchs se font uniquement sur Discord avec <strong>/in</strong> et <strong>/out</strong>.</p>
+        <div class="dashboard-grid">
+          <article class="card card-span-2 clock-in-widget" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 24px; text-align: center;">
+            <span id="shift-badge" class="mini-pill danger" style="margin-bottom: 32px; font-size: 0.9rem; padding: 10px 20px;">Hors service</span>
+            
+            <div style="margin-bottom: 40px;">
+              <span class="muted" style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 800;">Temps de la session</span>
+              <h1 id="today-hours" style="font-size: 5rem; margin: 12px 0; font-variant-numeric: tabular-nums; letter-spacing: -0.04em; color: var(--text); line-height: 1;">0h 00m 00s</h1>
+              <div style="color: var(--teal); font-weight: 800; font-size: 1.4rem;">+ <span id="today-pay">0$</span></div>
             </div>
 
-            <div class="profile-status-visual">
-              <div class="profile-status-ring">
-                <canvas id="profile-status-chart"></canvas>
-              </div>
-              <div class="profile-status-notes">
-                <span class="profile-note-chip">Punch Discord uniquement</span>
-                <span class="profile-note-chip">Statut live</span>
-              </div>
-            </div>
+            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">ENTRER EN SERVICE</button>
           </article>
 
-          <div id="personal-stats-section" style="display: none;">
+          <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
             <article class="card stat-card metric-card metric-payroll" style="display: flex; flex-direction: column; padding: 24px;">
               <div class="card-head" style="margin-bottom: 12px;">
                 <div>
@@ -190,7 +180,7 @@
               </div>
             </article>
 
-            <article class="card card-span-2 profile-history-card" style="flex-grow: 1;">
+            <article class="card" style="flex-grow: 1;">
               <div class="card-head" style="margin-bottom: 12px;">
                 <div>
                   <h3 style="font-size: 1.1rem;">Derniers shifts</h3>
@@ -339,6 +329,108 @@
                 <tbody id="leaderboard-body"></tbody>
               </table>
             </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-salaire" class="app-page salaire-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Salaires par role</h3>
+                <p class="muted">Chaque role a son propre taux.</p>
+              </div>
+              <span class="mini-pill">Roles</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Taux actuel</th>
+                    <th>Nouveau taux</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="role-rates-body"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-analyse" class="app-page analyse-page">
+        <div class="dashboard-grid">
+          <article class="card card-span-3">
+            <div class="card-head">
+              <div>
+                <h3>Aperçu Financier (En direct)</h3>
+                <p class="muted">Bilan de la trésorerie actuelle.</p>
+              </div>
+            </div>
+            <div class="summary-band" style="grid-template-columns: repeat(4, 1fr); margin-top: 0;">
+              <div class="summary-item">
+                <span>Revenus totaux</span><strong id="bilan-tot-rev" style="color: var(--teal);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Dépenses totales</span><strong id="bilan-tot-exp" style="color: var(--orange);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Salaires Dus</span><strong id="bilan-tot-pay" style="color: var(--red);">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Profit Net</span><strong id="bilan-tot-net" style="color: var(--blue);">0$</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card card-span-2 chart-card large-chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Flux Financier (30 Jours)</h3>
+                <p class="muted">Évolution dynamique des revenus et dépenses.</p>
+              </div>
+            </div>
+            <div style="position: relative; height: 300px; width: 100%;">
+              <canvas id="bilan-finance-chart"></canvas>
+            </div>
+          </article>
+
+          <article class="card chart-card large-chart-card">
+            <div class="card-head">
+              <div>
+                <h3>Répartition des dépenses</h3>
+                <p class="muted">Où va l'argent du garage.</p>
+              </div>
+            </div>
+            <div style="position: relative; height: 300px; width: 100%;">
+              <canvas id="bilan-donut-chart"></canvas>
+            </div>
+          </article>
+
+          <article class="card card-span-3 analysis-advice-card">
+            <div class="card-head">
+              <div>
+                <h3>Conseil final</h3>
+                <p class="muted">Recommandation lisible selon les donnees actuelles, sans toucher aux taux officiels.</p>
+              </div>
+            </div>
+            <div class="summary-band simulation-summary">
+              <div class="summary-item">
+                <span>Marge actuelle</span>
+                <strong id="sim-profit-target">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Salaires actuellement dus</span>
+                <strong id="sim-current-payroll">0$</strong>
+              </div>
+              <div class="summary-item">
+                <span>Ratio salaires / revenus</span>
+                <strong id="sim-payroll-gap">0%</strong>
+              </div>
+            </div>
+            <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
           </article>
         </div>
       </section>
@@ -703,7 +795,7 @@
     </a>
     <a href="#tableau" class="mobile-nav-item active" data-route="tableau" data-admin-only="true">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-      <span>Profil</span>
+      <span>Dashboard</span>
     </a>
     <a href="#inventaire" class="mobile-nav-item" data-route="inventaire">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>

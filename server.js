@@ -22,14 +22,14 @@ const {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } = require("discord.js");
-const { getSupabase } = require("./netlify/functions/lib/supabase");
+const { required, getAdminIds } = require("./netlify/functions/lib/env");
 const {
-  ROLE_DEFINITIONS,
-  resolveRoleFromDiscordMember,
-  getDefaultRoleRates,
-} = require("./roles");
-const { requireAuth, requireAdminAccess, requireAdmin } = require("./auth");
-const authRoutes = require("./routes/auth.routes");
+  encodeSession,
+  decodeSession,
+  parseCookies,
+  buildCookie,
+} = require("./netlify/functions/lib/session");
+const { getSupabase } = require("./netlify/functions/lib/supabase");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,8 +48,6 @@ const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID =
   process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1495989501166747669";
 const DISCORD_RECRUITMENT_CHANNEL_ID =
   process.env.DISCORD_RECRUITMENT_CHANNEL_ID || "1496506153922859079";
-const DISCORD_STAFF_GUIDE_CHANNEL_ID =
-  process.env.DISCORD_STAFF_GUIDE_CHANNEL_ID || "1497649359221952592";
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -59,8 +57,43 @@ const discordBotRuntime = {
   tag: null,
   error: null,
 };
+const ADMIN_ROLE_FALLBACKS = {
+  "417605116070461442": "Patron",
+  "893278269170933810": "Copatron",
+};
 const PAYSLIP_SIGNATURE =
   "Signé Léo Belleamy et Niko Walker | Santos Tuners Inc";
+const ROLE_DEFINITIONS = [
+  { name: "Patron", id: "1487868408228741171", hourlyRate: 60, isAdmin: true },
+  {
+    name: "Copatron",
+    id: "1487666934412611594",
+    hourlyRate: 45,
+    isAdmin: true,
+  },
+  {
+    name: "Gerant",
+    id: "1487852908077781168",
+    hourlyRate: 35,
+    isAdmin: true,
+    canManage: false,
+  },
+  {
+    name: "Gouvernement",
+    id: "1494749026694987816",
+    hourlyRate: 0,
+    isAdmin: true,
+    canManage: false,
+    isSupervision: true,
+  },
+  { name: "Mecano", id: "1487852832643354665", hourlyRate: 25, isAdmin: false },
+  {
+    name: "Apprenti",
+    id: "1487852702519136496",
+    hourlyRate: 18,
+    isAdmin: false,
+  },
+];
 const GARAGE_PART_CODES = [
   "engine_oil",
   "tyre_replacement",
@@ -187,8 +220,6 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
-app.use("/auth", authRoutes);
-
 // Middleware global pour traquer si l'API prend plus de 5 secondes à répondre
 app.use((req, res, next) => {
   const start = Date.now();
@@ -222,6 +253,38 @@ app.get("/api/health", (req, res) => {
     time: new Date().toISOString(),
   });
 });
+
+function getSession(req) {
+  const cookies = parseCookies(req.headers.cookie || "");
+  return decodeSession(cookies.tunershub_session, required("SESSION_SECRET"));
+}
+
+function requireAuth(req, res, next) {
+  const session = getSession(req);
+  if (!session) {
+    return res.status(401).send("Non autorise.");
+  }
+  req.session = session;
+  next();
+}
+
+function requireAdminAccess(req, res, next) {
+  const session = getSession(req);
+  if (!session || !session.isAdmin) {
+    return res.status(403).send("Acces refuse.");
+  }
+  req.session = session;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  const session = getSession(req);
+  if (!session || !session.isAdmin || session.canManage === false) {
+    return res.status(403).send("Acces lecture seule.");
+  }
+  req.session = session;
+  next();
+}
 
 function getShiftPeriod(dateLike) {
   const date = new Date(dateLike);
@@ -260,14 +323,11 @@ async function getSettingsMap(supabase) {
 }
 
 async function upsertSetting(supabase, key, value) {
-  const { error } = await supabase.from("app_settings").upsert(
-    {
-      key,
-      value,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" },
-  );
+  const { error } = await supabase.from("app_settings").upsert({
+    key,
+    value,
+    updated_at: new Date().toISOString(),
+  });
   if (error) {
     throw error;
   }
@@ -303,6 +363,12 @@ async function writeAuditLog(supabase, req, action, options = {}) {
   }
 }
 
+function getDefaultRoleRates() {
+  return Object.fromEntries(
+    ROLE_DEFINITIONS.map((role) => [role.name, role.hourlyRate]),
+  );
+}
+
 function formatRpMoney(value) {
   return `${Math.round(Number(value || 0))}$`;
 }
@@ -318,304 +384,31 @@ async function getRoleRates(supabase) {
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
 }
 
-async function saveSingleRoleRate(supabase, roleName, nextRate) {
-  const roleDefinition = ROLE_DEFINITIONS.find((role) => role.name === roleName);
-  if (!roleDefinition) {
-    throw new Error("Role invalide.");
-  }
-
-  const numericRate = Number(nextRate);
-  if (!Number.isFinite(numericRate) || numericRate < 0) {
-    throw new Error("Montant invalide.");
-  }
-
-  const currentRates = await getRoleRates(supabase);
-  const updatedRates = {
-    ...currentRates,
-    [roleName]: numericRate,
-  };
-
-  await upsertSetting(supabase, "role_rates", updatedRates);
-
-  const confirmedRates = await getRoleRates(supabase);
-  const confirmedRate = Number(confirmedRates[roleName]);
-  if (!Number.isFinite(confirmedRate) || confirmedRate !== numericRate) {
-    throw new Error("Verification base de donnees echouee.");
-  }
-
-  const { error } = await supabase
-    .from("employees")
-    .update({ hourly_rate: confirmedRate })
-    .eq("role", roleName);
-  if (error) {
-    throw error;
-  }
-
-  return confirmedRates;
-}
-
-async function setDiscordServiceRoleByApi(discordId, roleId, shouldHaveRole) {
-  if (!discordId || !roleId || !process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_GUILD_ID) {
-    return;
-  }
-
-  const endpoint = `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordId}/roles/${roleId}`;
-  await fetch(endpoint, {
-    method: shouldHaveRole ? "PUT" : "DELETE",
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-  }).catch(() => null);
-}
-
-async function fetchGuildMember(discordId) {
-  if (!discordId || !process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_GUILD_ID) {
-    return null;
-  }
-
-  if (discordClient?.isReady?.()) {
-    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-    const member = await guild?.members?.fetch(discordId).catch(() => null);
-    if (member) {
-      return {
-        nick: member.nickname,
-        user: {
-          username: member.user?.username,
-          global_name: member.user?.globalName,
-        },
-        roles: Array.from(member.roles?.cache?.keys?.() || []),
-      };
-    }
-  }
-
-  const memberResponse = await fetch(
-    `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordId}`,
-    {
-      headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
-    },
-  ).catch(() => null);
-
-  if (!memberResponse?.ok) return null;
-  return memberResponse.json();
-}
-
-async function syncEmployeeRoleWithDiscord(
-  supabase,
-  employee,
-  roleRates = null,
-) {
-  if (!employee?.discord_id) return employee;
-
-  const member = await fetchGuildMember(employee.discord_id);
-  if (!member) return employee;
-
-  const resolvedRole = resolveRoleFromDiscordMember(member, employee.discord_id);
-  const nextDisplayName =
-    member.nick ||
-    member.user?.global_name ||
-    member.user?.username ||
-    employee.discord_name;
-  const nextRoleName = resolvedRole.name;
-  const nextRoleId = resolvedRole.id || null;
-  const rates = roleRates || (await getRoleRates(supabase));
-  const nextHourlyRate = numberOrDefault(
-    rates[nextRoleName],
-    DEFAULT_HOURLY_RATE,
+function resolveMemberRole(memberRoles) {
+  return (
+    ROLE_DEFINITIONS.find((role) => memberRoles.includes(role.id)) ||
+    ROLE_DEFINITIONS[3]
   );
+}
 
-  if (
-    employee.role === nextRoleName &&
-    employee.discord_name === nextDisplayName &&
-    Number(employee.hourly_rate || 0) === Number(nextHourlyRate || 0)
-  ) {
-    return {
-      ...employee,
-      role_id: employee.role_id || nextRoleId,
-    };
-  }
+function getAdminFallbackRole(discordId) {
+  const roleName = ADMIN_ROLE_FALLBACKS[discordId];
+  return ROLE_DEFINITIONS.find((role) => role.name === roleName) || null;
+}
 
-  const updatePayload = {
-    role: nextRoleName,
-    discord_name: nextDisplayName,
-    hourly_rate: nextHourlyRate,
-  };
-  const { error } = await supabase
-    .from("employees")
-    .update(updatePayload)
-    .eq("id", employee.id);
-
-  if (error) {
-    console.error("Sync role Discord impossible:", error.message);
-    return employee;
-  }
-
-  return {
-    ...employee,
-    ...updatePayload,
-    role_id: nextRoleId,
-  };
+function resolveRoleFromDiscordMember(member, discordId) {
+  const roleIds = Array.isArray(member?.roles)
+    ? member.roles
+    : Array.from(member?.roles?.cache?.keys?.() || []);
+  return (
+    resolveMemberRole(roleIds) ||
+    getAdminFallbackRole(discordId) ||
+    ROLE_DEFINITIONS[3]
+  );
 }
 
 function getLogoPath() {
   return path.join(__dirname, "logo", "TurboPunch.png");
-}
-
-function getConfigurableRoleDefinitions() {
-  return ROLE_DEFINITIONS.filter((role) => role.name !== "Gouvernement");
-}
-
-function getStaffCommandRoleChoices() {
-  return getConfigurableRoleDefinitions().map((role) => ({
-    name: role.name,
-    value: role.name,
-  }));
-}
-
-function canUseStaffCommand(roleName) {
-  return ["Patron", "Copatron", "Gerant"].includes(roleName);
-}
-
-async function syncMissingEmployeesFromDiscord(supabase, roleRates) {
-  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return;
-
-  const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-  if (!guild) return;
-
-  const members = await guild.members.fetch().catch(() => null);
-  if (!members?.size) return;
-
-  const { data: employees, error } = await supabase
-    .from("employees")
-    .select("discord_id");
-  if (error) throw error;
-
-  const knownDiscordIds = new Set(
-    (employees || []).map((employee) => employee.discord_id).filter(Boolean),
-  );
-  const inserts = [];
-
-  members.forEach((member) => {
-    const matchingRole = getConfigurableRoleDefinitions().find((role) =>
-      role.id ? member.roles.cache.has(role.id) : false,
-    );
-    if (!matchingRole) return;
-    if (knownDiscordIds.has(member.id)) return;
-
-    const resolvedRole = resolveRoleFromDiscordMember(member, member.id);
-    inserts.push({
-      discord_id: member.id,
-      discord_name:
-        member.displayName ||
-        member.user?.globalName ||
-        member.user?.username ||
-        `Employe ${member.id}`,
-      role: resolvedRole.name,
-      role_id: resolvedRole.id || null,
-      hourly_rate: numberOrDefault(
-        roleRates[resolvedRole.name],
-        DEFAULT_HOURLY_RATE,
-      ),
-      is_active: false,
-    });
-  });
-
-  if (!inserts.length) return;
-
-  const { error: insertError } = await supabase.from("employees").insert(inserts);
-  if (insertError) {
-    throw insertError;
-  }
-}
-
-async function hireDiscordUser(
-  discordId,
-  roleName,
-  hiredByLabel = "Direction Discord",
-) {
-  const roleDefinition = getConfigurableRoleDefinitions().find(
-    (role) => role.name === roleName,
-  );
-  if (!roleDefinition) {
-    throw new Error("Role invalide.");
-  }
-
-  const supabase = getSupabase();
-  const roleRates = await getRoleRates(supabase);
-  const roleRate = numberOrDefault(roleRates[roleName], DEFAULT_HOURLY_RATE);
-
-  let member = null;
-  if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
-    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-    member = await guild?.members.fetch(discordId).catch(() => null);
-  }
-
-  const displayName =
-    member?.displayName ||
-    member?.user?.globalName ||
-    member?.user?.username ||
-    `Employe ${discordId}`;
-
-  const { data: existingEmployee, error: existingEmployeeError } =
-    await supabase
-      .from("employees")
-      .select("*")
-      .eq("discord_id", discordId)
-      .maybeSingle();
-
-  if (existingEmployeeError) {
-    throw existingEmployeeError;
-  }
-
-  const payload = {
-    discord_id: discordId,
-    discord_name: displayName,
-    role: roleName,
-    role_id: roleDefinition.id || null,
-    hourly_rate: roleRate,
-    is_active: false,
-  };
-
-  const employeeQuery = existingEmployee
-    ? supabase
-        .from("employees")
-        .update(payload)
-        .eq("id", existingEmployee.id)
-        .select()
-        .single()
-    : supabase.from("employees").insert(payload).select().single();
-
-  const { data: employee, error: employeeError } = await employeeQuery;
-  if (employeeError) {
-    throw employeeError;
-  }
-
-  if (member) {
-    const managedRoleIds = getConfigurableRoleDefinitions()
-      .map((role) => role.id)
-      .filter(Boolean);
-    const roleIdsToRemove = managedRoleIds.filter(
-      (roleId) => roleId !== roleDefinition.id && member.roles.cache.has(roleId),
-    );
-    if (roleIdsToRemove.length) {
-      await member.roles.remove(roleIdsToRemove).catch(() => null);
-    }
-    if (roleDefinition.id && !member.roles.cache.has(roleDefinition.id)) {
-      await member.roles.add(roleDefinition.id).catch(() => null);
-    }
-  }
-
-  await updateServiceRole(discordId, false).catch(() => null);
-  await sendDiscordDm(
-    discordId,
-    `Bienvenue chez Santos Tuners. Tu as ete embauche comme **${roleName}** par **${hiredByLabel}**.`,
-  ).catch(() => null);
-
-  return {
-    employee,
-    roleDefinition,
-    memberFound: Boolean(member),
-  };
 }
 
 async function syncDiscordCommands() {
@@ -655,54 +448,14 @@ async function syncDiscordCommands() {
         },
       ],
     },
-    {
-      name: "salaire",
-      description: "Modifier le salaire horaire d'un role",
-      options: [
-        {
-          name: "role",
-          description: "Role a modifier",
-          type: 3,
-          required: true,
-          choices: getStaffCommandRoleChoices(),
-        },
-        {
-          name: "salaire",
-          description: "Nouveau salaire horaire",
-          type: 10,
-          required: true,
-        },
-      ],
-    },
-    {
-      name: "embauche",
-      description: "Embaucher un joueur et lui attribuer un role",
-      options: [
-        {
-          name: "utilisateur",
-          description: "Membre Discord a embaucher",
-          type: 6,
-          required: true,
-        },
-        {
-          name: "role",
-          description: "Role a attribuer",
-          type: 3,
-          required: true,
-          choices: getStaffCommandRoleChoices(),
-        },
-      ],
-    },
-  ].filter((command) => command.name !== "finance");
+  ];
 
   try {
     await discordClient.application.commands.set(
       commands,
       process.env.DISCORD_GUILD_ID || undefined,
     );
-    console.log(
-      "Commandes Discord synchronisees: /in /out /paye /salaire /embauche",
-    );
+    console.log("Commandes Discord synchronisees: /in /out /paye");
   } catch (error) {
     console.error(
       "Synchronisation commandes Discord impossible:",
@@ -754,46 +507,6 @@ function buildEmployeeGuideEmbed() {
     .setTimestamp();
 }
 
-function buildStaffGuideEmbed() {
-  return new EmbedBuilder()
-    .setColor(0xe63946)
-    .setTitle("TunersHub | Guide staff")
-    .setDescription(
-      "Commandes staff du bot pour la direction et la gestion de l'equipe Santos Tuners.",
-    )
-    .addFields(
-      {
-        name: "/in",
-        value: "Entre en service et demarre ton quart.",
-      },
-      {
-        name: "/out",
-        value: "Ferme ton quart et sauvegarde tes heures.",
-      },
-      {
-        name: "/paye",
-        value: "Affiche tes heures et ton argent gagne en prive.",
-      },
-      {
-        name: "/salaire [role] [salaire]",
-        value:
-          "Accessible a **Patron**, **Copatron** et **Gerant**. Modifie le taux horaire du role choisi.",
-      },
-      {
-        name: "/embauche [utilisateur] [role]",
-        value:
-          "Accessible a **Patron**, **Copatron** et **Gerant**. Cree ou met a jour l'employe, applique le role Discord et prepare le compte TunersHub.",
-      },
-      {
-        name: "Notes",
-        value:
-          "Les punchs se font sur Discord. Le panel web sert surtout au suivi, a la gestion et aux corrections.",
-      },
-    )
-    .setFooter({ text: "Santos Tuners Inc | Staff Bot" })
-    .setTimestamp();
-}
-
 async function publishEmployeeGuideEmbed() {
   if (!discordClient?.isReady?.() || !DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID) return;
 
@@ -832,47 +545,6 @@ async function publishEmployeeGuideEmbed() {
     });
   } catch (error) {
     console.error("Publication guide employe impossible:", error.message);
-  }
-}
-
-async function publishStaffGuideEmbed() {
-  if (!discordClient?.isReady?.() || !DISCORD_STAFF_GUIDE_CHANNEL_ID) return;
-
-  try {
-    const supabase = getSupabase();
-    const settings = await getSettingsMap(supabase);
-    const guideState = settings.discord_staff_guide || {};
-    const channel = await discordClient.channels
-      .fetch(DISCORD_STAFF_GUIDE_CHANNEL_ID)
-      .catch(() => null);
-
-    if (!channel?.isTextBased?.()) {
-      console.error("Salon guide staff introuvable ou non textuel.");
-      return;
-    }
-
-    const payload = { embeds: [buildStaffGuideEmbed()] };
-    let message = null;
-
-    if (guideState.messageId) {
-      message = await channel.messages
-        .fetch(guideState.messageId)
-        .catch(() => null);
-    }
-
-    if (message) {
-      await message.edit(payload);
-    } else {
-      message = await channel.send(payload);
-    }
-
-    await upsertSetting(supabase, "discord_staff_guide", {
-      channelId: DISCORD_STAFF_GUIDE_CHANNEL_ID,
-      messageId: message.id,
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Publication guide staff impossible:", error.message);
   }
 }
 
@@ -926,33 +598,25 @@ async function publishRecruitmentEmbed() {
 }
 
 async function updateServiceRole(discordId, isActive) {
-  if (!process.env.DISCORD_GUILD_ID) return;
-  const roleIn = "1496901938216828938";
-  const roleOut = "1496902369743605851";
-
+  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return;
   try {
-    let member = null;
-    if (discordClient?.isReady?.()) {
-      const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-      member = await guild?.members.fetch(discordId).catch(() => null);
-    }
+    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+    if (!guild) return;
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    if (!member) return;
 
-    if (member) {
-      if (isActive) {
-        await member.roles.add(roleIn).catch(() => {});
-        await member.roles.remove(roleOut).catch(() => {});
-      } else {
-        await member.roles.remove(roleIn).catch(() => {});
-        await member.roles.add(roleOut).catch(() => {});
-      }
+    const roleIn = "1496901938216828938";
+    const roleOut = "1496902369743605851";
+
+    if (isActive) {
+      await member.roles.add(roleIn).catch(() => {});
+      await member.roles.remove(roleOut).catch(() => {});
     } else {
-      await setDiscordServiceRoleByApi(discordId, roleIn, isActive);
-      await setDiscordServiceRoleByApi(discordId, roleOut, !isActive);
+      await member.roles.remove(roleIn).catch(() => {});
+      await member.roles.add(roleOut).catch(() => {});
     }
   } catch (e) {
     console.error("Erreur roles service:", e.message);
-    await setDiscordServiceRoleByApi(discordId, roleIn, isActive);
-    await setDiscordServiceRoleByApi(discordId, roleOut, !isActive);
   }
 }
 
@@ -996,7 +660,6 @@ function startDiscordBot() {
       });
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
-      publishStaffGuideEmbed();
       publishRecruitmentEmbed();
     } catch (error) {
       discordBotRuntime.error = error.message;
@@ -1147,90 +810,6 @@ function startDiscordBot() {
           } catch (err) {
             await interaction.editReply(
               `Erreur lors de l'opération : ${err.message}`,
-            );
-          }
-          return;
-        }
-
-        if (interaction.commandName === "salaire") {
-          if (!canUseStaffCommand(roleDefinition.name)) {
-            await interaction.reply({
-              content:
-                "Commande reservee a Patron, Copatron et Gerant.",
-              flags: [MessageFlags.Ephemeral],
-            });
-            return;
-          }
-
-          const roleName = interaction.options.getString("role");
-          const nextRate = interaction.options.getNumber("salaire");
-          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-
-          try {
-            const supabase = getSupabase();
-            const roleRates = await saveSingleRoleRate(
-              supabase,
-              roleName,
-              nextRate,
-            );
-            await interaction.editReply(
-              `Salaire mis a jour pour **${roleName}**: **${formatRpMoney(roleRates[roleName])}/h**.`,
-            );
-          } catch (err) {
-            await interaction.editReply(
-              `Erreur salaire: ${err.message}`,
-            );
-          }
-          return;
-        }
-
-        if (interaction.commandName === "embauche") {
-          if (!canUseStaffCommand(roleDefinition.name)) {
-            await interaction.reply({
-              content:
-                "Commande reservee a Patron, Copatron et Gerant.",
-              flags: [MessageFlags.Ephemeral],
-            });
-            return;
-          }
-
-          const targetUser = interaction.options.getUser("utilisateur");
-          const discordId = targetUser?.id;
-          const targetRole = interaction.options.getString("role");
-          const hiredByLabel =
-            interaction.member?.displayName ||
-            interaction.user.globalName ||
-            interaction.user.username;
-
-          if (!discordId) {
-            await interaction.reply({
-              content: "Utilisateur Discord invalide.",
-              flags: [MessageFlags.Ephemeral],
-            });
-            return;
-          }
-
-          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
-          try {
-            const result = await hireDiscordUser(
-              discordId,
-              targetRole,
-              hiredByLabel,
-            );
-
-            await interaction.editReply(
-              [
-                `Employe prepare pour TunersHub: <@${discordId}>`,
-                `Role attribue: **${targetRole}**`,
-                `Taux horaire: **${formatRpMoney(result.employee.hourly_rate)}/h**`,
-                result.memberFound
-                  ? "Role Discord applique avec succes."
-                  : "Compte TunersHub cree, mais le membre Discord n'a pas ete trouve dans le serveur pour l'attribution du role.",
-              ].join("\n"),
-            );
-          } catch (err) {
-            await interaction.editReply(
-              `Erreur embauche: ${err.message}`,
             );
           }
           return;
@@ -1736,21 +1315,7 @@ async function closeActiveShiftForEmployee(
     throw shiftError;
   }
   if (!shift) {
-    const { error: staleEmployeeError } = await supabase
-      .from("employees")
-      .update({ is_active: false })
-      .eq("id", employee.id);
-    if (staleEmployeeError) {
-      throw staleEmployeeError;
-    }
-    await updateServiceRole(employee.discord_id, false);
-    return {
-      durationHours: 0,
-      shiftPeriod: null,
-      punchedInAt: null,
-      punchedOutAt: new Date(),
-      shiftId: null,
-    };
+    throw new Error("Aucun shift actif a fermer.");
   }
 
   const punchedOutAt = new Date();
@@ -1822,8 +1387,6 @@ async function punchInDiscordUser(discordId, displayName, roleName = "Mecano") {
   const employeePayload = existingEmployee
     ? {
         discord_name: displayName,
-        role: roleName,
-        hourly_rate: roleRate,
         is_active: true,
       }
     : {
@@ -2157,33 +1720,25 @@ function startKeepAliveMonitor() {
 
 async function buildEmployeeSnapshots(supabase) {
   const [
+    { data: employees, error: employeesError },
     { data: shifts, error: shiftsError },
   ] = await Promise.all([
+    supabase
+      .from("employees")
+      .select("*")
+      .order("created_at", { ascending: true }),
     supabase
       .from("shifts")
       .select("*")
       .order("punched_in_at", { ascending: true }),
   ]);
 
-  if (shiftsError) throw shiftsError;
-
-  const roleRates = await getRoleRates(supabase);
-  await syncMissingEmployeesFromDiscord(supabase, roleRates);
-  const { data: employees, error: employeesError } = await supabase
-    .from("employees")
-    .select("*")
-    .order("created_at", { ascending: true });
   if (employeesError) throw employeesError;
-
-  const syncedEmployees = await Promise.all(
-    (employees || []).map((employee) =>
-      syncEmployeeRoleWithDiscord(supabase, employee, roleRates),
-    ),
-  );
+  if (shiftsError) throw shiftsError;
 
   const shiftsByEmployee = groupBy(shifts || [], (shift) => shift.employee_id);
 
-  return syncedEmployees.map((employee) => {
+  return (employees || []).map((employee) => {
     const employeeShifts = shiftsByEmployee.get(employee.id) || [];
     const closedShifts = employeeShifts.filter(
       (shift) => shift.status === "closed",
@@ -2216,23 +1771,13 @@ async function buildEmployeeSnapshots(supabase) {
         )
       : 0;
 
-    const computedIsActive = Boolean(activeShift);
-    if (Boolean(employee.is_active) !== computedIsActive) {
-      supabase
-        .from("employees")
-        .update({ is_active: computedIsActive })
-        .eq("id", employee.id)
-        .then(() => updateServiceRole(employee.discord_id, computedIsActive))
-        .catch(() => null);
-    }
-
     return {
       ...employee,
       active_days: Number(employee.active_days || activeDays || 0),
       today_hours: todayHours,
       preferred_shift: preferredShift,
       total_hours: Number(employee.total_hours || 0),
-      is_active: computedIsActive,
+      is_active: Boolean(activeShift || employee.is_active),
       active_shift_id: activeShift?.id || null,
       active_shift_started_at: activeShift?.punched_in_at || null,
     };
@@ -2305,6 +1850,138 @@ function buildPayslipPdf(res, payload) {
   doc.text(PAYSLIP_SIGNATURE, 48, 548);
   doc.end();
 }
+
+app.get("/auth/discord/login", (req, res) => {
+  const url = new URL("https://discord.com/api/oauth2/authorize");
+  url.searchParams.set("client_id", required("DISCORD_CLIENT_ID"));
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
+  url.searchParams.set("scope", "identify");
+  url.searchParams.set("prompt", "consent");
+  res.redirect(url.toString());
+});
+
+app.get("/auth/discord/callback", async (req, res) => {
+  try {
+    const code = req.query.code;
+    if (!code) {
+      return res.status(400).send("Code Discord manquant.");
+    }
+
+    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: required("DISCORD_CLIENT_ID"),
+        client_secret: required("DISCORD_CLIENT_SECRET"),
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: required("DISCORD_REDIRECT_URI"),
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      return res
+        .status(500)
+        .send(`Echec echange token Discord: ${await tokenResponse.text()}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const profileResponse = await fetch("https://discord.com/api/users/@me", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!profileResponse.ok) {
+      return res
+        .status(500)
+        .send(
+          `Echec recuperation profil Discord: ${await profileResponse.text()}`,
+        );
+    }
+
+    const profile = await profileResponse.json();
+    let displayName = profile.global_name || profile.username;
+    let roleName = "Mecano";
+    let roleId = null;
+    let isAdmin = getAdminIds().includes(profile.id);
+    let canManage = true;
+
+    if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
+      const memberResponse = await fetch(
+        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`,
+        {
+          headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
+        },
+      );
+
+      if (memberResponse.ok) {
+        const member = await memberResponse.json();
+        displayName =
+          member.nick ||
+          member.user?.global_name ||
+          member.user?.username ||
+          displayName;
+        const resolvedRole = resolveMemberRole(member.roles || []);
+        roleName = resolvedRole.name;
+        roleId = resolvedRole.id;
+        isAdmin = isAdmin || resolvedRole.isAdmin;
+        canManage = resolvedRole.canManage !== false;
+      } else {
+        const fallbackRole = getAdminFallbackRole(profile.id);
+        if (fallbackRole) {
+          roleName = fallbackRole.name;
+          roleId = fallbackRole.id;
+          isAdmin = true;
+          canManage = true;
+        }
+      }
+    } else {
+      const fallbackRole = getAdminFallbackRole(profile.id);
+      if (fallbackRole) {
+        roleName = fallbackRole.name;
+        roleId = fallbackRole.id;
+        isAdmin = true;
+        canManage = true;
+      }
+    }
+
+    const session = {
+      discordId: profile.id,
+      username: profile.username,
+      displayName,
+      roleName,
+      roleId,
+      avatar: profile.avatar,
+      isAdmin,
+      canManage,
+      isSupervision: roleName === "Gouvernement",
+      readOnly: isAdmin && canManage === false,
+    };
+
+    res.setHeader(
+      "Set-Cookie",
+      buildCookie(
+        "tunershub_session",
+        encodeSession(session, required("SESSION_SECRET")),
+      ),
+    );
+    res.redirect("/");
+  } catch (error) {
+    res.status(500).send(error.message);
+  }
+});
+
+app.get("/auth/me", (req, res) => {
+  res.json({ user: getSession(req) || null });
+});
+
+app.get("/auth/logout", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
+  );
+  res.redirect("/");
+});
 
 app.get("/api/me-state", requireAuth, async (req, res) => {
   try {
@@ -2398,8 +2075,7 @@ app.post("/api/punch-in", requireAuth, async (req, res) => {
     const employeePayload = existingEmployee
       ? {
           discord_name: req.session.displayName || req.session.username,
-          role: roleName,
-          hourly_rate: roleRate,
+          role: req.session.roleName || existingEmployee.role,
           is_active: true,
         }
       : {
@@ -2473,36 +2149,68 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
-    const roleRates = await getRoleRates(supabase);
-    const resolvedRoleName = req.session.roleName || employee.role;
-    const resolvedHourlyRate = numberOrDefault(
-      roleRates[resolvedRoleName],
-      employee.hourly_rate || DEFAULT_HOURLY_RATE,
+    const { data: shift, error: shiftError } = await supabase
+      .from("shifts")
+      .select("*")
+      .eq("employee_id", employee.id)
+      .eq("status", "active")
+      .order("punched_in_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (shiftError) {
+      return res.status(500).send(shiftError.message);
+    }
+
+    const punchedOutAt = new Date();
+    const punchedInAt = new Date(shift.punched_in_at);
+    const durationHours = Number(
+      ((punchedOutAt - punchedInAt) / 3600000).toFixed(2),
     );
+    const shiftPeriod = getShiftPeriod(punchedInAt);
+
+    const { error: updateShiftError } = await supabase
+      .from("shifts")
+      .update({
+        punched_out_at: punchedOutAt.toISOString(),
+        duration_hours: durationHours,
+        shift_period: shiftPeriod,
+        status: "closed",
+      })
+      .eq("id", shift.id);
+
+    if (updateShiftError) {
+      return res.status(500).send(updateShiftError.message);
+    }
+
     const { error: updateEmployeeError } = await supabase
       .from("employees")
       .update({
         discord_name: req.session.displayName || req.session.username,
-        role: resolvedRoleName,
-        hourly_rate: resolvedHourlyRate,
+        role: req.session.roleName || employee.role,
+        is_active: false,
+        active_days: Number(employee.active_days || 0) + 1,
+        total_hours: Number(employee.total_hours || 0) + durationHours,
       })
       .eq("id", employee.id);
 
     if (updateEmployeeError) {
       return res.status(500).send(updateEmployeeError.message);
     }
-    const result = await closeActiveShiftForEmployee(supabase, {
-      ...employee,
-      role: resolvedRoleName,
-      hourly_rate: resolvedHourlyRate,
-      discord_name: req.session.displayName || req.session.username,
-    }, "Web");
 
-    res.json({
-      ok: true,
-      durationHours: result.durationHours,
-      shiftPeriod: result.shiftPeriod,
+    await updateServiceRole(req.session.discordId, false);
+
+    await sendActivityWebhook("punch_out", {
+      displayName: req.session.displayName || req.session.username,
+      username: req.session.username,
+      roleName: req.session.roleName || employee.role,
+      discordId: req.session.discordId,
+      timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
+      punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
+      durationHours,
     });
+
+    res.json({ ok: true, durationHours, shiftPeriod });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -2592,39 +2300,6 @@ app.get("/api/admin-audit-logs", requireAdminAccess, async (req, res) => {
   }
 });
 
-app.get("/api/admin-debug-state", requireAdminAccess, async (req, res) => {
-  try {
-    const supabase = getSupabase();
-    const settings = await getSettingsMap(supabase);
-    const { data: employees, error: employeesError } = await supabase
-      .from("employees")
-      .select("id, discord_id, discord_name, role, hourly_rate, is_active");
-    const { data: activeShifts, error: shiftsError } = await supabase
-      .from("shifts")
-      .select("id, employee_id, punched_in_at, status")
-      .eq("status", "active")
-      .order("punched_in_at", { ascending: false });
-
-    if (employeesError) throw employeesError;
-    if (shiftsError) throw shiftsError;
-
-    res.json({
-      roleRates: settings.role_rates || null,
-      employees: employees || [],
-      activeShifts: activeShifts || [],
-      session: {
-        discordId: req.session.discordId,
-        displayName: req.session.displayName,
-        roleName: req.session.roleName,
-        isAdmin: req.session.isAdmin,
-        canManage: req.session.canManage,
-      },
-    });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
 app.get("/api/admin-notes/:id", requireAdminAccess, async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -2688,50 +2363,33 @@ app.post("/api/admin-global-rate", requireAdmin, async (req, res) => {
 app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
   try {
     const incoming = req.body?.roleRates || {};
+    const merged = { ...getDefaultRoleRates() };
+    ROLE_DEFINITIONS.forEach((role) => {
+      const nextValue = Number(incoming[role.name]);
+      merged[role.name] = Number.isFinite(nextValue)
+        ? nextValue
+        : merged[role.name];
+    });
+
     const supabase = getSupabase();
-    let latestRates = await getRoleRates(supabase);
+    await upsertSetting(supabase, "role_rates", merged);
 
     for (const role of ROLE_DEFINITIONS) {
-      if (Number.isFinite(Number(incoming[role.name]))) {
-        latestRates = await saveSingleRoleRate(
-          supabase,
-          role.name,
-          Number(incoming[role.name]),
-        );
+      const { error } = await supabase
+        .from("employees")
+        .update({ hourly_rate: merged[role.name] })
+        .eq("role", role.name);
+
+      if (error) {
+        throw error;
       }
     }
 
     await writeAuditLog(supabase, req, "role_rates_updated", {
-      details: { roleRates: latestRates },
+      details: { roleRates: merged },
     });
 
-    res.json({ ok: true, roleRates: latestRates });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
-app.post("/api/admin-role-rate", requireAdmin, async (req, res) => {
-  try {
-    const roleName = String(req.body?.roleName || "");
-    const nextRate = req.body?.rate;
-    if (!roleName) {
-      return res.status(400).send("Role manquant.");
-    }
-
-    const supabase = getSupabase();
-    const confirmedRates = await saveSingleRoleRate(supabase, roleName, nextRate);
-
-    await writeAuditLog(supabase, req, "role_rate_updated", {
-      details: { roleName, rate: confirmedRates[roleName] },
-    });
-
-    res.json({
-      ok: true,
-      roleName,
-      rate: confirmedRates[roleName],
-      roleRates: confirmedRates,
-    });
+    res.json({ ok: true, roleRates: merged });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -3066,78 +2724,6 @@ app.delete("/api/admin-employees/:id", requireAdminAccess, async (req, res) => {
   }
 });
 
-app.post("/api/admin-employees/:id/role", requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { role } = req.body;
-    const targetRole = ROLE_DEFINITIONS.find((entry) => entry.name === role);
-    if (!targetRole) return res.status(400).send("Role invalide.");
-    if (!role) return res.status(400).send("Rôle manquant.");
-
-    const supabase = getSupabase();
-    const roleRates = await getRoleRates(supabase);
-    const hourlyRate = numberOrDefault(roleRates[role], DEFAULT_HOURLY_RATE);
-    const { data: employeeBefore, error: employeeBeforeError } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (employeeBeforeError) {
-      return res.status(500).send(employeeBeforeError.message);
-    }
-    if (!employeeBefore) {
-      return res.status(404).send("Employe introuvable.");
-    }
-
-    const { error } = await supabase
-      .from("employees")
-      .update({ role, hourly_rate: hourlyRate })
-      .eq("id", id);
-
-    if (error) {
-      return res.status(500).send(error.message);
-    }
-
-    if (
-      discordClient?.isReady?.() &&
-      process.env.DISCORD_GUILD_ID &&
-      employeeBefore.discord_id
-    ) {
-      const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-      const member = await guild?.members
-        ?.fetch(employeeBefore.discord_id)
-        .catch(() => null);
-
-      if (member) {
-        const managedRoleIds = ROLE_DEFINITIONS.map((entry) => entry.id).filter(
-          Boolean,
-        );
-        const roleIdsToRemove = managedRoleIds.filter(
-          (roleId) => roleId !== targetRole.id && member.roles.cache.has(roleId),
-        );
-        if (roleIdsToRemove.length) {
-          await member.roles.remove(roleIdsToRemove).catch(() => null);
-        }
-        if (targetRole.id && !member.roles.cache.has(targetRole.id)) {
-          await member.roles.add(targetRole.id).catch(() => null);
-        }
-      }
-    }
-
-    await writeAuditLog(supabase, req, "employee_role_changed", {
-      targetEmployeeId: id,
-      targetDiscordId: employeeBefore.discord_id,
-      targetName: employeeBefore.discord_name,
-      details: { employeeId: id, oldRole: employeeBefore.role, newRole: role },
-    });
-
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).send(error.message);
-  }
-});
-
 app.post(
   "/api/admin-recruitments/:id/:action",
   requireAdminAccess,
@@ -3208,11 +2794,19 @@ app.post(
           `🎉 Bonne nouvelle ! Ta candidature a ete **acceptee** chez Santos Tuners en tant que **${assignedRoleName}** ! Contacte un membre de la direction au plus vite pour la suite !`,
         );
         try {
-          await hireDiscordUser(
-            rec.discordId,
-            assignedRoleName,
-            req.session.displayName || req.session.username || "Direction",
-          );
+          if (discordClient?.isReady?.() && process.env.DISCORD_GUILD_ID) {
+            const guild = discordClient.guilds.cache.get(
+              process.env.DISCORD_GUILD_ID,
+            );
+            if (guild) {
+              const member = await guild.members
+                .fetch(rec.discordId)
+                .catch(() => null);
+              if (member) {
+                await member.roles.add(assignedRoleId).catch(() => null);
+              }
+            }
+          }
         } catch (err) {
           console.error("Erreur attribution role recrue:", err.message);
         }

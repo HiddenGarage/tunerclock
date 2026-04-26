@@ -476,6 +476,58 @@ function canUseStaffCommand(roleName) {
   return ["Patron", "Copatron", "Gerant"].includes(roleName);
 }
 
+async function syncMissingEmployeesFromDiscord(supabase, roleRates) {
+  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return;
+
+  const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+  if (!guild) return;
+
+  const members = await guild.members.fetch().catch(() => null);
+  if (!members?.size) return;
+
+  const { data: employees, error } = await supabase
+    .from("employees")
+    .select("discord_id");
+  if (error) throw error;
+
+  const knownDiscordIds = new Set(
+    (employees || []).map((employee) => employee.discord_id).filter(Boolean),
+  );
+  const inserts = [];
+
+  members.forEach((member) => {
+    const matchingRole = getConfigurableRoleDefinitions().find((role) =>
+      role.id ? member.roles.cache.has(role.id) : false,
+    );
+    if (!matchingRole) return;
+    if (knownDiscordIds.has(member.id)) return;
+
+    const resolvedRole = resolveRoleFromDiscordMember(member, member.id);
+    inserts.push({
+      discord_id: member.id,
+      discord_name:
+        member.displayName ||
+        member.user?.globalName ||
+        member.user?.username ||
+        `Employe ${member.id}`,
+      role: resolvedRole.name,
+      role_id: resolvedRole.id || null,
+      hourly_rate: numberOrDefault(
+        roleRates[resolvedRole.name],
+        DEFAULT_HOURLY_RATE,
+      ),
+      is_active: false,
+    });
+  });
+
+  if (!inserts.length) return;
+
+  const { error: insertError } = await supabase.from("employees").insert(inserts);
+  if (insertError) {
+    throw insertError;
+  }
+}
+
 async function hireDiscordUser(
   discordId,
   roleName,
@@ -627,9 +679,9 @@ async function syncDiscordCommands() {
       description: "Embaucher un joueur et lui attribuer un role",
       options: [
         {
-          name: "id",
-          description: "ID Discord du joueur",
-          type: 3,
+          name: "utilisateur",
+          description: "Membre Discord a embaucher",
+          type: 6,
           required: true,
         },
         {
@@ -641,7 +693,7 @@ async function syncDiscordCommands() {
         },
       ],
     },
-  ];
+  ].filter((command) => command.name !== "finance");
 
   try {
     await discordClient.application.commands.set(
@@ -649,7 +701,7 @@ async function syncDiscordCommands() {
       process.env.DISCORD_GUILD_ID || undefined,
     );
     console.log(
-      "Commandes Discord synchronisees: /in /out /paye /finance /salaire /embauche",
+      "Commandes Discord synchronisees: /in /out /paye /salaire /embauche",
     );
   } catch (error) {
     console.error(
@@ -728,14 +780,9 @@ function buildStaffGuideEmbed() {
           "Accessible a **Patron**, **Copatron** et **Gerant**. Modifie le taux horaire du role choisi.",
       },
       {
-        name: "/embauche [id] [role]",
+        name: "/embauche [utilisateur] [role]",
         value:
           "Accessible a **Patron**, **Copatron** et **Gerant**. Cree ou met a jour l'employe, applique le role Discord et prepare le compte TunersHub.",
-      },
-      {
-        name: "/finance",
-        value:
-          "Accessible a **Patron** et **Copatron** seulement. Sert a ajuster la tresorerie du garage.",
       },
       {
         name: "Notes",
@@ -1147,12 +1194,21 @@ function startDiscordBot() {
             return;
           }
 
-          const discordId = interaction.options.getString("id");
+          const targetUser = interaction.options.getUser("utilisateur");
+          const discordId = targetUser?.id;
           const targetRole = interaction.options.getString("role");
           const hiredByLabel =
             interaction.member?.displayName ||
             interaction.user.globalName ||
             interaction.user.username;
+
+          if (!discordId) {
+            await interaction.reply({
+              content: "Utilisateur Discord invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
 
           await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
           try {
@@ -2101,23 +2157,24 @@ function startKeepAliveMonitor() {
 
 async function buildEmployeeSnapshots(supabase) {
   const [
-    { data: employees, error: employeesError },
     { data: shifts, error: shiftsError },
   ] = await Promise.all([
-    supabase
-      .from("employees")
-      .select("*")
-      .order("created_at", { ascending: true }),
     supabase
       .from("shifts")
       .select("*")
       .order("punched_in_at", { ascending: true }),
   ]);
 
-  if (employeesError) throw employeesError;
   if (shiftsError) throw shiftsError;
 
   const roleRates = await getRoleRates(supabase);
+  await syncMissingEmployeesFromDiscord(supabase, roleRates);
+  const { data: employees, error: employeesError } = await supabase
+    .from("employees")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (employeesError) throw employeesError;
+
   const syncedEmployees = await Promise.all(
     (employees || []).map((employee) =>
       syncEmployeeRoleWithDiscord(supabase, employee, roleRates),

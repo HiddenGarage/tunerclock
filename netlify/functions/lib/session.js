@@ -35,19 +35,7 @@ function parseCookies(headerValue = "") {
 }
 
 function buildCookie(name, value, maxAge = 60 * 60 * 24 * 7) {
-  const parts = [
-    `${name}=${value}`,
-    "Path=/",
-    "HttpOnly",
-    "SameSite=Lax",
-    `Max-Age=${maxAge}`,
-  ];
-
-  if (String(process.env.NODE_ENV || "").toLowerCase() === "production") {
-    parts.push("Secure");
-  }
-
-  return parts.join("; ");
+  return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 module.exports = {

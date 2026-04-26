@@ -1,12 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { required, getAdminIds } = require("../netlify/functions/lib/env");
-const {
-  encodeSession,
-  buildCookie,
-} = require("../netlify/functions/lib/session");
-const { resolveMemberRole, getAdminFallbackRole } = require("../roles");
+const { required } = require("../netlify/functions/lib/env");
 const { getSession } = require("../auth");
+const {
+  refreshDiscordSession,
+  writeSessionCookie,
+} = require("../discord-session");
 
 router.get("/discord/login", (req, res) => {
   const url = new URL("https://discord.com/api/oauth2/authorize");
@@ -57,70 +56,42 @@ router.get("/discord/callback", async (req, res) => {
     }
 
     const profile = await profileResponse.json();
-    let displayName = profile.global_name || profile.username;
-    let roleName = "Mecano";
-    let roleId = null;
-    let isAdmin = getAdminIds().includes(profile.id);
-    let canManage = true;
-
-    if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
-      const memberResponse = await fetch(
-        `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`,
-        {
-          headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
-        },
-      );
-
-      if (memberResponse.ok) {
-        const member = await memberResponse.json();
-        displayName =
-          member.nick ||
-          member.user?.global_name ||
-          member.user?.username ||
-          displayName;
-        const resolvedRole = resolveMemberRole(member.roles || []);
-        roleName = resolvedRole.name;
-        roleId = resolvedRole.id;
-        isAdmin = isAdmin || resolvedRole.isAdmin;
-        canManage = resolvedRole.canManage !== false;
-      } else {
-        const fallbackRole = getAdminFallbackRole(profile.id);
-        if (fallbackRole) {
-          roleName = fallbackRole.name;
-          roleId = fallbackRole.id;
-          isAdmin = true;
-          canManage = true;
-        }
-      }
-    }
-
-    const session = {
+    const baseSession = {
       discordId: profile.id,
       username: profile.username,
-      displayName,
-      roleName,
-      roleId,
+      displayName: profile.global_name || profile.username,
+      roleName: "Mecano",
+      roleId: null,
       avatar: profile.avatar,
-      isAdmin,
-      canManage,
-      isSupervision: roleName === "Gouvernement",
-      readOnly: isAdmin && canManage === false,
+      isAdmin: false,
+      canManage: true,
+      isSupervision: false,
+      readOnly: false,
     };
+    const session = await refreshDiscordSession(baseSession);
 
-    res.setHeader(
-      "Set-Cookie",
-      buildCookie(
-        "tunershub_session",
-        encodeSession(session, required("SESSION_SECRET")),
-      ),
-    );
+    writeSessionCookie(res, session);
     res.redirect("/");
   } catch (error) {
     res.status(500).send(error.message);
   }
 });
 
-router.get("/me", (req, res) => res.json({ user: getSession(req) || null }));
+router.get("/me", async (req, res) => {
+  const session = getSession(req);
+  if (!session) {
+    return res.json({ user: null });
+  }
+
+  const refreshedSession = await refreshDiscordSession(session).catch(
+    () => session,
+  );
+  if (JSON.stringify(refreshedSession) !== JSON.stringify(session)) {
+    writeSessionCookie(res, refreshedSession);
+  }
+
+  res.json({ user: refreshedSession });
+});
 router.get("/logout", (req, res) => {
   res.setHeader(
     "Set-Cookie",

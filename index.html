@@ -22,8 +22,8 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Mise en service</div>
-        <a href="#pointage" class="nav-item" data-route="pointage">Mise en service</a>
+        <div class="nav-category">Profil</div>
+        <a href="#pointage" class="nav-item" data-route="pointage">Profil</a>
         <a href="#historique" class="nav-item" data-route="historique" data-admin-only="true">Historique</a>
         
         <div class="nav-category">Atelier</div>
@@ -143,8 +143,8 @@
       <section id="page-pointage" class="app-page pointage-page">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
           <div>
-            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Mise en service</h2>
-            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour commencer ton quart.</p>
+            <h2 style="font-size: 1.8rem; margin: 0; font-weight: 800;">Profil</h2>
+            <p id="shift-message" class="muted" style="margin: 4px 0 0;">Connecte-toi pour voir ton profil et utilise Discord pour tes punchs.</p>
           </div>
           <button id="discord-login" class="secondary-button">Se connecter avec Discord</button>
         </div>
@@ -159,7 +159,7 @@
               <div style="color: var(--teal); font-weight: 800; font-size: 1.4rem;">+ <span id="today-pay">0$</span></div>
             </div>
 
-            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">ENTRER EN SERVICE</button>
+            <button id="punch-toggle" class="punch-toggle-btn" disabled style="width: 100%; max-width: 360px; border-radius: 50px; min-height: 72px; font-size: 1.1rem; letter-spacing: 0.1em;">UTILISE /in ET /out SUR DISCORD</button>
           </article>
 
           <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
@@ -719,7 +719,7 @@
     </a>
     <a href="#tableau" class="mobile-nav-item active" data-route="tableau" data-admin-only="true">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-      <span>Dashboard</span>
+      <span>Profil</span>
     </a>
     <a href="#inventaire" class="mobile-nav-item" data-route="inventaire">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>

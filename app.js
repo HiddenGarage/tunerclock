@@ -99,7 +99,6 @@ const pageTitles = {
   inventaire: "Gestion Stock",
   stats: "Équipe",
   recrutements: "Recrutements",
-  gestion: "Comptabilité",
   salaire: "Salaire",
   contrats: "Contrats",
   logs: "Registre",
@@ -469,7 +468,7 @@ function applyAccessControl() {
       }
     }
   });
-  elements.logoutButton?.classList.toggle("hidden", !state.loggedIn);
+  elements.logoutButton?.classList.add("hidden"); // Toujours caché car pas de déconnexion
   document.body.classList.toggle("read-only-mode", state.readOnly);
   document
     .querySelectorAll(
@@ -477,8 +476,7 @@ function applyAccessControl() {
     )
     .forEach((element) => {
       if (element.id === "logout-button") return;
-      if (element.id === "logout-button" || element.id === "punch-toggle")
-        return;
+      if (element.id === "punch-toggle") return;
       element.disabled = state.readOnly;
     });
 
@@ -1071,7 +1069,11 @@ function renderStatsTables() {
           return `
       <tr>
         <td>${escapeHtml(employee.name)}</td>
-        <td>${escapeHtml(employee.roleName)}</td>
+        <td>
+          <select class="employee-role-select" data-employee-index="${employeeIndex}">
+            ${roleOrder.map((roleName) => '<option value="' + roleName + '" ' + (employee.roleName === roleName ? "selected" : "") + '>' + roleName + '</option>').join("")}
+          </select>
+        </td>
         <td>
           <button class="editable-hours-button" data-employee-index="${employeeIndex}" title="Cliquer pour modifier les heures de ${escapeHtml(employee.name)}">
             ${formatHoursMinutes(employee.hours)}
@@ -2418,9 +2420,9 @@ function updateAll() {
   drawPerformanceChart();
   renderPersonalDashboard();
   startAdminLiveTimer();
+  renderRebootPage();
   renderRadioPlaylist();
   renderRadioPlaylistsSidebar();
-  renderRebootPage();
   applyAccessControl();
 }
 
@@ -2564,96 +2566,6 @@ async function loadAuditLogs() {
   auditLogs = data?.logs || [];
 }
 
-async function loadMeState() {
-  try {
-    const response = await fetch("/api/me-state", { credentials: "include" });
-    if (!response.ok) return;
-    const data = await response.json();
-    if (!data.employee || !state.currentUser) return;
-
-    const intendedPunchState = localStorage.getItem(
-      "tuner_intended_punch_state",
-    );
-    const current = normaliseEmployeeRecord(data.employee);
-    current.name = state.currentUser.name;
-    state.currentUser = current;
-
-    if (!state.isAdmin) {
-      employees = [current];
-    } else {
-      const existing = employees.filter(
-        (employee) => employee.discordId !== current.discordId,
-      );
-      employees = [current, ...existing];
-    }
-
-    if (data.activeShift?.punched_in_at) {
-      if (localStorage.getItem("tuner_punch_pending") === "out") {
-        // The previous punch out was interrupted! Auto resolve.
-        localStorage.removeItem("tuner_punch_pending");
-        localStorage.setItem("tuner_intended_punch_state", "out"); // Intention est sortie
-        activeShiftStartedAt = null;
-        state.punchedIn = false;
-        fetch("/api/punch-out", {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => null);
-      } else {
-        activeShiftStartedAt = new Date(
-          data.activeShift.punched_in_at,
-        ).getTime();
-        state.punchedIn = true;
-        localStorage.setItem("tuner_intended_punch_state", "in"); // Confirmer l'intention
-      }
-    } else {
-      if (localStorage.getItem("tuner_punch_pending") === "in") {
-        // The previous punch in was interrupted! Auto resolve.
-        localStorage.removeItem("tuner_punch_pending");
-        localStorage.setItem("tuner_intended_punch_state", "in"); // Confirmer l'intention
-        activeShiftStartedAt = Date.now();
-        state.punchedIn = true;
-        if (state.currentUser) state.currentUser.active = true;
-        fetch("/api/punch-in", {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => null);
-      } else if (intendedPunchState === "in") {
-        // Si le serveur dit "hors service" mais l'intention était "en service", on retente un punch-in
-        showToast("Tentative de reconnexion au service...", false);
-        activeShiftStartedAt = Date.now();
-        state.punchedIn = true;
-        if (state.currentUser) state.currentUser.active = true;
-        fetch("/api/punch-in", {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => null);
-      } else {
-        activeShiftStartedAt = null;
-        state.punchedIn = false;
-        localStorage.setItem("tuner_intended_punch_state", "out"); // Confirmer l'intention
-      }
-    }
-
-    if (data.contracts) {
-      contracts = data.contracts;
-    }
-    if (data.inventoryStock) {
-      inventoryStock = data.inventoryStock;
-    }
-    if (data.recentShifts) {
-      myRecentShifts = data.recentShifts;
-    }
-    if (data.radioPlaylists) {
-      radioPlaylists = data.radioPlaylists;
-      if (!activePlaylistId && radioPlaylists.length > 0) {
-        activePlaylistId = radioPlaylists[0].id;
-      }
-    }
-  } catch (error) {
-    console.error(error);
-  }
-}
-
 function syncCurrentUserFromSession(sessionUser) {
   state.isAdmin = Boolean(sessionUser.isAdmin);
   state.canManage = sessionUser.canManage !== false;
@@ -2678,55 +2590,6 @@ function syncCurrentUserFromSession(sessionUser) {
       );
     }, 250);
   }
-}
-
-async function loadAuthSession() {
-  try {
-    const response = await fetch("/auth/me", { credentials: "include" });
-    const data = await response.json();
-
-    if (data.user) {
-      syncCurrentUserFromSession(data.user);
-      await loadMeState();
-      await loadAdminDashboard();
-      await loadInventoryLogs();
-      startAdminRefreshLoop();
-    } else {
-      state.loggedIn = false;
-      state.isAdmin = false;
-      state.canManage = false;
-      state.readOnly = false;
-      state.currentUser = null;
-      state.punchedIn = false;
-      if (adminRefreshTimerId) {
-        clearInterval(adminRefreshTimerId);
-        adminRefreshTimerId = null;
-      }
-      employees = [];
-      expenses = [];
-      shifts = [];
-      myRecentShifts = [];
-      state.recordedPayouts = 0;
-      setStatusDot(false);
-    }
-  } catch (error) {
-    setText(elements.demoUserText, "Connexion Discord indisponible");
-    setStatusDot(false);
-  }
-  await refreshBotStatus();
-  updateAll();
-}
-
-function loginWithDiscord() {
-  if (!state.loggedIn) window.location.href = "/auth/discord/login";
-}
-
-function logout() {
-  if (adminRefreshTimerId) {
-    clearInterval(adminRefreshTimerId);
-    adminRefreshTimerId = null;
-  }
-  window.location.href = "/auth/logout";
 }
 
 function queueFinanceSave() {
@@ -3421,8 +3284,6 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
   }
 });
 
-elements.discordLogin?.addEventListener("click", loginWithDiscord);
-elements.logoutButton?.addEventListener("click", logout);
 elements.punchToggle?.addEventListener("click", async () => {
   if (state.punchedIn) await punchOut();
   else await punchIn();
@@ -3485,6 +3346,12 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   );
   updateRoleRate(roleName, Number(input?.value));
   if (input) input.value = "";
+});
+
+elements.statsBody?.addEventListener("change", (event) => {
+  const select = event.target.closest(".employee-role-select");
+  if (!select) return;
+  updateEmployeeRole(Number(select.dataset.employeeIndex), select.value);
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
@@ -4012,17 +3879,122 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+
+async function loadMeState() {
+  if (!state.loggedIn) return;
+  const response = await fetch("/api/me-state", { credentials: "include" }).catch(() => null);
+  if (!response?.ok) return;
+  const data = await response.json().catch(() => null);
+  if (!data) return;
+
+  if (data.employee) {
+    const employee = normaliseEmployeeRecord(data.employee);
+    state.currentUser = { ...state.currentUser, ...employee };
+    employees = employees.map((entry) =>
+      entry.discordId === employee.discordId ? employee : entry,
+    );
+    if (!employees.some((entry) => entry.discordId === employee.discordId)) {
+      employees.push(employee);
+    }
+  }
+
+  const activeShift = data.activeShift || null;
+  state.punchedIn = Boolean(activeShift || state.currentUser?.active);
+  if (state.punchedIn) {
+    activeShiftStartedAt = activeShift?.punched_in_at
+      ? new Date(activeShift.punched_in_at).getTime()
+      : state.currentUser?.activeShiftStartedAt
+        ? new Date(state.currentUser.activeShiftStartedAt).getTime()
+        : Date.now();
+    if (state.currentUser) {
+      state.currentUser.active = true;
+      state.currentUser.activeShiftStartedAt = activeShift?.punched_in_at || state.currentUser.activeShiftStartedAt;
+      state.currentUser.activeShiftId = activeShift?.id || state.currentUser.activeShiftId;
+    }
+  } else {
+    activeShiftStartedAt = null;
+    if (state.currentUser) {
+      state.currentUser.active = false;
+      state.currentUser.activeShiftStartedAt = null;
+      state.currentUser.activeShiftId = null;
+    }
+  }
+
+  myRecentShifts = data.recentShifts || [];
+  contracts = data.contracts || contracts;
+  inventoryStock = data.inventoryStock || inventoryStock;
+  if (data.radioPlaylists) {
+    radioPlaylists = data.radioPlaylists;
+    if (!activePlaylistId && radioPlaylists.length > 0) activePlaylistId = radioPlaylists[0].id;
+  }
+}
+
+async function loadAuthSession() {
+  const response = await fetch("/auth/me", { credentials: "include" }).catch(() => null);
+  const data = response?.ok ? await response.json().catch(() => null) : null;
+  if (!data?.user) {
+    state.loggedIn = false;
+    state.isAdmin = false;
+    state.canManage = false;
+    state.readOnly = false;
+    state.currentUser = null;
+    state.punchedIn = false;
+    activeShiftStartedAt = null;
+    employees = [];
+    setStatusDot(false);
+    updateAll();
+    return;
+  }
+
+  syncCurrentUserFromSession(data.user);
+  await loadMeState();
+  if (state.isAdmin) {
+    await loadAdminDashboard();
+    await loadInventoryLogs();
+    startAdminRefreshLoop();
+  }
+  await refreshBotStatus();
+  updateAll();
+}
+
+async function updateEmployeeRole(employeeIndex, nextRoleName) {
+  const employee = employees[employeeIndex];
+  if (!state.isAdmin || state.readOnly || !employee?.id || !roleOrder.includes(nextRoleName)) return;
+  const previousRole = employee.roleName;
+  const previousRate = employee.hourlyRate;
+  const nextRate = getRoleRate(nextRoleName);
+
+  employees[employeeIndex] = {
+    ...employee,
+    roleName: nextRoleName,
+    roleId: roleIdMap[nextRoleName] || employee.roleId,
+    hourlyRate: nextRate,
+  };
+  if (state.currentUser?.discordId === employee.discordId) {
+    state.currentUser = { ...state.currentUser, roleName: nextRoleName, hourlyRate: nextRate };
+  }
+  updateAll();
+
+  const response = await fetch(
+    "/api/admin-employees/" + encodeURIComponent(employee.id) + "/role",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ roleName: nextRoleName }),
+    },
+  ).catch(() => null);
+
+  if (!response?.ok) {
+    employees[employeeIndex] = { ...employees[employeeIndex], roleName: previousRole, hourlyRate: previousRate };
+    showToast("Impossible de changer le rôle.", true);
+  } else {
+    showToast("Rôle mis à jour.");
+    await loadAdminDashboard();
+  }
+  updateAll();
+}
+
 window.addEventListener("hashchange", routeToCurrentPage);
 
-window.addEventListener(
-  "scroll",
-  () => {
-    document
-      .querySelectorAll(".action-menu-dropdown")
-      .forEach((d) => (d.style.display = "none"));
-  },
-  { passive: true, capture: true },
-);
-
-updateAll();
 loadAuthSession();

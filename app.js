@@ -162,21 +162,6 @@ const elements = {
   shiftChart: document.getElementById("shift-chart"),
   analysisChart: document.getElementById("analysis-chart"),
   cagnotteChartCanvas: document.getElementById("cagnotte-chart"),
-  simRevenue: document.getElementById("sim-revenue"),
-  simExpenses: document.getElementById("sim-expenses"),
-  simTargetProfit: document.getElementById("sim-target-profit"),
-  simRoleMix: document.getElementById("sim-role-mix"),
-  simResalePrice: document.getElementById("sim-resale-price"),
-  simWeeklyParts: document.getElementById("sim-weekly-parts"),
-  simPossiblePayroll: document.getElementById("sim-possible-payroll"),
-  simCurrentPayroll: document.getElementById("sim-current-payroll"),
-  simRemainingProfit: document.getElementById("sim-remaining-profit"),
-  simRecommendedHourly: document.getElementById("sim-recommended-hourly"),
-  simEmployeeCount: document.getElementById("sim-employee-count"),
-  simProfitTarget: document.getElementById("sim-profit-target"),
-  simPayrollGap: document.getElementById("sim-payroll-gap"),
-  simRecommendation: document.getElementById("sim-recommendation"),
-  saveAnalysis: document.getElementById("save-analysis"),
   toast: document.getElementById("toast"),
   pageTitle: document.getElementById("page-title"),
   navItems: Array.from(document.querySelectorAll(".nav-item, .nav-category")),
@@ -595,118 +580,6 @@ function getTotalEmployeePayments() {
 
 function getTotalCosts() {
   return getExpenseTotal() + getTotalEmployeePayments();
-  const paidTotal = getTotalEmployeePayments();
-  const currentPayroll = getPayrollTotal();
-  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
-  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
-  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
-  const activeEmployees = employees.filter(
-    (employee) => employee.active,
-  ).length;
-  const totalHours = employees.reduce((sum, employee) => {
-    const liveH = employee.active ? getLiveEmployeeHours(employee) : 0;
-    return sum + Number(employee.hours || 0) + liveH;
-  }, 0);
-  const currentMecanoRate = getRoleRate("Mecano");
-  let adjustmentFactor = 1;
-
-  if (revenue <= 0 || totalHours <= 0) {
-    adjustmentFactor = 1;
-  } else if (payrollRatio <= 28) {
-    adjustmentFactor = 1;
-  } else if (payrollRatio <= 38) {
-    adjustmentFactor = 0.9;
-  } else {
-    adjustmentFactor = 0.8;
-  }
-
-  const recommendedRates = Object.fromEntries(
-    roleOrder.map((roleName) => {
-      const currentRate = getRoleRate(roleName);
-      const nextRate =
-        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
-      return [roleName, nextRate];
-    }),
-  );
-  const recommendedMecanoRate =
-    recommendedRates.Mecano ||
-    roundToStep(currentMecanoRate * adjustmentFactor, 25);
-  const roleCounts =
-    roleOrder
-      .map((roleName) => {
-        const count = employees.filter(
-          (employee) => employee.roleName === roleName,
-        ).length;
-        return count ? `${count} ${roleName}` : null;
-      })
-      .filter(Boolean)
-      .join(" | ") || "Aucun employe";
-
-  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
-  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
-  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
-  setText(
-    elements.simRecommendedHourly,
-    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
-  );
-  setText(elements.simEmployeeCount, String(employees.length));
-  setText(elements.simRoleMix, roleCounts);
-  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
-  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
-
-  let headline = "Analyse en attente";
-  let status =
-    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
-  let action = "Aucune modification conseillee pour l'instant.";
-  const rateAdvice = roleOrder
-    .filter((roleName) =>
-      employees.some((employee) => employee.roleName === roleName),
-    )
-    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
-    .join("<br>");
-
-  if (revenue > 0 && totalHours > 0) {
-    if (payrollRatio < 8) {
-      headline = "Marge tres confortable";
-      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
-      action =
-        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
-    } else if (payrollRatio < 15) {
-      headline = "Paie encore tres saine";
-      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
-      action = "Conseil prudent: garde les taux actuels.";
-    } else if (payrollRatio <= 28) {
-      headline = "Equilibre correct";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
-      action = "Conseil prudent: garde les taux actuels.";
-    } else if (payrollRatio <= 38) {
-      headline = "Paie un peu lourde";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
-      action =
-        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
-    } else {
-      headline = "Risque de payer trop cher";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
-      action =
-        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
-    }
-  }
-
-  setHtml(
-    elements.simRecommendation,
-    `
-    <div class="analysis-recommendation-head">
-      <span>${escapeHtml(headline)}</span>
-      <strong>${recommendedMecanoRate}$/h Mecano</strong>
-    </div>
-    <div class="analysis-recommendation-grid">
-      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
-      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
-      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
-      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
-    </div>
-  `,
-  );
 }
 
 function updateLivePunchMetrics() {
@@ -1070,9 +943,13 @@ function renderStatsTables() {
       <tr>
         <td>${escapeHtml(employee.name)}</td>
         <td>
-          <select class="employee-role-select" data-employee-index="${employeeIndex}">
-            ${roleOrder.map((roleName) => '<option value="' + roleName + '" ' + (employee.roleName === roleName ? "selected" : "") + '>' + roleName + '</option>').join("")}
-          </select>
+          ${
+            state.isAdmin && !state.readOnly
+              ? `<select class="role-select" data-id="${employee.id}" style="min-height: 32px; padding: 4px; font-size: 0.85rem; width: auto; background: rgba(0,0,0,0.3); border: 1px solid var(--line); color: var(--text); border-radius: 4px;">
+              ${roleOrder.map((r) => `<option value="${r}" ${employee.roleName === r ? "selected" : ""}>${r}</option>`).join("")}
+            </select>`
+              : escapeHtml(employee.roleName)
+          }
         </td>
         <td>
           <button class="editable-hours-button" data-employee-index="${employeeIndex}" title="Cliquer pour modifier les heures de ${escapeHtml(employee.name)}">
@@ -1155,300 +1032,6 @@ function renderPresenceList() {
       })
       .join(""),
   );
-}
-
-function renderSimulation() {
-  drawBilanCharts();
-  const revenue = state.weeklyProfit || 0;
-  const expenseTotal = getExpenseTotal();
-  const paidTotal = getTotalEmployeePayments();
-  const currentPayroll = getPayrollTotal();
-  const remainingProfit = revenue - expenseTotal - paidTotal - currentPayroll;
-  const payrollRatio = revenue > 0 ? (currentPayroll / revenue) * 100 : 0;
-  const marginRatio = revenue > 0 ? (remainingProfit / revenue) * 100 : 0;
-  const activeEmployees = employees.filter(
-    (employee) => employee.active,
-  ).length;
-  const totalHours = employees.reduce(
-    (sum, employee) =>
-      sum +
-      Number(employee.hours || 0) +
-      (employee.active ? getLiveEmployeeHours(employee) : 0),
-    0,
-  );
-  const currentMecanoRate = getRoleRate("Mecano");
-  let adjustmentFactor = 1;
-
-  if (revenue <= 0 || totalHours <= 0) {
-    adjustmentFactor = 1;
-  } else if (payrollRatio <= 28) {
-    adjustmentFactor = 1;
-  } else if (payrollRatio <= 38) {
-    adjustmentFactor = 0.9;
-  } else {
-    adjustmentFactor = 0.8;
-  }
-
-  const recommendedRates = Object.fromEntries(
-    roleOrder.map((roleName) => {
-      const currentRate = getRoleRate(roleName);
-      const nextRate =
-        currentRate <= 0 ? 0 : roundToStep(currentRate * adjustmentFactor, 25);
-      return [roleName, nextRate];
-    }),
-  );
-  const recommendedMecanoRate =
-    recommendedRates.Mecano ||
-    roundToStep(currentMecanoRate * adjustmentFactor, 25);
-  const roleCounts =
-    roleOrder
-      .map((roleName) => {
-        const count = employees.filter(
-          (employee) => employee.roleName === roleName,
-        ).length;
-        return count ? `${count} ${roleName}` : null;
-      })
-      .filter(Boolean)
-      .join(" | ") || "Aucun employe";
-
-  setText(elements.simPossiblePayroll, formatMoney(currentPayroll));
-  setText(elements.simCurrentPayroll, formatMoney(currentPayroll));
-  setText(elements.simRemainingProfit, formatMoney(remainingProfit));
-  setText(
-    elements.simRecommendedHourly,
-    recommendedMecanoRate > 0 ? `${recommendedMecanoRate}$/h` : "0$/h",
-  );
-  setText(elements.simEmployeeCount, String(employees.length));
-  setText(elements.simRoleMix, roleCounts);
-  setText(elements.simProfitTarget, `${marginRatio.toFixed(0)}%`);
-  setText(elements.simPayrollGap, `${payrollRatio.toFixed(0)}%`);
-
-  let headline = "Analyse en attente";
-  let status =
-    "Ajoute au moins des revenus et quelques heures pour obtenir un conseil fiable.";
-  let action = "Aucune modification conseillee pour l'instant.";
-  const rateAdvice = roleOrder
-    .filter((roleName) =>
-      employees.some((employee) => employee.roleName === roleName),
-    )
-    .map((roleName) => `${roleName}: ${recommendedRates[roleName]}$/h`)
-    .join("<br>");
-
-  if (revenue > 0 && totalHours > 0) {
-    if (payrollRatio < 8) {
-      headline = "Marge tres confortable";
-      status = `Les salaires dus utilisent seulement ${payrollRatio.toFixed(1)}% des revenus actuels. Tu peux augmenter legerement sans exploser la marge.`;
-      action =
-        "Conseil prudent: garde les taux actuels. Si tu veux motiver l'equipe, donne plutot une prime ponctuelle qu'une hausse permanente.";
-    } else if (payrollRatio < 15) {
-      headline = "Paie encore tres saine";
-      status = `La charge salariale reste basse (${payrollRatio.toFixed(1)}%). Les taux actuels semblent faciles a soutenir.`;
-      action = "Conseil prudent: garde les taux actuels.";
-    } else if (payrollRatio <= 28) {
-      headline = "Equilibre correct";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. C'est une zone saine pour RP.`;
-      action = "Conseil prudent: garde les taux actuels.";
-    } else if (payrollRatio <= 38) {
-      headline = "Paie un peu lourde";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Il faut eviter de monter les salaires maintenant.`;
-      action =
-        "Conseil prudent: baisse douce ou attends plus de revenus avant paiement.";
-    } else {
-      headline = "Risque de payer trop cher";
-      status = `La paie represente ${payrollRatio.toFixed(1)}% des revenus. Le garage risque de perdre trop de profit.`;
-      action =
-        "Conseil prudent: reduis temporairement ou paie seulement une partie.";
-    }
-  }
-
-  setHtml(
-    elements.simRecommendation,
-    `
-    <div class="analysis-recommendation-head">
-      <span>${escapeHtml(headline)}</span>
-      <strong>${recommendedMecanoRate}$/h Mecano</strong>
-    </div>
-    <div class="analysis-recommendation-grid">
-      <div><small>Pourquoi</small><p>${escapeHtml(status)}</p></div>
-      <div><small>Action conseillee</small><p>${escapeHtml(action)}</p></div>
-      <div><small>Taux par role</small><p>${rateAdvice || "Pas assez de donnees employe."}</p></div>
-      <div><small>Stats lues</small><p>Revenus: ${formatMoney(revenue)}<br>Profit net: ${formatMoney(remainingProfit)}<br>Employes actifs: ${activeEmployees}</p></div>
-    </div>
-  `,
-  );
-}
-
-function drawBilanCharts() {
-  const canvasLine = document.getElementById("bilan-finance-chart");
-  const canvasDonut = document.getElementById("bilan-donut-chart");
-  if (!canvasLine || !canvasDonut || typeof Chart === "undefined") return;
-
-  const revenue = state.weeklyProfit || 0;
-  const expenseTotal = getExpenseTotal();
-  const currentPayroll = getPayrollTotal();
-  const netProfit = revenue - expenseTotal - currentPayroll;
-
-  if (document.getElementById("bilan-tot-rev")) {
-    setText(document.getElementById("bilan-tot-rev"), formatMoney(revenue));
-    setText(
-      document.getElementById("bilan-tot-exp"),
-      formatMoney(expenseTotal),
-    );
-    setText(
-      document.getElementById("bilan-tot-pay"),
-      formatMoney(currentPayroll),
-    );
-    setText(document.getElementById("bilan-tot-net"), formatMoney(netProfit));
-  }
-
-  const getLocalKey = (date) => {
-    const d = new Date(date);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  const daysData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return {
-      dateKey: getLocalKey(d),
-      label: d
-        .toLocaleDateString("fr-CA", { weekday: "short" })
-        .replace(".", ""),
-    };
-  });
-
-  const dataRev = daysData.map((day) => {
-    return profitEntries
-      .filter((p) => p.created_at && p.created_at.startsWith(day.dateKey))
-      .reduce((s, p) => s + Number(p.amount || 0), 0);
-  });
-  const dataExp = daysData.map((day) => {
-    return expenses
-      .filter((e) => e.createdAt && e.createdAt.startsWith(day.dateKey))
-      .reduce((s, e) => s + Number(e.cost || 0), 0);
-  });
-
-  const maxVal = Math.max(...dataRev, ...dataExp);
-  const yMin = maxVal === 0 ? 100 : undefined;
-
-  if (!chartState.bilanLine) {
-    const ctx = canvasLine.getContext("2d");
-    const gradRev = ctx.createLinearGradient(0, 0, 0, 300);
-    gradRev.addColorStop(0, "rgba(76, 175, 80, 0.4)");
-    gradRev.addColorStop(1, "rgba(76, 175, 80, 0)");
-    const gradExp = ctx.createLinearGradient(0, 0, 0, 300);
-    gradExp.addColorStop(0, "rgba(230, 57, 70, 0.4)");
-    gradExp.addColorStop(1, "rgba(230, 57, 70, 0)");
-
-    chartState.bilanLine = new Chart(canvasLine, {
-      type: "line",
-      data: {
-        labels: daysData.map(
-          (d) => d.label.charAt(0).toUpperCase() + d.label.slice(1),
-        ),
-        datasets: [
-          {
-            label: "Revenus",
-            data: dataRev,
-            borderColor: chartPalette.teal,
-            backgroundColor: gradRev,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-          },
-          {
-            label: "Dépenses",
-            data: dataExp,
-            borderColor: chartPalette.red,
-            backgroundColor: gradExp,
-            fill: true,
-            tension: 0.4,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: { legend: { labels: { color: "#fff" } } },
-        scales: {
-          x: { grid: { display: false } },
-          y: {
-            grid: { color: "rgba(255,255,255,0.05)" },
-            min: 0,
-            suggestedMax: yMin,
-          },
-        },
-      },
-    });
-  } else {
-    chartState.bilanLine.data.datasets[0].data = dataRev;
-    chartState.bilanLine.data.datasets[1].data = dataExp;
-    if (yMin) chartState.bilanLine.options.scales.y.suggestedMax = yMin;
-    chartState.bilanLine.update();
-  }
-
-  const expByCategory = {};
-  expenses.forEach((e) => {
-    expByCategory[e.category] =
-      (expByCategory[e.category] || 0) + (e.cost || 0);
-  });
-  const contractsTot = getContractTotal();
-  if (contractsTot > 0) expByCategory["Contrats"] = contractsTot;
-  if (currentPayroll > 0) expByCategory["Salaires Dus"] = currentPayroll;
-
-  let donutLabels = Object.keys(expByCategory);
-  let donutValues = Object.values(expByCategory);
-  let bgColors = [
-    chartPalette.orange,
-    chartPalette.blue,
-    chartPalette.red,
-    chartPalette.teal,
-    "#9b5de5",
-    "#f15bb5",
-  ];
-
-  if (donutValues.length === 0 || donutValues.every((v) => v === 0)) {
-    donutLabels = ["Aucune donnée"];
-    donutValues = [1];
-    bgColors = ["#2a2b2f"];
-  }
-
-  if (!chartState.bilanDonut) {
-    chartState.bilanDonut = new Chart(canvasDonut, {
-      type: "doughnut",
-      data: {
-        labels: donutLabels,
-        datasets: [
-          {
-            data: donutValues,
-            backgroundColor: bgColors,
-            borderWidth: 0,
-            hoverOffset: 10,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "70%",
-        plugins: {
-          legend: {
-            position: "bottom",
-            labels: { color: "#fff", usePointStyle: true, padding: 20 },
-          },
-        },
-      },
-    });
-  } else {
-    chartState.bilanDonut.data.labels = donutLabels;
-    chartState.bilanDonut.data.datasets[0].data = donutValues;
-    chartState.bilanDonut.data.datasets[0].backgroundColor = bgColors;
-    chartState.bilanDonut.update();
-  }
 }
 
 function renderRecruitmentsTable() {
@@ -2502,29 +2085,6 @@ async function loadAdminDashboard() {
       elements.partCost,
       String(Number(data.settings?.part_settings?.fixedCost || 105)),
     );
-    const analysisSettings = data.settings?.analysis_settings || {};
-    setValue(
-      elements.simRevenue,
-      analysisSettings.revenue ? String(analysisSettings.revenue) : "",
-    );
-    setValue(
-      elements.simExpenses,
-      analysisSettings.expenses ? String(analysisSettings.expenses) : "",
-    );
-    setValue(
-      elements.simTargetProfit,
-      analysisSettings.targetProfitPercent
-        ? String(analysisSettings.targetProfitPercent)
-        : "",
-    );
-    setValue(
-      elements.simResalePrice,
-      analysisSettings.resalePrice ? String(analysisSettings.resalePrice) : "",
-    );
-    setValue(
-      elements.simWeeklyParts,
-      analysisSettings.weeklyParts ? String(analysisSettings.weeklyParts) : "",
-    );
 
     if (state.currentUser) {
       const matching = employees.find(
@@ -2592,38 +2152,11 @@ function syncCurrentUserFromSession(sessionUser) {
   }
 }
 
-function queueFinanceSave() {
-  updateAll();
-}
-
-async function saveAnalysisSettings() {
-  if (!state.isAdmin || state.readOnly) return;
-  const payload = {
-    revenue: getNumericValue(elements.simRevenue),
-    expenses: getNumericValue(elements.simExpenses),
-    targetProfitPercent: getNumericValue(elements.simTargetProfit),
-    resalePrice: getNumericValue(elements.simResalePrice),
-    weeklyParts: getNumericValue(elements.simWeeklyParts),
-  };
-
-  const response = await fetch("/api/admin-analysis-settings", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(payload),
-  }).catch(() => null);
-
-  if (!response?.ok) {
-    showToast("Impossible d'enregistrer l'analyse.", true);
-    return;
-  }
-
-  showToast("Analyse enregistree.");
-}
-
 async function updateRoleRate(roleName, nextRate) {
   if (state.readOnly) return;
-  if (!Number.isFinite(nextRate) || nextRate < 0) return;
+  if (!Number.isFinite(nextRate) || nextRate <= 0) return; // Empêche de sauvegarder "0" par inadvertance
+
+  const previousRates = { ...state.roleRates };
   state.roleRates[roleName] = nextRate;
   employees = employees.map((employee) =>
     employee.roleName === roleName
@@ -2636,18 +2169,31 @@ async function updateRoleRate(roleName, nextRate) {
   updateAll();
 
   if (!state.isAdmin) return;
-  await fetch("/api/admin-role-rates", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ roleRates: state.roleRates }),
-  })
-    .then(() => {
-      showToast(`Salaire ${roleName} mis a jour.`);
-    })
-    .catch(() => {
-      showToast("Impossible de sauvegarder le salaire du role.", true);
+  try {
+    const res = await fetch("/api/admin-role-rates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ roleRates: state.roleRates }),
     });
+    if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.roleRates) {
+        state.roleRates = {
+          ...state.roleRates,
+          ...data.roleRates,
+        };
+      }
+      showToast(`Salaire ${roleName} mis a jour.`);
+    } else {
+      throw new Error("API Error");
+    }
+  } catch (e) {
+    state.roleRates = previousRates;
+    showToast("Impossible de sauvegarder le salaire du role.", true);
+    await loadAdminDashboard();
+    updateAll();
+  }
 }
 
 async function adjustEmployeeHours(employeeIndex, hoursValue) {
@@ -3296,7 +2842,7 @@ elements.closeAuditBtn?.addEventListener("click", () => {
 });
 elements.refreshAnalysisBtn?.addEventListener("click", () => {
   updateAll();
-  showToast("Bilan rafraichi.");
+  showToast("Tableau rafraichi.");
 });
 elements.saveNotesBtn?.addEventListener("click", saveNotes);
 elements.rebootButtons.forEach((button) => {
@@ -3348,10 +2894,27 @@ elements.roleRatesBody?.addEventListener("click", (event) => {
   if (input) input.value = "";
 });
 
-elements.statsBody?.addEventListener("change", (event) => {
-  const select = event.target.closest(".employee-role-select");
-  if (!select) return;
-  updateEmployeeRole(Number(select.dataset.employeeIndex), select.value);
+elements.statsBody?.addEventListener("change", async (event) => {
+  const select = event.target.closest(".role-select");
+  if (select) {
+    const empId = select.dataset.id;
+    const newRole = select.value;
+    if (!empId) return;
+
+    const res = await fetch(`/api/admin-employees/${empId}/role`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (res.ok) {
+      showToast(`Rôle mis à jour: ${newRole}.`);
+      await loadAdminDashboard();
+      updateAll();
+    } else {
+      showToast("Erreur lors du changement de rôle.", true);
+    }
+  }
 });
 
 elements.statsBody?.addEventListener("click", (event) => {
@@ -3601,8 +3164,6 @@ document
       const data = await res.json();
       state.weeklyProfit = data.weeklyProfit;
       showToast(`Revenu ajusté (${amount > 0 ? "+" : ""}${amount}$).`);
-      renderOverview();
-      renderSimulation();
     } else {
       showToast("Erreur lors de l'ajustement.", true);
     }
@@ -3648,16 +3209,6 @@ elements.auditBody?.addEventListener("click", (event) => {
       if (elements.auditModal) elements.auditModal.style.display = "flex";
     }
   }
-});
-
-[
-  elements.simRevenue,
-  elements.simExpenses,
-  elements.simTargetProfit,
-  elements.simResalePrice,
-  elements.simWeeklyParts,
-].forEach((element) => {
-  element?.addEventListener("input", queueFinanceSave);
 });
 
 async function saveRadioPlaylists() {
@@ -3879,122 +3430,75 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-
-async function loadMeState() {
-  if (!state.loggedIn) return;
-  const response = await fetch("/api/me-state", { credentials: "include" }).catch(() => null);
-  if (!response?.ok) return;
-  const data = await response.json().catch(() => null);
-  if (!data) return;
-
-  if (data.employee) {
-    const employee = normaliseEmployeeRecord(data.employee);
-    state.currentUser = { ...state.currentUser, ...employee };
-    employees = employees.map((entry) =>
-      entry.discordId === employee.discordId ? employee : entry,
-    );
-    if (!employees.some((entry) => entry.discordId === employee.discordId)) {
-      employees.push(employee);
-    }
-  }
-
-  const activeShift = data.activeShift || null;
-  state.punchedIn = Boolean(activeShift || state.currentUser?.active);
-  if (state.punchedIn) {
-    activeShiftStartedAt = activeShift?.punched_in_at
-      ? new Date(activeShift.punched_in_at).getTime()
-      : state.currentUser?.activeShiftStartedAt
-        ? new Date(state.currentUser.activeShiftStartedAt).getTime()
-        : Date.now();
-    if (state.currentUser) {
-      state.currentUser.active = true;
-      state.currentUser.activeShiftStartedAt = activeShift?.punched_in_at || state.currentUser.activeShiftStartedAt;
-      state.currentUser.activeShiftId = activeShift?.id || state.currentUser.activeShiftId;
-    }
-  } else {
-    activeShiftStartedAt = null;
-    if (state.currentUser) {
-      state.currentUser.active = false;
-      state.currentUser.activeShiftStartedAt = null;
-      state.currentUser.activeShiftId = null;
-    }
-  }
-
-  myRecentShifts = data.recentShifts || [];
-  contracts = data.contracts || contracts;
-  inventoryStock = data.inventoryStock || inventoryStock;
-  if (data.radioPlaylists) {
-    radioPlaylists = data.radioPlaylists;
-    if (!activePlaylistId && radioPlaylists.length > 0) activePlaylistId = radioPlaylists[0].id;
-  }
-}
+window.addEventListener("hashchange", routeToCurrentPage);
 
 async function loadAuthSession() {
-  const response = await fetch("/auth/me", { credentials: "include" }).catch(() => null);
-  const data = response?.ok ? await response.json().catch(() => null) : null;
-  if (!data?.user) {
+  try {
+    const authRes = await fetch("/auth/me", { credentials: "include" });
+    if (!authRes.ok) throw new Error("Auth failed");
+    const authData = await authRes.json();
+
+    if (authData.user) {
+      syncCurrentUserFromSession(authData.user);
+
+      const stateRes = await fetch("/api/me-state", { credentials: "include" });
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        const hasActiveShift = Boolean(stateData.activeShift);
+        if (stateData.employee) {
+          const emp = normaliseEmployeeRecord(stateData.employee);
+          state.currentUser = emp;
+          const existingIndex = employees.findIndex(
+            (e) => e.discordId === emp.discordId,
+          );
+          if (existingIndex !== -1) employees[existingIndex] = emp;
+          else employees.push(emp);
+
+          state.punchedIn = hasActiveShift || emp.active;
+          if (hasActiveShift) state.currentUser.active = true;
+          activeShiftStartedAt = (
+            stateData.activeShift?.punched_in_at || emp.activeShiftStartedAt
+          )
+            ? new Date(
+                stateData.activeShift?.punched_in_at ||
+                  emp.activeShiftStartedAt,
+              ).getTime()
+            : null;
+          myRecentShifts = stateData.recentShifts || [];
+          contracts = stateData.contracts || [];
+          inventoryStock = stateData.inventoryStock || {};
+          if (stateData.radioPlaylists)
+            radioPlaylists = stateData.radioPlaylists;
+        } else {
+          state.punchedIn = hasActiveShift;
+          activeShiftStartedAt = stateData.activeShift?.punched_in_at
+            ? new Date(stateData.activeShift.punched_in_at).getTime()
+            : null;
+          myRecentShifts = stateData.recentShifts || [];
+          contracts = stateData.contracts || [];
+          inventoryStock = stateData.inventoryStock || {};
+          if (stateData.radioPlaylists)
+            radioPlaylists = stateData.radioPlaylists;
+        }
+      }
+
+      if (state.isAdmin) {
+        await loadAdminDashboard();
+        startAdminRefreshLoop();
+      }
+
+      await loadInventoryLogs();
+    } else {
+      state.loggedIn = false;
+      state.currentUser = null;
+    }
+  } catch (err) {
+    console.error(err);
     state.loggedIn = false;
-    state.isAdmin = false;
-    state.canManage = false;
-    state.readOnly = false;
-    state.currentUser = null;
-    state.punchedIn = false;
-    activeShiftStartedAt = null;
-    employees = [];
-    setStatusDot(false);
-    updateAll();
-    return;
   }
 
-  syncCurrentUserFromSession(data.user);
-  await loadMeState();
-  if (state.isAdmin) {
-    await loadAdminDashboard();
-    await loadInventoryLogs();
-    startAdminRefreshLoop();
-  }
-  await refreshBotStatus();
+  refreshBotStatus();
   updateAll();
 }
-
-async function updateEmployeeRole(employeeIndex, nextRoleName) {
-  const employee = employees[employeeIndex];
-  if (!state.isAdmin || state.readOnly || !employee?.id || !roleOrder.includes(nextRoleName)) return;
-  const previousRole = employee.roleName;
-  const previousRate = employee.hourlyRate;
-  const nextRate = getRoleRate(nextRoleName);
-
-  employees[employeeIndex] = {
-    ...employee,
-    roleName: nextRoleName,
-    roleId: roleIdMap[nextRoleName] || employee.roleId,
-    hourlyRate: nextRate,
-  };
-  if (state.currentUser?.discordId === employee.discordId) {
-    state.currentUser = { ...state.currentUser, roleName: nextRoleName, hourlyRate: nextRate };
-  }
-  updateAll();
-
-  const response = await fetch(
-    "/api/admin-employees/" + encodeURIComponent(employee.id) + "/role",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ roleName: nextRoleName }),
-    },
-  ).catch(() => null);
-
-  if (!response?.ok) {
-    employees[employeeIndex] = { ...employees[employeeIndex], roleName: previousRole, hourlyRate: previousRate };
-    showToast("Impossible de changer le rôle.", true);
-  } else {
-    showToast("Rôle mis à jour.");
-    await loadAdminDashboard();
-  }
-  updateAll();
-}
-
-window.addEventListener("hashchange", routeToCurrentPage);
 
 loadAuthSession();

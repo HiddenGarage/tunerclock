@@ -1,10 +1,26 @@
 const { getAdminIds } = require("./lib/env");
 const { encodeSession, buildCookie } = require("./lib/session");
+const { refreshDiscordSession } = require("../../auth");
 
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1495868929346769058";
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || "LUTEOe-oHYTFZ-5xy-o0SpKa0YU4n5R7";
-const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || "https://tunerclock.netlify.app/auth/discord/callback";
 const SESSION_SECRET = process.env.SESSION_SECRET || "tunerclock-secret-2026-change-moi";
+
+function getEventOrigin(event) {
+  const proto =
+    event.headers["x-forwarded-proto"] ||
+    event.headers["X-Forwarded-Proto"] ||
+    "https";
+  const host = event.headers.host || event.headers.Host;
+  return `${proto}://${host}`;
+}
+
+function resolveDiscordRedirectUri(event) {
+  return (
+    process.env.DISCORD_REDIRECT_URI ||
+    `${getEventOrigin(event)}/auth/discord/callback`
+  );
+}
 
 exports.handler = async function handler(event) {
   const code = event.queryStringParameters?.code;
@@ -20,7 +36,7 @@ exports.handler = async function handler(event) {
       client_secret: CLIENT_SECRET,
       grant_type: "authorization_code",
       code,
-      redirect_uri: REDIRECT_URI
+      redirect_uri: resolveDiscordRedirectUri(event)
     })
   });
 
@@ -40,19 +56,31 @@ exports.handler = async function handler(event) {
   }
 
   const profile = await profileResponse.json();
-  const session = {
+  const baseSession = {
     discordId: profile.id,
     username: profile.username,
+    displayName: profile.global_name || profile.username,
+    roleName: "Mecano",
+    roleId: null,
     avatar: profile.avatar,
-    isAdmin: getAdminIds().includes(profile.id)
+    isAdmin: getAdminIds().includes(profile.id),
+    canManage: true,
+    isSupervision: false,
+    readOnly: false,
   };
+  const session = await refreshDiscordSession(baseSession).catch(
+    () => baseSession,
+  );
 
-  const cookie = buildCookie("tunerclock_session", encodeSession(session, SESSION_SECRET));
+  const cookie = buildCookie(
+    "tunershub_session",
+    encodeSession(session, SESSION_SECRET),
+  );
 
   return {
     statusCode: 302,
     headers: {
-      Location: "/",
+      Location: "/#pointage",
       "Set-Cookie": cookie
     }
   };

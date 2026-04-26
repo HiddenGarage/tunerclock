@@ -94,7 +94,7 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord",
-  pointage: "Mise en service",
+  pointage: "Profil",
   historique: "Historique",
   inventaire: "Gestion Stock",
   stats: "Équipe",
@@ -105,6 +105,7 @@ const pageTitles = {
   reboot: "Système",
   radio: "Musique",
 };
+const WEB_PUNCH_ENABLED = false;
 
 const state = {
   loggedIn: false,
@@ -1611,10 +1612,17 @@ function renderShiftState() {
   if (!state.loggedIn || !state.currentUser) {
     setText(elements.shiftBadge, "Hors service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
-    setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
+    setText(
+      elements.shiftMessage,
+      "Connecte-toi pour voir ton profil. Les punchs se font uniquement sur Discord avec /in et /out.",
+    );
     setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
-    if (elements.punchToggle) elements.punchToggle.disabled = true;
+    if (elements.punchToggle) {
+      elements.punchToggle.textContent = "UTILISE /in ET /out SUR DISCORD";
+      elements.punchToggle.classList.remove("active");
+      elements.punchToggle.disabled = true;
+    }
     if (elements.discordLogin)
       elements.discordLogin.style.display = "inline-flex";
     stopLiveTimer();
@@ -1645,12 +1653,12 @@ function renderShiftState() {
       elements.shiftBadge.className = "mini-pill success";
     setText(
       elements.shiftMessage,
-      "Tu es en service. Ton temps et ton argent montent en direct.",
+      "Tu es en service via Discord. Ton profil affiche ton temps et ton argent en direct.",
     );
     if (elements.punchToggle) {
-      elements.punchToggle.textContent = "SORTIR DU SERVICE";
-      elements.punchToggle.classList.add("active");
-      elements.punchToggle.disabled = false;
+      elements.punchToggle.textContent = "UTILISE /out SUR DISCORD";
+      elements.punchToggle.classList.remove("active");
+      elements.punchToggle.disabled = true;
     }
     startLiveTimer();
   } else {
@@ -1658,12 +1666,12 @@ function renderShiftState() {
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
     setText(
       elements.shiftMessage,
-      "Tu n'es pas en service. Entre en service pour lancer le pointage.",
+      "Tu n'es pas en service. Utilise /in sur Discord pour entrer en service.",
     );
     if (elements.punchToggle) {
-      elements.punchToggle.textContent = "ENTRER EN SERVICE";
+      elements.punchToggle.textContent = "UTILISE /in SUR DISCORD";
       elements.punchToggle.classList.remove("active");
-      elements.punchToggle.disabled = false;
+      elements.punchToggle.disabled = true;
     }
     stopLiveTimer();
     updateLivePunchMetrics();
@@ -2883,6 +2891,10 @@ elements.submitPoliceReport?.addEventListener("click", async () => {
 });
 
 elements.punchToggle?.addEventListener("click", async () => {
+  if (!WEB_PUNCH_ENABLED) {
+    showToast("Les punchs se font uniquement sur Discord avec /in et /out.", true);
+    return;
+  }
   if (state.punchedIn) await punchOut();
   else await punchIn();
 });

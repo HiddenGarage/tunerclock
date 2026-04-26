@@ -553,6 +553,12 @@ function routeToCurrentPage() {
   if (elements.bottomPlayer) {
     elements.bottomPlayer.style.display = route === "radio" ? "flex" : "none";
   }
+
+  if (route === "tableau") {
+    setTimeout(() => {
+      drawPerformanceChart();
+    }, 50);
+  }
 }
 
 function setStatusDot(active) {
@@ -835,6 +841,7 @@ function startAdminLiveTimer() {
     renderStatsTables();
     renderLeaderboard();
     renderOverview();
+    drawPerformanceChart();
   }, 1000);
 }
 
@@ -844,7 +851,7 @@ function startAdminRefreshLoop() {
     if (!state.isAdmin) return;
     await loadAdminDashboard();
     updateAll();
-  }, 30000);
+  }, 10000);
 }
 
 function renderOverview() {
@@ -962,13 +969,21 @@ function drawSparkline(canvasId, colorHex, rgbString, value) {
 function drawPerformanceChart() {
   const canvas = document.getElementById("performance-chart");
   if (!canvas || typeof Chart === "undefined") return;
+  if (!canvas.offsetParent) return;
 
   const top5 = [...employees]
-    .filter((e) => e.hours > 0)
-    .sort((a, b) => b.hours - a.hours)
+    .map((employee) => {
+      const liveHours = employee.active ? getLiveEmployeeHours(employee) : 0;
+      return {
+        ...employee,
+        totalDisplayHours: Number(employee.hours || 0) + liveHours,
+      };
+    })
+    .filter((e) => e.totalDisplayHours > 0)
+    .sort((a, b) => b.totalDisplayHours - a.totalDisplayHours)
     .slice(0, 5);
   let labels = top5.map((e) => e.name);
-  let data = top5.map((e) => Number(e.hours.toFixed(2)));
+  let data = top5.map((e) => Number(e.totalDisplayHours.toFixed(2)));
 
   if (top5.length === 0) {
     labels = ["En attente"];
@@ -2428,6 +2443,7 @@ function updateAll() {
   renderContractsTable();
   renderHistorique();
   renderShiftState();
+  drawPerformanceChart();
   drawShiftDonutChart();
   drawTrendChart();
   renderPersonalDashboard();
@@ -3118,6 +3134,7 @@ function openRecruitmentModal(id) {
     <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
     <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="offer_interview" style="border-color: var(--teal); color: var(--teal);">Inviter en entrevue</button>
     <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter direct</button>
+    <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="remove">Retirer sans message</button>
   `;
 
   if (rec.status === "interview_offered") {
@@ -3125,18 +3142,21 @@ function openRecruitmentModal(id) {
     actionsHtml = `
       <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Annuler et Refuser</button>
       <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Accepter direct</button>
+      <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="remove">Retirer sans message</button>
     `;
   } else if (rec.status === "interview_selected") {
     statusText = `Le candidat a choisi : ${escapeHtml(rec.interviewSelected)}`;
     actionsHtml = `
       <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser</button>
       <button class="success-button resolve-recruitment-btn" data-id="${rec.id}" data-action="confirm_interview">Confirmer l'entrevue</button>
+      <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="remove">Retirer sans message</button>
     `;
   } else if (rec.status === "interview_confirmed") {
     statusText = `Entrevue confirmée : ${escapeHtml(rec.interviewSelected)}`;
     actionsHtml = `
       <button class="danger-button resolve-recruitment-btn" data-id="${rec.id}" data-action="reject">Refuser (Après entrevue)</button>
       <button class="primary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="accept">Embaucher</button>
+      <button class="secondary-button resolve-recruitment-btn" data-id="${rec.id}" data-action="remove">Retirer sans message</button>
     `;
   }
 
@@ -3191,7 +3211,9 @@ async function resolveRecruitment(id, action) {
     const msg =
       action === "reject"
         ? "Refuser cette candidature (et envoyer le message de refus) ?"
-        : "Confirmer l'entrevue à cette date (et envoyer une notification Discord) ?";
+        : action === "remove"
+          ? "Retirer cette candidature sans envoyer aucun message ?"
+          : "Confirmer l'entrevue à cette date (et envoyer une notification Discord) ?";
     if (!window.confirm(msg)) return;
   }
 
@@ -3885,3 +3907,5 @@ window.addEventListener("hashchange", routeToCurrentPage);
 
 updateAll();
 loadAuthSession();
+
+

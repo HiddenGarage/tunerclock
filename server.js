@@ -258,11 +258,14 @@ async function getSettingsMap(supabase) {
 }
 
 async function upsertSetting(supabase, key, value) {
-  const { error } = await supabase.from("app_settings").upsert({
-    key,
-    value,
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await supabase.from("app_settings").upsert(
+    {
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
   if (error) {
     throw error;
   }
@@ -311,6 +314,21 @@ function numberOrDefault(value, fallback) {
 async function getRoleRates(supabase) {
   const settings = await getSettingsMap(supabase);
   return { ...getDefaultRoleRates(), ...(settings.role_rates || {}) };
+}
+
+async function setDiscordServiceRoleByApi(discordId, roleId, shouldHaveRole) {
+  if (!discordId || !roleId || !process.env.DISCORD_BOT_TOKEN || !process.env.DISCORD_GUILD_ID) {
+    return;
+  }
+
+  const endpoint = `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${discordId}/roles/${roleId}`;
+  await fetch(endpoint, {
+    method: shouldHaveRole ? "PUT" : "DELETE",
+    headers: {
+      Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  }).catch(() => null);
 }
 
 async function fetchGuildMember(discordId) {
@@ -592,25 +610,33 @@ async function publishRecruitmentEmbed() {
 }
 
 async function updateServiceRole(discordId, isActive) {
-  if (!discordClient?.isReady?.() || !process.env.DISCORD_GUILD_ID) return;
+  if (!process.env.DISCORD_GUILD_ID) return;
+  const roleIn = "1496901938216828938";
+  const roleOut = "1496902369743605851";
+
   try {
-    const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
-    if (!guild) return;
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    if (!member) return;
+    let member = null;
+    if (discordClient?.isReady?.()) {
+      const guild = discordClient.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+      member = await guild?.members.fetch(discordId).catch(() => null);
+    }
 
-    const roleIn = "1496901938216828938";
-    const roleOut = "1496902369743605851";
-
-    if (isActive) {
-      await member.roles.add(roleIn).catch(() => {});
-      await member.roles.remove(roleOut).catch(() => {});
+    if (member) {
+      if (isActive) {
+        await member.roles.add(roleIn).catch(() => {});
+        await member.roles.remove(roleOut).catch(() => {});
+      } else {
+        await member.roles.remove(roleIn).catch(() => {});
+        await member.roles.add(roleOut).catch(() => {});
+      }
     } else {
-      await member.roles.remove(roleIn).catch(() => {});
-      await member.roles.add(roleOut).catch(() => {});
+      await setDiscordServiceRoleByApi(discordId, roleIn, isActive);
+      await setDiscordServiceRoleByApi(discordId, roleOut, !isActive);
     }
   } catch (e) {
     console.error("Erreur roles service:", e.message);
+    await setDiscordServiceRoleByApi(discordId, roleIn, isActive);
+    await setDiscordServiceRoleByApi(discordId, roleOut, !isActive);
   }
 }
 
@@ -2027,70 +2053,30 @@ app.post("/api/punch-out", requireAuth, async (req, res) => {
       roleRates[resolvedRoleName],
       employee.hourly_rate || DEFAULT_HOURLY_RATE,
     );
-
-    const { data: shift, error: shiftError } = await supabase
-      .from("shifts")
-      .select("*")
-      .eq("employee_id", employee.id)
-      .eq("status", "active")
-      .order("punched_in_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (shiftError) {
-      return res.status(500).send(shiftError.message);
-    }
-
-    const punchedOutAt = new Date();
-    const punchedInAt = new Date(shift.punched_in_at);
-    const durationHours = Number(
-      ((punchedOutAt - punchedInAt) / 3600000).toFixed(2),
-    );
-    const shiftPeriod = getShiftPeriod(punchedInAt);
-
-    const { error: updateShiftError } = await supabase
-      .from("shifts")
-      .update({
-        punched_out_at: punchedOutAt.toISOString(),
-        duration_hours: durationHours,
-        shift_period: shiftPeriod,
-        status: "closed",
-      })
-      .eq("id", shift.id);
-
-    if (updateShiftError) {
-      return res.status(500).send(updateShiftError.message);
-    }
-
     const { error: updateEmployeeError } = await supabase
       .from("employees")
       .update({
         discord_name: req.session.displayName || req.session.username,
         role: resolvedRoleName,
         hourly_rate: resolvedHourlyRate,
-        is_active: false,
-        active_days: Number(employee.active_days || 0) + 1,
-        total_hours: Number(employee.total_hours || 0) + durationHours,
       })
       .eq("id", employee.id);
 
     if (updateEmployeeError) {
       return res.status(500).send(updateEmployeeError.message);
     }
+    const result = await closeActiveShiftForEmployee(supabase, {
+      ...employee,
+      role: resolvedRoleName,
+      hourly_rate: resolvedHourlyRate,
+      discord_name: req.session.displayName || req.session.username,
+    }, "Web");
 
-    await updateServiceRole(req.session.discordId, false);
-
-    await sendActivityWebhook("punch_out", {
-      displayName: req.session.displayName || req.session.username,
-      username: req.session.username,
-      roleName: resolvedRoleName,
-      discordId: req.session.discordId,
-      timestampLabel: punchedOutAt.toLocaleString("fr-CA"),
-      punchedInLabel: punchedInAt.toLocaleString("fr-CA"),
-      durationHours,
+    res.json({
+      ok: true,
+      durationHours: result.durationHours,
+      shiftPeriod: result.shiftPeriod,
     });
-
-    res.json({ ok: true, durationHours, shiftPeriod });
   } catch (error) {
     res.status(500).send(error.message);
   }
@@ -2253,11 +2239,12 @@ app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
 
     const supabase = getSupabase();
     await upsertSetting(supabase, "role_rates", merged);
+    const savedRates = await getRoleRates(supabase);
 
     for (const role of ROLE_DEFINITIONS) {
       const { error } = await supabase
         .from("employees")
-        .update({ hourly_rate: merged[role.name] })
+        .update({ hourly_rate: savedRates[role.name] })
         .eq("role", role.name);
 
       if (error) {
@@ -2266,10 +2253,10 @@ app.post("/api/admin-role-rates", requireAdmin, async (req, res) => {
     }
 
     await writeAuditLog(supabase, req, "role_rates_updated", {
-      details: { roleRates: merged },
+      details: { roleRates: savedRates },
     });
 
-    res.json({ ok: true, roleRates: merged });
+    res.json({ ok: true, roleRates: savedRates });
   } catch (error) {
     res.status(500).send(error.message);
   }

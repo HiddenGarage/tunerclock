@@ -2126,6 +2126,45 @@ async function loadAuditLogs() {
   auditLogs = data?.logs || [];
 }
 
+async function loadMeState() {
+  if (!state.loggedIn || !state.currentUser?.discordId) return;
+
+  const response = await fetch("/api/me-state", {
+    credentials: "include",
+  }).catch(() => null);
+  if (!response?.ok) return;
+
+  const data = await response.json().catch(() => null);
+  if (!data) return;
+
+  const hasActiveShift = Boolean(data.activeShift);
+  if (data.employee) {
+    const employee = normaliseEmployeeRecord(data.employee);
+    if (hasActiveShift) employee.active = true;
+
+    state.currentUser = employee;
+    const existingIndex = employees.findIndex(
+      (entry) => entry.discordId === employee.discordId,
+    );
+    if (existingIndex !== -1) {
+      employees[existingIndex] = employee;
+    } else {
+      employees.push(employee);
+    }
+  }
+
+  state.punchedIn = hasActiveShift || Boolean(data.employee?.is_active);
+  activeShiftStartedAt = data.activeShift?.punched_in_at
+    ? new Date(data.activeShift.punched_in_at).getTime()
+    : data.employee?.active_shift_started_at
+      ? new Date(data.employee.active_shift_started_at).getTime()
+      : null;
+  myRecentShifts = data.recentShifts || [];
+  contracts = data.contracts || [];
+  inventoryStock = data.inventoryStock || {};
+  if (data.radioPlaylists) radioPlaylists = data.radioPlaylists;
+}
+
 function syncCurrentUserFromSession(sessionUser) {
   state.isAdmin = Boolean(sessionUser.isAdmin);
   state.canManage = sessionUser.canManage !== false;

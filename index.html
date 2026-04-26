@@ -37,7 +37,6 @@
         <div class="nav-category">Direction</div>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
         <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
-        <a href="#analyse" class="nav-item nav-item-success" data-route="analyse" data-admin-only="true">Bilan</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
         <div class="nav-category">Détente</div>
@@ -356,81 +355,6 @@
                 <tbody id="role-rates-body"></tbody>
               </table>
             </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="page-analyse" class="app-page analyse-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Aperçu Financier (En direct)</h3>
-                <p class="muted">Bilan de la trésorerie actuelle.</p>
-              </div>
-            </div>
-            <div class="summary-band" style="grid-template-columns: repeat(4, 1fr); margin-top: 0;">
-              <div class="summary-item">
-                <span>Revenus totaux</span><strong id="bilan-tot-rev" style="color: var(--teal);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Dépenses totales</span><strong id="bilan-tot-exp" style="color: var(--orange);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Salaires Dus</span><strong id="bilan-tot-pay" style="color: var(--red);">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Profit Net</span><strong id="bilan-tot-net" style="color: var(--blue);">0$</strong>
-              </div>
-            </div>
-          </article>
-
-          <article class="card card-span-2 chart-card large-chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Flux Financier (30 Jours)</h3>
-                <p class="muted">Évolution dynamique des revenus et dépenses.</p>
-              </div>
-            </div>
-            <div style="position: relative; height: 300px; width: 100%;">
-              <canvas id="bilan-finance-chart"></canvas>
-            </div>
-          </article>
-
-          <article class="card chart-card large-chart-card">
-            <div class="card-head">
-              <div>
-                <h3>Répartition des dépenses</h3>
-                <p class="muted">Où va l'argent du garage.</p>
-              </div>
-            </div>
-            <div style="position: relative; height: 300px; width: 100%;">
-              <canvas id="bilan-donut-chart"></canvas>
-            </div>
-          </article>
-
-          <article class="card card-span-3 analysis-advice-card">
-            <div class="card-head">
-              <div>
-                <h3>Conseil final</h3>
-                <p class="muted">Recommandation lisible selon les donnees actuelles, sans toucher aux taux officiels.</p>
-              </div>
-            </div>
-            <div class="summary-band simulation-summary">
-              <div class="summary-item">
-                <span>Marge actuelle</span>
-                <strong id="sim-profit-target">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Salaires actuellement dus</span>
-                <strong id="sim-current-payroll">0$</strong>
-              </div>
-              <div class="summary-item">
-                <span>Ratio salaires / revenus</span>
-                <strong id="sim-payroll-gap">0%</strong>
-              </div>
-            </div>
-            <div id="sim-recommendation" class="analysis-recommendation">A analyser</div>
           </article>
         </div>
       </section>

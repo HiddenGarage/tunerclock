@@ -36,7 +36,6 @@
         
         <div class="nav-category">Direction</div>
         <a href="#gestion" class="nav-item nav-item-gestion" data-route="gestion" data-admin-only="true">Comptabilité</a>
-        <a href="#salaire" class="nav-item" data-route="salaire" data-admin-only="true">Salaire</a>
         <a href="#contrats" class="nav-item" data-route="contrats">Contrats</a>
         
         <div class="nav-category">Détente</div>
@@ -151,12 +150,16 @@
 
         <div class="dashboard-grid">
           <article class="card card-span-2 clock-in-widget profile-hero-card">
-            <span id="shift-badge" class="mini-pill danger profile-shift-badge">Hors service</span>
+            <div class="profile-hero-copy">
+              <span id="shift-badge" class="mini-pill danger profile-shift-badge">Hors service</span>
 
-            <div class="profile-session-block">
-              <span class="profile-session-label">Temps de la session</span>
-              <h1 id="today-hours" class="profile-session-hours">0h 00m 00s</h1>
-              <div class="profile-session-pay">+ <span id="today-pay">0$</span></div>
+              <div class="profile-session-block">
+                <span class="profile-session-label">Temps de la session</span>
+                <h1 id="today-hours" class="profile-session-hours">0h 00m 00s</h1>
+                <div class="profile-session-pay">+ <span id="today-pay">0$</span></div>
+              </div>
+
+              <p class="muted profile-discord-hint">Les punchs se font uniquement sur Discord avec <strong>/in</strong> et <strong>/out</strong>.</p>
             </div>
 
             <div class="profile-status-visual">
@@ -165,11 +168,9 @@
               </div>
               <div class="profile-status-notes">
                 <span class="profile-note-chip">Punch Discord uniquement</span>
-                <span class="profile-note-chip">Live quand tu es en service</span>
+                <span class="profile-note-chip">Statut live</span>
               </div>
             </div>
-
-            <p class="muted profile-discord-hint">Les punchs se font uniquement sur Discord avec <strong>/in</strong> et <strong>/out</strong>.</p>
           </article>
 
           <div id="personal-stats-section" style="display: none; flex-direction: column; gap: 16px;">
@@ -336,33 +337,6 @@
                   </tr>
                 </thead>
                 <tbody id="leaderboard-body"></tbody>
-              </table>
-            </div>
-          </article>
-        </div>
-      </section>
-
-      <section id="page-salaire" class="app-page salaire-page">
-        <div class="dashboard-grid">
-          <article class="card card-span-3">
-            <div class="card-head">
-              <div>
-                <h3>Salaires par role</h3>
-                <p class="muted">Chaque role a son propre taux.</p>
-              </div>
-              <span class="mini-pill">Roles</span>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>Taux actuel</th>
-                    <th>Nouveau taux</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody id="role-rates-body"></tbody>
               </table>
             </div>
           </article>

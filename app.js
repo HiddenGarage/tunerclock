@@ -2221,11 +2221,11 @@ async function updateRoleRate(roleName, nextRate) {
 
   if (!state.isAdmin) return;
   try {
-    const res = await fetch("/api/admin-role-rates", {
+    const res = await fetch("/api/admin-role-rate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ roleRates: state.roleRates }),
+      body: JSON.stringify({ roleName, rate: nextRate }),
     });
     if (res.ok) {
       const data = await res.json().catch(() => null);

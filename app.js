@@ -12,6 +12,7 @@ let liveTimerId = null;
 let currentNoteId = null;
 let adminLiveTimerId = null;
 let adminRefreshTimerId = null;
+let meStateRefreshTimerId = null;
 let myRecentShifts = [];
 let inventoryLogs = [];
 const chartState = {};
@@ -712,6 +713,33 @@ function startAdminRefreshLoop() {
     await loadAdminDashboard();
     updateAll();
   }, 30000);
+}
+
+function startMeStateRefreshLoop() {
+  if (meStateRefreshTimerId || !state.loggedIn) return;
+  meStateRefreshTimerId = setInterval(async () => {
+    if (!state.loggedIn) return;
+    const previousPunchedIn = state.punchedIn;
+    const previousStartedAt = activeShiftStartedAt;
+    const previousRole = state.currentUser?.roleName || null;
+
+    await loadMeState();
+
+    if (
+      previousPunchedIn !== state.punchedIn ||
+      previousStartedAt !== activeShiftStartedAt ||
+      previousRole !== state.currentUser?.roleName
+    ) {
+      updateAll();
+      return;
+    }
+
+    if (state.currentUser?.active || state.punchedIn) {
+      renderShiftState();
+      renderProfileStatusChart();
+      renderPersonalDashboard();
+    }
+  }, 5000);
 }
 
 function renderOverview() {
@@ -1441,7 +1469,7 @@ function renderPersonalDashboard() {
   }
 
   if (elements.personalStatsSection)
-    elements.personalStatsSection.style.display = "flex";
+    elements.personalStatsSection.style.display = "contents";
 
   const unpaidHours =
     (state.currentUser.hours || 0) + (state.currentUser.todayHours || 0);
@@ -2177,6 +2205,10 @@ async function loadAdminDashboard() {
           state.currentUser.active = wasActive;
           state.currentUser.activeShiftStartedAt = wasStartedAt;
           state.currentUser.todayHours = wasTodayHours;
+        } else if (state.currentUser.activeShiftStartedAt) {
+          activeShiftStartedAt = new Date(
+            state.currentUser.activeShiftStartedAt,
+          ).getTime();
         }
       }
     }
@@ -3623,6 +3655,7 @@ async function loadAuthSession() {
       }
 
       await loadInventoryLogs();
+      startMeStateRefreshLoop();
     } else {
       state.loggedIn = false;
       state.currentUser = null;

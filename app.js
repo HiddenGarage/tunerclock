@@ -33,8 +33,6 @@ const routes = [
   "stats",
   "recrutements",
   "gestion",
-  "salaire",
-  "analyse",
   "contrats",
   "logs",
   "inventaire",
@@ -95,14 +93,12 @@ const roleIdMap = {
 };
 const pageTitles = {
   tableau: "Tableau de bord",
-  pointage: "Mise en service",
+  pointage: "Profil",
   historique: "Historique",
   inventaire: "Gestion Stock",
   stats: "Équipe",
   recrutements: "Recrutements",
   gestion: "Comptabilité",
-  salaire: "Salaire",
-  analyse: "Bilan",
   contrats: "Contrats",
   logs: "Registre",
   reboot: "Système",
@@ -146,7 +142,7 @@ const elements = {
   todayPay: document.getElementById("today-pay"),
   punchToggle: document.getElementById("punch-toggle"),
   leaderboardBody: document.getElementById("leaderboard-body"),
-  presenceBody: document.getElementById("presence-body"),
+  activityGrid: document.getElementById("activity-grid"),
   auditBody: document.getElementById("audit-body"),
   historiqueBody: document.getElementById("historique-body"),
   inventoryLogsBody: document.getElementById("inventory-logs-body"),
@@ -836,6 +832,8 @@ function startAdminLiveTimer() {
   }
   adminLiveTimerId = setInterval(() => {
     renderPresenceList();
+    renderStatsTables();
+    renderLeaderboard();
     renderOverview();
   }, 1000);
 }
@@ -1023,7 +1021,7 @@ function getLastActiveDays(employeeId) {
 }
 
 function renderStatsTables() {
-  if (!elements.statsBody || !elements.roleRatesBody) return;
+  if (!elements.statsBody) return;
 
   if (!employees.length) {
     setHtml(
@@ -1052,6 +1050,8 @@ function renderStatsTables() {
               inactivityHtml = `<span class="mini-pill danger">${inactivityDays} j</span>`;
           }
 
+          const liveHours = employee.active ? getLiveEmployeeHours(employee) : 0;
+          const payableHours = Number(employee.hours || 0) + liveHours;
           return `
       <tr>
         <td>${escapeHtml(employee.name)}</td>
@@ -1065,7 +1065,7 @@ function renderStatsTables() {
         <td>${employee.activeDays}</td>
         <td>${escapeHtml(employee.preferredShift)}</td>
         <td>${formatMoney(employee.hourlyRate)}</td>
-        <td>${formatMoney(employee.hours * employee.hourlyRate)}</td>
+        <td>${formatMoney(payableHours * employee.hourlyRate)}</td>
         <td>
           <button class="secondary-button table-button open-notes-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Dossier</button>
           <button class="danger-button table-button fire-btn" data-id="${employee.id}" data-name="${escapeHtml(employee.name)}">Congédier</button>
@@ -1077,11 +1077,12 @@ function renderStatsTables() {
     );
   }
 
-  setHtml(
-    elements.roleRatesBody,
-    roleOrder
-      .map(
-        (roleName) => `
+  if (elements.roleRatesBody) {
+    setHtml(
+      elements.roleRatesBody,
+      roleOrder
+        .map(
+          (roleName) => `
     <tr>
       <td>${roleName}</td>
       <td>${formatMoney(getRoleRate(roleName))}</td>
@@ -1089,9 +1090,10 @@ function renderStatsTables() {
       <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
     </tr>
   `,
-      )
-      .join(""),
-  );
+        )
+        .join(""),
+    );
+  }
 }
 
 function renderSimulation() {
@@ -1389,44 +1391,57 @@ function drawBilanCharts() {
 }
 
 function renderPresenceList() {
-  if (!elements.presenceBody) return;
-  const activeEmployees = employees.filter((employee) => employee.active);
-  if (!activeEmployees.length) {
-    setHtml(
-      elements.presenceBody,
-      `<tr><td colspan="8">Aucun employe en service.</td></tr>`,
-    );
+  if (!elements.activityGrid) return;
+  if (!employees.length) {
+    setHtml(elements.activityGrid, `<p class="muted">Aucune donnee employe.</p>`);
     return;
   }
 
   setHtml(
-    elements.presenceBody,
-    activeEmployees
+    elements.activityGrid,
+    employees
       .map((employee) => {
         const employeeIndex = employees.findIndex(
           (entry) => entry.discordId === employee.discordId,
         );
-        const liveHours = getLiveEmployeeHours(employee);
-        const status = getPresenceStatus(liveHours);
-        const reminder = getReminderInfo(employee);
+        const liveHours = employee.active ? getLiveEmployeeHours(employee) : 0;
+        const status = employee.active
+          ? getPresenceStatus(liveHours)
+          : { label: "Inactif", className: "mini-pill danger" };
+        const reminder = employee.active
+          ? getReminderInfo(employee)
+          : { label: "Aucun", className: "mini-pill" };
         const entryLabel = employee.activeShiftStartedAt
           ? new Date(employee.activeShiftStartedAt).toLocaleString("fr-CA")
           : "-";
+        const cardClass = employee.active
+          ? "activity-card is-active"
+          : "activity-card is-inactive";
+        const actionButtons = employee.active
+          ? `
+            <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
+            <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
+          `
+          : `
+            <button class="secondary-button table-button" disabled>Rappel</button>
+            <button class="danger-button table-button" disabled>Forcer sortie</button>
+          `;
 
         return `
-      <tr>
-        <td>${employee.name}</td>
-        <td>${employee.roleName}</td>
-        <td>${entryLabel}</td>
-        <td>${formatHoursMinutesSeconds(liveHours)}</td>
-        <td>${formatMoney(liveHours * employee.hourlyRate)}</td>
-        <td><span class="${status.className}">${status.label}</span></td>
-        <td><span class="${reminder.className}">${reminder.label}</span></td>
-        <td>
-          <button class="secondary-button table-button reminder-button" data-employee-index="${employeeIndex}">Rappel</button>
-          <button class="danger-button table-button force-out-button" data-employee-index="${employeeIndex}">Forcer sortie</button>
-        </td>
-      </tr>
+      <article class="${cardClass}">
+        <div class="activity-card-head">
+          <h4>${escapeHtml(employee.name)}</h4>
+          <span class="${status.className}">${status.label}</span>
+        </div>
+        <p class="muted activity-role">${escapeHtml(employee.roleName)}</p>
+        <div class="activity-metrics">
+          <div><span>Entree</span><strong>${entryLabel}</strong></div>
+          <div><span>Duree live</span><strong>${formatHoursMinutesSeconds(liveHours)}</strong></div>
+          <div><span>Cout live</span><strong>${formatMoney(liveHours * employee.hourlyRate)}</strong></div>
+          <div><span>Rappel</span><strong>${reminder.label}</strong></div>
+        </div>
+        <div class="activity-actions">${actionButtons}</div>
+      </article>
     `;
       })
       .join(""),
@@ -1737,7 +1752,9 @@ function renderLeaderboard() {
           (entry) => entry.discordId === employee.discordId,
         );
         const isTopWorker = index === 0 && employee.hours > 0;
-        const estimatedPay = employee.hours * employee.hourlyRate;
+        const liveHours = employee.active ? getLiveEmployeeHours(employee) : 0;
+        const payableHours = Number(employee.hours || 0) + liveHours;
+        const estimatedPay = payableHours * employee.hourlyRate;
         const pdfButton = employee.lastPayslip?.payoutId
           ? `
       <a class="secondary-button secondary-table-button table-button" href="/api/payouts/${employee.lastPayslip.payoutId}/pdf" target="_blank" rel="noreferrer">PDF</a>
@@ -1753,7 +1770,7 @@ function renderLeaderboard() {
       <tr>
         <td>${employee.name} ${isTopWorker ? '<span title="Employe de la semaine" style="cursor:help;">👑</span>' : ""}</td>
         <td>${employee.roleName}</td>
-        <td>${formatHoursMinutes(employee.hours)}</td>
+        <td>${formatHoursMinutes(payableHours)}</td>
         <td>${formatMoney(estimatedPay)}</td>
         <td><input type="number" class="prime-input" data-employee-index="${employeeIndex}" placeholder="0" min="0" step="1" style="width: 80px; padding: 0.25rem 0.5rem;"></td>
         <td>
@@ -1836,7 +1853,7 @@ function renderPersonalDashboard() {
   }
 
   if (elements.personalStatsSection)
-    elements.personalStatsSection.style.display = "flex";
+    elements.personalStatsSection.style.display = "block";
 
   const unpaidHours =
     (state.currentUser.hours || 0) + (state.currentUser.todayHours || 0);
@@ -1845,6 +1862,17 @@ function renderPersonalDashboard() {
 
   setText(elements.pendingHours, formatHoursMinutes(unpaidHours));
   setText(elements.pendingPay, formatMoney(pendingPay));
+  const lastShift = myRecentShifts?.[0] || null;
+  setText(
+    document.getElementById("last-shift-duration"),
+    lastShift ? formatHoursMinutes(lastShift.duration_hours) : "-",
+  );
+  setText(
+    document.getElementById("last-shift-ended"),
+    lastShift?.punched_out_at
+      ? `Termine: ${new Date(lastShift.punched_out_at).toLocaleString("fr-CA")}`
+      : "Aucun shift termine",
+  );
 
   // Graphique Barres (Style Financial Dashboard)
   const canvas = elements.cagnotteChartCanvas;
@@ -1883,7 +1911,7 @@ function renderPersonalDashboard() {
       const shiftDateKey = getLocalKey(s.punched_in_at);
       const day = daysData.find((d) => d.dateKey === shiftDateKey);
       if (day) {
-        day.amount += Number(s.duration_hours || 0) * hourlyRate;
+        day.amount += Number(s.duration_hours || 0);
       }
     });
 
@@ -1928,11 +1956,11 @@ function renderPersonalDashboard() {
               borderWidth: 1,
               padding: 12,
               cornerRadius: 4,
-              callbacks: {
-                label(context) {
-                  return formatMoney(context.raw);
+                callbacks: {
+                  label(context) {
+                    return `${Number(context.raw || 0).toFixed(2)} h`;
+                  },
                 },
-              },
             },
           },
           scales: {
@@ -2006,7 +2034,10 @@ function renderShiftState() {
   if (!state.loggedIn || !state.currentUser) {
     setText(elements.shiftBadge, "Hors service");
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
-    setText(elements.shiftMessage, "Connecte-toi pour commencer ton quart.");
+    setText(
+      elements.shiftMessage,
+      "Connecte-toi pour voir ton profil et ton activite.",
+    );
     setText(elements.todayHours, "0h 00m 00s");
     setText(elements.todayPay, "0$");
     if (elements.punchToggle) elements.punchToggle.disabled = true;
@@ -2040,7 +2071,7 @@ function renderShiftState() {
       elements.shiftBadge.className = "mini-pill success";
     setText(
       elements.shiftMessage,
-      "Tu es en service. Ton temps et ton argent montent en direct.",
+      "Tu es en service. Ton temps de session et ta paie estimee montent en direct.",
     );
     if (elements.punchToggle) {
       elements.punchToggle.textContent = "SORTIR DU SERVICE";
@@ -2053,7 +2084,7 @@ function renderShiftState() {
     if (elements.shiftBadge) elements.shiftBadge.className = "mini-pill danger";
     setText(
       elements.shiftMessage,
-      "Tu n'es pas en service. Entre en service pour lancer le pointage.",
+      "Tu n'es pas en service. Le profil reste disponible en lecture live.",
     );
     if (elements.punchToggle) {
       elements.punchToggle.textContent = "ENTRER EN SERVICE";
@@ -3347,7 +3378,7 @@ elements.statsBody?.addEventListener("click", (event) => {
   adjustEmployeeHours(employeeIndex, normalizedValue);
 });
 
-elements.presenceBody?.addEventListener("click", (event) => {
+elements.activityGrid?.addEventListener("click", (event) => {
   const reminderButton = event.target.closest(".reminder-button");
   if (reminderButton) {
     sendReminder(Number(reminderButton.dataset.employeeIndex));

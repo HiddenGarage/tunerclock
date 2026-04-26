@@ -428,7 +428,10 @@ async function writeDiscordAuditLog(
     target_name: options.targetName || null,
     details: options.details || {},
   };
-  await supabase.from("audit_logs").insert(payload).catch(() => null);
+  const { error } = await supabase.from("audit_logs").insert(payload);
+  if (error) {
+    console.error("Audit log Discord impossible:", error.message);
+  }
 }
 
 function getLogoPath() {

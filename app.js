@@ -33,7 +33,6 @@ const routes = [
   "stats",
   "recrutements",
   "gestion",
-  "salaire",
   "contrats",
   "logs",
   "inventaire",
@@ -99,7 +98,6 @@ const pageTitles = {
   inventaire: "Gestion Stock",
   stats: "Équipe",
   recrutements: "Recrutements",
-  salaire: "Salaire",
   contrats: "Contrats",
   logs: "Registre",
   reboot: "Système",
@@ -446,7 +444,7 @@ function applyAccessControl() {
 
     // Cache les pages non autorisées pour le Gérant
     if (state.currentUser?.roleName === "Gerant") {
-      const hiddenForGerant = ["logs", "reboot", "recrutements", "salaire"];
+      const hiddenForGerant = ["logs", "reboot", "recrutements"];
       if (
         hiddenForGerant.includes(item.dataset.route) ||
         item.dataset.hiddenGerant === "true"
@@ -605,6 +603,7 @@ function updateLivePunchMetrics() {
           )
         : "0$",
     );
+    renderProfileStatusChart();
     return;
   }
 
@@ -615,6 +614,7 @@ function updateLivePunchMetrics() {
     elements.todayPay,
     formatMoney(elapsedHours * state.currentUser.hourlyRate),
   );
+  renderProfileStatusChart();
   renderPersonalDashboard();
 }
 
@@ -888,7 +888,7 @@ function getLastActiveDays(employeeId) {
 }
 
 function renderStatsTables() {
-  if (!elements.statsBody || !elements.roleRatesBody) return;
+  if (!elements.statsBody) return;
 
   if (elements.presenceBody) {
     const presenceCard = elements.presenceBody.closest(".card");
@@ -974,21 +974,23 @@ function renderStatsTables() {
     );
   }
 
-  setHtml(
-    elements.roleRatesBody,
-    roleOrder
-      .map(
-        (roleName) => `
-    <tr>
-      <td>${roleName}</td>
-      <td>${formatMoney(getRoleRate(roleName))}</td>
-      <td><input class="role-rate-input" data-role-name="${roleName}" type="number" min="0" step="1" placeholder="${getRoleRate(roleName)}"></td>
-      <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
-    </tr>
-  `,
-      )
-      .join(""),
-  );
+  if (elements.roleRatesBody) {
+    setHtml(
+      elements.roleRatesBody,
+      roleOrder
+        .map(
+          (roleName) => `
+      <tr>
+        <td>${roleName}</td>
+        <td>${formatMoney(getRoleRate(roleName))}</td>
+        <td><input class="role-rate-input" data-role-name="${roleName}" type="number" min="0" step="1" placeholder="${getRoleRate(roleName)}"></td>
+        <td><button class="primary-button table-button save-role-rate-button" data-role-name="${roleName}">Sauvegarder</button></td>
+      </tr>
+    `,
+        )
+        .join(""),
+    );
+  }
 }
 
 function renderPresenceList() {
@@ -1687,57 +1689,57 @@ function renderProfileStatusChart() {
   const liveHours = isActive ? getLiveEmployeeHours(state.currentUser) : 0;
   const progressHours = Math.min(Math.max(liveHours, 0), 8);
   const remainingHours = Math.max(0.25, 8 - progressHours);
-  const dataset = isActive ? [progressHours || 0.15, remainingHours] : [1];
+  const dataset = isActive ? [Math.max(progressHours, 0.12), remainingHours] : [1];
+  const labels = isActive ? ["Session", "Reste"] : ["Hors service"];
+  const backgroundColor = isActive
+    ? [chartPalette.teal, "rgba(255, 255, 255, 0.08)"]
+    : ["rgba(255, 255, 255, 0.08)"];
 
-  destroyChart("profileStatus");
-  chartState.profileStatus = new Chart(canvas, {
-    type: "doughnut",
-    plugins: [doughnutCenterTextPlugin],
-    data: {
-      labels: isActive ? ["Session", "Reste"] : ["Hors service"],
-      datasets: [
-        {
-          data: dataset,
-          backgroundColor: isActive
-            ? [chartPalette.teal, "rgba(255, 255, 255, 0.08)"]
-            : ["rgba(255, 255, 255, 0.08)"],
-          borderColor: "#202124",
-          borderWidth: 6,
-          borderRadius: 6,
-          spacing: 4,
-          hoverOffset: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      cutout: "76%",
-      plugins: {
-        doughnutCenterText: {
-          value: isActive ? formatCompactHours(liveHours) : "OFF",
-          label: isActive ? "Session live" : "Profil",
-        },
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "#182232",
-          titleColor: "#f8fbff",
-          bodyColor: "#f8fbff",
-          borderColor: "#24364f",
-          borderWidth: 1,
-          padding: 12,
-          cornerRadius: 4,
-          callbacks: {
-            label(context) {
-              if (!isActive) return "Utilise /in sur Discord";
-              return `${context.label}: ${formatHoursMinutes(context.raw || 0)}`;
-            },
+  if (!chartState.profileStatus) {
+    chartState.profileStatus = new Chart(canvas, {
+      type: "doughnut",
+      plugins: [doughnutCenterTextPlugin],
+      data: {
+        labels,
+        datasets: [
+          {
+            data: dataset,
+            backgroundColor,
+            borderColor: "#202124",
+            borderWidth: 3,
+            borderRadius: 0,
+            spacing: 2,
+            hoverOffset: 0,
           },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 },
+        events: [],
+        cutout: "80%",
+        plugins: {
+          doughnutCenterText: {
+            value: isActive ? formatCompactHours(liveHours) : "OFF",
+            label: isActive ? "Session live" : "Profil",
+          },
+          legend: { display: false },
+          tooltip: { enabled: false },
         },
       },
-    },
-  });
+    });
+    return;
+  }
+
+  chartState.profileStatus.data.labels = labels;
+  chartState.profileStatus.data.datasets[0].data = dataset;
+  chartState.profileStatus.data.datasets[0].backgroundColor = backgroundColor;
+  chartState.profileStatus.options.plugins.doughnutCenterText = {
+    value: isActive ? formatCompactHours(liveHours) : "OFF",
+    label: isActive ? "Session live" : "Profil",
+  };
+  chartState.profileStatus.update("none");
 }
 
 function drawShiftDonutChart() {

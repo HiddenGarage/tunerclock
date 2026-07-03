@@ -48,6 +48,10 @@ const DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID =
   process.env.DISCORD_EMPLOYEE_GUIDE_CHANNEL_ID || "1495989501166747669";
 const DISCORD_RECRUITMENT_CHANNEL_ID =
   process.env.DISCORD_RECRUITMENT_CHANNEL_ID || "1496506153922859079";
+const DISCORD_ACTIVITY_CHANNEL_ID =
+  process.env.DISCORD_ACTIVITY_CHANNEL_ID || "1487846337931120762";
+const DISCORD_STARTUP_CHANNEL_ID =
+  process.env.DISCORD_STARTUP_CHANNEL_ID || DISCORD_ACTIVITY_CHANNEL_ID;
 let discordClient = null;
 let reminderMonitorId = null;
 let keepAliveMonitorId = null;
@@ -700,6 +704,89 @@ async function updateServiceRole(discordId, isActive) {
   }
 }
 
+async function getTopGarageEmployee() {
+  const supabase = getSupabase();
+  const { data: employees, error: employeesError } = await supabase
+    .from("employees")
+    .select("id, discord_id, discord_name, total_hours, active_days, is_active");
+
+  if (employeesError) throw employeesError;
+  if (!employees?.length) return null;
+
+  const { data: activeShifts } = await supabase
+    .from("shifts")
+    .select("employee_id, punched_in_at, status")
+    .eq("status", "active");
+
+  const activeShiftByEmployee = new Map();
+  for (const shift of activeShifts || []) {
+    const previous = activeShiftByEmployee.get(shift.employee_id);
+    if (
+      !previous ||
+      new Date(shift.punched_in_at).getTime() >
+        new Date(previous.punched_in_at).getTime()
+    ) {
+      activeShiftByEmployee.set(shift.employee_id, shift);
+    }
+  }
+
+  const now = Date.now();
+  const rankedEmployees = employees
+    .map((employee) => {
+      const activeShift = activeShiftByEmployee.get(employee.id);
+      const liveHours = activeShift
+        ? Math.max(
+            0,
+            (now - new Date(activeShift.punched_in_at).getTime()) / 3600000,
+          )
+        : 0;
+      return {
+        discordId: employee.discord_id,
+        name: employee.discord_name || "Employe",
+        totalHours: Number(employee.total_hours || 0) + liveHours,
+        activeDays: Number(employee.active_days || 0),
+      };
+    })
+    .filter((employee) => employee.discordId)
+    .sort(
+      (a, b) =>
+        b.totalHours - a.totalHours || b.activeDays - a.activeDays,
+    );
+
+  return rankedEmployees[0] || null;
+}
+
+async function sendStartupMessage() {
+  if (!discordClient?.isReady?.() || !DISCORD_STARTUP_CHANNEL_ID) return;
+
+  try {
+    const channel = await discordClient.channels
+      .fetch(DISCORD_STARTUP_CHANNEL_ID)
+      .catch(() => null);
+
+    if (!channel?.isTextBased?.()) return;
+
+    const messageLines = [
+      "J’ai planté, j’ai réfléchi, j’suis revenu plus fort. Merci de toucher à rien pentoute pendant 4 secondes.",
+    ];
+
+    const topEmployee = await getTopGarageEmployee().catch((error) => {
+      console.error("Employe le plus actif introuvable:", error.message);
+      return null;
+    });
+
+    if (topEmployee) {
+      messageLines.push(
+        `Btw <@${topEmployee.discordId}>, t'es un bon mongole , tu passes-tu ta vie au garage ? ${topEmployee.totalHours.toFixed(2)}h au compteur, va toucher du gazon un peu.`,
+      );
+    }
+
+    await channel.send(messageLines.join("\n\n")).catch(() => {});
+  } catch (error) {
+    console.error("Message de demarrage Discord impossible:", error.message);
+  }
+}
+
 function startDiscordBot() {
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.log("Discord bot token absent: bot non demarre.");
@@ -723,7 +810,7 @@ function startDiscordBot() {
     console.warn("[DISCORD WARN]:", info);
   });
 
-  discordClient.once("clientReady", () => {
+  discordClient.once("clientReady", async () => {
     discordBotRuntime.online = true;
     discordBotRuntime.error = null;
     discordBotRuntime.tag = discordClient.user?.tag || null;
@@ -741,6 +828,7 @@ function startDiscordBot() {
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
       publishRecruitmentEmbed();
+      await sendStartupMessage();
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
@@ -1436,8 +1524,10 @@ async function sendDiscordDmPayload(discordId, payload) {
 
 async function sendFunnyForceOutMessage(discordId) {
   if (!discordClient?.isReady?.()) return;
-  const channelId = "1487846337931120762";
-  const channel = await discordClient.channels.fetch(channelId);
+  const channel = await discordClient.channels
+    .fetch(DISCORD_ACTIVITY_CHANNEL_ID)
+    .catch(() => null);
+  if (!channel?.isTextBased?.()) return;
 
   const messages = [
     `Hey <@${discordId}>, t’as tu l'intention de dormir au garage à soir ou c'est juste que t'as oublier de puncher ?`,
@@ -1453,6 +1543,20 @@ async function sendFunnyForceOutMessage(discordId) {
     `<@${discordId}>, t'as-tu besoin d'une fleche néon ou d'une éducatrice spécialisée pour te montrer où est le bouton? Punch out automatique fait. Décrisse.`,
     `<@${discordId}>, t'es aussi mêlé qu'un jeu de cartes dans une sécheuse. J'ai punché pour toi.`,
     `<@${discordId}>, t'es aussi utile qu'un sac de sable dans l'désert. Jtai punch out.`,
+    `<@${discordId}>, ton shift etait rendu plus long qu'une attente chez SAAQ. Punch out automatique.`,
+    `<@${discordId}>, le garage fermait, les lumieres etaient eteintes, pis toi t'etais encore punch in comme un lampadaire. C'est regle.`,
+    `<@${discordId}>, t'as laisse ton punch in ouvert tellement longtemps que le lift a demande une pause syndicale.`,
+    `<@${discordId}>, meme la cafetiere a fini son shift avant toi. Je t'ai sorti.`,
+    `<@${discordId}>, ta feuille de temps commencait a ressembler a une hypotheque. Punch out force.`,
+    `<@${discordId}>, t'as oublie /out encore. Le bouton etait pas cache dans le coffre, promis.`,
+    `<@${discordId}>, j'ai ferme ton shift avant que la paie fasse faillite le garage.`,
+    `<@${discordId}>, prochaine fois qu'tu veux vivre au garage, signe un bail avec la direction. Punch out fait.`,
+    `<@${discordId}>, ton personnage dormait debout a cote du coffre a outils. J'ai eu pitie.`,
+    `<@${discordId}>, le compresseur a arrete, les clients sont partis, mais ton punch in vivait encore sa meilleure vie.`,
+    `<@${discordId}>, c'est pas un marathon de mecanique icitte. Va prendre de l'air, j'ai ferme ton temps.`,
+    `<@${discordId}>, t'as tellement pas punch out que meme le bot a eu le temps de planter et revenir.`,
+    `<@${discordId}>, ton overtime commencait a faire peur au comptable. Je t'ai sauve.`,
+    `<@${discordId}>, rappel amical: /out existe. Rappel moins amical: je viens de le faire pour toi.`,
   ];
 
   const randomMsg = messages[Math.floor(Math.random() * messages.length)];

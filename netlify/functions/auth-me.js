@@ -1,6 +1,7 @@
 const { parseCookies, decodeSession } = require("./lib/session");
+const { required } = require("./lib/env");
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "tunerclock-secret-2026-change-moi";
+const SESSION_SECRET = required("SESSION_SECRET");
 
 exports.handler = async function handler(event) {
   const cookies = parseCookies(event.headers.cookie || "");

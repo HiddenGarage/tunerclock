@@ -1,10 +1,10 @@
-const { getAdminIds } = require("./lib/env");
+const { required, getAdminIds } = require("./lib/env");
 const { encodeSession, buildCookie } = require("./lib/session");
 
-const CLIENT_ID = process.env.DISCORD_CLIENT_ID || "1495868929346769058";
-const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || "LUTEOe-oHYTFZ-5xy-o0SpKa0YU4n5R7";
-const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || "https://tunerclock.netlify.app/auth/discord/callback";
-const SESSION_SECRET = process.env.SESSION_SECRET || "tunerclock-secret-2026-change-moi";
+const CLIENT_ID = required("DISCORD_CLIENT_ID");
+const CLIENT_SECRET = required("DISCORD_CLIENT_SECRET");
+const REDIRECT_URI = required("DISCORD_REDIRECT_URI");
+const SESSION_SECRET = required("SESSION_SECRET");
 
 exports.handler = async function handler(event) {
   const code = event.queryStringParameters?.code;

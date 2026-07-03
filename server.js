@@ -34,7 +34,7 @@ const {
 const { getSupabase } = require("./netlify/functions/lib/supabase");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || process.env.SERVER_PORT || process.env.APP_PORT || 3000);
 const DEFAULT_HOURLY_RATE = 25;
 const REMINDER_AFTER_HOURS = Number(process.env.REMINDER_AFTER_HOURS || 3);
 const REMINDER_SCAN_MINUTES = Number(process.env.REMINDER_SCAN_MINUTES || 5);
@@ -204,8 +204,7 @@ const DEFAULT_RADIO_PLAYLISTS = [
   },
 ];
 
-const SYSTEM_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1496910730417537316/YV3-cS7_kcckxMC7IhYnRK5bj02dqoSoonLJ7e3Y5gCvoZ5_61k15Oj9Tc6xUwdrPooU";
+const SYSTEM_WEBHOOK_URL = (process.env.SYSTEM_WEBHOOK_URL || "").trim();
 const errorCooldowns = new Map();
 
 const oauthLoginCooldowns = new Map();
@@ -334,7 +333,7 @@ function buildDiscordAuthError(errorInfo, step = "OAuth") {
       status: 429,
       title: "Discord bloque temporairement la connexion.",
       message:
-        "Le bot n'est pas forcement mort. C'est l'auth web Discord qui se fait rate limit cote Render/Discord. Attends 10 a 30 minutes sans spam login, puis reessaie.",
+        "Le bot n'est pas forcement mort. C'est l'auth web Discord qui se fait rate limit cote hebergeur/Discord. Attends 10 a 30 minutes sans spam login, puis reessaie.",
     };
   }
 
@@ -343,7 +342,7 @@ function buildDiscordAuthError(errorInfo, step = "OAuth") {
       status: 500,
       title: "Secret OAuth Discord invalide.",
       message:
-        "Verifie DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET dans Render. Ce n'est pas le DISCORD_BOT_TOKEN.",
+        "Verifie DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET dans ton hebergeur. Ce n'est pas le DISCORD_BOT_TOKEN.",
     };
   }
 
@@ -352,7 +351,7 @@ function buildDiscordAuthError(errorInfo, step = "OAuth") {
       status: 500,
       title: "Callback Discord invalide.",
       message:
-        "Verifie que DISCORD_REDIRECT_URI dans Render est identique au Redirect URI dans Discord Developer Portal, sans slash de trop.",
+        "Verifie que DISCORD_REDIRECT_URI dans ton hebergeur est identique au Redirect URI dans Discord Developer Portal, sans slash de trop.",
     };
   }
 
@@ -360,7 +359,7 @@ function buildDiscordAuthError(errorInfo, step = "OAuth") {
     status: 500,
     title: `Erreur connexion Discord (${step}).`,
     message:
-      "Discord a refuse la connexion. Regarde les logs Render, le statut HTTP et le detail court affiche ici.",
+      "Discord a refuse la connexion. Regarde les logs de l'hebergeur, le statut HTTP et le detail court affiche ici.",
   };
 }
 
@@ -1057,7 +1056,7 @@ function startDiscordBot() {
   if (!DISCORD_BOT_TOKEN) {
     discordBotRuntime.configured = false;
     discordBotRuntime.online = false;
-    discordBotRuntime.error = "DISCORD_BOT_TOKEN absent dans Render";
+    discordBotRuntime.error = "DISCORD_BOT_TOKEN absent dans ton hebergeur";
     console.error("[DISCORD BOOT] DISCORD_BOT_TOKEN absent: bot non demarre.");
     return;
   }
@@ -1214,8 +1213,7 @@ function startDiscordBot() {
   });
 }
 async function sendActivityWebhook() {
-  const webhookUrl =
-    "https://discord.com/api/webhooks/1495960759883141130/E5UCgZJA07T7UlRcKmW3uCJp1OJ9GyOIa42E-9mKK1CekjNB9Qe1tKjdnSgyFQOy1Z8e";
+  const webhookUrl = (process.env.ACTIVITY_WEBHOOK_URL || "").trim();
   if (!webhookUrl) return;
 
   try {
@@ -2184,7 +2182,7 @@ app.get("/auth/discord/callback", async (req, res) => {
       isTimeout ? "Discord ne repond pas assez vite." : "Erreur auth Discord.",
       isTimeout
         ? "Discord ou Render a timeout pendant la connexion. Attends une minute, puis reessaie une seule fois."
-        : "Une erreur interne a bloque la connexion Discord. Regarde les logs Render pour le detail.",
+        : "Une erreur interne a bloque la connexion Discord. Regarde les logs de l'hebergeur pour le detail.",
       isTimeout ? 504 : 500,
       error.message,
     );
@@ -3054,8 +3052,10 @@ app.post(
 app.post("/api/report-police", requireAuth, async (req, res) => {
   try {
     const { matricule, reason } = req.body;
-    const webhookUrl =
-      "https://discord.com/api/webhooks/1496473207681581066/KIDu0OlH0W3M2k0igCTGe1SQj3LqHLVmnsKaJjlEcpnMz-vinitZ_okoeMyYg7RqWopt";
+    const webhookUrl = (process.env.POLICE_REPORT_WEBHOOK_URL || "").trim();
+    if (!webhookUrl) {
+      return res.status(500).json({ ok: false, error: "POLICE_REPORT_WEBHOOK_URL manquant." });
+    }
     const embed = {
       title: "🚨 Signalement LSPD / BCSO",
       color: 0xd94b4b,
@@ -3638,8 +3638,8 @@ startReminderMonitor();
 startInactivityMonitor();
 startKeepAliveMonitor();
 
-app.listen(PORT, () => {
-  console.log(`TunersHub running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`TunersHub running on 0.0.0.0:${PORT}`);
   logSystemEvent(
     "🟢 Système mis à jour / Redémarré",
     `Une mise à jour a été détectée (ex: fichiers modifiés) et le site TunersHub a redémarré avec succès.`,

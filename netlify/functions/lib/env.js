@@ -1,8 +1,6 @@
 const FALLBACKS = {
-  DISCORD_CLIENT_ID: "1495868929346769058",
-  DISCORD_REDIRECT_URI: "https://tunerclock.netlify.app/auth/discord/callback",
-  SUPABASE_URL: "https://qiqjpjlnnmvgsjqzmasd.supabase.co",
-  ALLOWED_ADMIN_IDS: "417605116070461442,893278269170933810"
+  // Aucun secret ne doit etre hardcode dans GitHub.
+  // Mets les valeurs dans .env ou dans les variables d'environnement de l'hebergeur.
 };
 
 function required(name) {

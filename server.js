@@ -67,6 +67,20 @@ const discordBotRuntime = {
   tag: null,
   error: null,
 };
+let discordLoginRetryTimer = null;
+let discordLoginRetryCount = 0;
+const DISCORD_GATEWAY_READY_TIMEOUT_MS = Math.max(
+  25000,
+  Number(process.env.DISCORD_GATEWAY_READY_TIMEOUT_MS || 45000),
+);
+const DISCORD_LOGIN_RETRY_MIN_MS = Math.max(
+  10000,
+  Number(process.env.DISCORD_LOGIN_RETRY_MIN_MS || 30000),
+);
+const DISCORD_LOGIN_RETRY_MAX_MS = Math.max(
+  DISCORD_LOGIN_RETRY_MIN_MS,
+  Number(process.env.DISCORD_LOGIN_RETRY_MAX_MS || 5 * 60 * 1000),
+);
 const ADMIN_ROLE_FALLBACKS = {
   "417605116070461442": "Patron",
   "893278269170933810": "Copatron",
@@ -922,6 +936,88 @@ async function getTopGarageEmployee() {
   return rankedEmployees[0] || null;
 }
 
+async function validateDiscordBotTokenBeforeGateway() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DISCORD_FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: { Authorization: `Bot ${DISCORD_BOT_TOKEN}` },
+      signal: controller.signal,
+    });
+    const rawBody = await response.text().catch(() => "");
+
+    if (response.ok) {
+      let botInfo = null;
+      try {
+        botInfo = JSON.parse(rawBody);
+      } catch (_) {}
+      console.log(
+        `[DISCORD BOOT] Token valide via REST: ${botInfo?.username || "bot"} (${botInfo?.id || "id inconnu"})`,
+      );
+      return true;
+    }
+
+    const cleanBody = rawBody.replace(/\s+/g, " ").slice(0, 600);
+
+    if (response.status === 401 || response.status === 403) {
+      discordBotRuntime.online = false;
+      discordBotRuntime.error = `DISCORD_BOT_TOKEN invalide ou refuse (${response.status})`;
+      console.error(
+        `[DISCORD BOOT] Token refuse par Discord REST (${response.status}). La il faut reset DISCORD_BOT_TOKEN dans le Developer Portal et Render.`,
+      );
+      console.error(`[DISCORD BOOT] Reponse Discord: ${cleanBody}`);
+      return false;
+    }
+
+    console.error(
+      `[DISCORD BOOT] Verification REST Discord non OK (${response.status}). On tente quand meme le Gateway. Reponse: ${cleanBody}`,
+    );
+    return true;
+  } catch (error) {
+    const message = error.name === "AbortError" ? "timeout Discord REST" : error.message;
+    console.error(
+      `[DISCORD BOOT] Verification REST Discord impossible (${message}). On tente quand meme le Gateway.`,
+    );
+    return true;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function scheduleDiscordReconnect(reason) {
+  discordBotRuntime.online = false;
+  discordBotRuntime.error = reason;
+
+  if (discordLoginRetryTimer) {
+    console.error(`[DISCORD BOOT] Reconnexion deja planifiee. Raison: ${reason}`);
+    return;
+  }
+
+  discordLoginRetryCount += 1;
+  const delayMs = Math.min(
+    DISCORD_LOGIN_RETRY_MAX_MS,
+    DISCORD_LOGIN_RETRY_MIN_MS * discordLoginRetryCount,
+  );
+
+  console.error(
+    `[DISCORD BOOT] Bot pas ready: ${reason}. Nouvelle tentative dans ${Math.round(delayMs / 1000)}s.`,
+  );
+
+  discordLoginRetryTimer = setTimeout(() => {
+    discordLoginRetryTimer = null;
+    try {
+      if (discordClient) {
+        discordClient.destroy();
+      }
+    } catch (error) {
+      console.error("[DISCORD BOOT] destroy() impossible:", error.message);
+    }
+    discordClient = null;
+    startDiscordBot();
+  }, delayMs);
+}
+
 async function sendStartupMessage() {
   if (!discordClient?.isReady?.() || !DISCORD_STARTUP_CHANNEL_ID) return;
 
@@ -994,11 +1090,10 @@ function startDiscordBot() {
   let readyHandled = false;
   let readyWatchdog = setTimeout(() => {
     if (readyHandled || discordBotRuntime.online) return;
-    discordBotRuntime.error = "login lance, mais aucun evenement ready apres 25 secondes";
-    console.error(
-      "[DISCORD BOOT] Le login est lance, mais le bot n'est pas ready apres 25 secondes. Verifie token, Gateway Discord, ou permissions du bot.",
+    scheduleDiscordReconnect(
+      `login lance, mais aucun evenement ready apres ${Math.round(DISCORD_GATEWAY_READY_TIMEOUT_MS / 1000)} secondes`,
     );
-  }, 25000);
+  }, DISCORD_GATEWAY_READY_TIMEOUT_MS);
 
   const handleDiscordReady = async () => {
     if (readyHandled) return;
@@ -1007,6 +1102,7 @@ function startDiscordBot() {
 
     discordBotRuntime.online = true;
     discordBotRuntime.error = null;
+    discordLoginRetryCount = 0;
     discordBotRuntime.tag = discordClient.user?.tag || null;
     discordBotRuntime.readyAt = new Date().toISOString();
     console.log(`Discord bot connecte en ligne: ${discordBotRuntime.tag}`);
@@ -1033,6 +1129,20 @@ function startDiscordBot() {
   // Compatibilite: certaines versions/ecosystemes utilisent ready, d'autres clientReady.
   discordClient.once("clientReady", handleDiscordReady);
   discordClient.once("ready", handleDiscordReady);
+
+  discordClient.on("shardReady", (shardId) => {
+    console.log(`[DISCORD BOOT] Shard ${shardId} ready.`);
+  });
+
+  discordClient.on("shardReconnecting", (shardId) => {
+    console.warn(`[DISCORD BOOT] Shard ${shardId} reconnecting...`);
+  });
+
+  discordClient.on("shardResume", (shardId, replayedEvents) => {
+    console.log(
+      `[DISCORD BOOT] Shard ${shardId} resume (${replayedEvents || 0} events replayed).`,
+    );
+  });
 
   discordClient.on("error", (error) => {
     discordBotRuntime.online = false;
@@ -1068,21 +1178,40 @@ function startDiscordBot() {
     );
   });
 
-  console.log("[DISCORD BOOT] Lancement discordClient.login()...");
-  discordClient
-    .login(DISCORD_BOT_TOKEN)
-    .then(() => {
-      console.log("[DISCORD BOOT] login() accepte par discord.js, attente du ready...");
-    })
-    .catch((error) => {
+  (async () => {
+    const tokenLooksValid = await validateDiscordBotTokenBeforeGateway();
+    if (!tokenLooksValid) {
       clearTimeout(readyWatchdog);
-      discordBotRuntime.online = false;
-      discordBotRuntime.error = error.message;
-      console.error("Connexion bot Discord impossible:", error.message);
-      console.error(
-        "[DISCORD BOOT] Si tu vois TokenInvalid / invalid token: reset DISCORD_BOT_TOKEN. Sinon envoie-moi cette ligne exacte.",
-      );
-    });
+      return;
+    }
+
+    console.log("[DISCORD BOOT] Lancement discordClient.login()...");
+    discordClient
+      .login(DISCORD_BOT_TOKEN)
+      .then(() => {
+        console.log("[DISCORD BOOT] login() accepte par discord.js, attente du ready...");
+      })
+      .catch((error) => {
+        clearTimeout(readyWatchdog);
+        discordBotRuntime.online = false;
+        discordBotRuntime.error = error.message;
+        console.error("Connexion bot Discord impossible:", error.message);
+        console.error(
+          "[DISCORD BOOT] Si tu vois TokenInvalid / invalid token: reset DISCORD_BOT_TOKEN. Sinon envoie-moi cette ligne exacte.",
+        );
+
+        const message = String(error.message || "").toLowerCase();
+        if (!message.includes("token") && !message.includes("disallowed intents")) {
+          scheduleDiscordReconnect(error.message);
+        }
+      });
+  })().catch((error) => {
+    clearTimeout(readyWatchdog);
+    discordBotRuntime.online = false;
+    discordBotRuntime.error = error.message;
+    console.error("[DISCORD BOOT] Erreur boot Discord:", error.message);
+    scheduleDiscordReconnect(error.message);
+  });
 }
 async function sendActivityWebhook() {
   const webhookUrl =

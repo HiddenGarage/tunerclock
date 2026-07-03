@@ -1,5 +1,7 @@
 require("dotenv").config();
 
+const crypto = require("node:crypto");
+
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -187,6 +189,162 @@ const DEFAULT_RADIO_PLAYLISTS = [
 const SYSTEM_WEBHOOK_URL =
   "https://discord.com/api/webhooks/1496910730417537316/YV3-cS7_kcckxMC7IhYnRK5bj02dqoSoonLJ7e3Y5gCvoZ5_61k15Oj9Tc6xUwdrPooU";
 const errorCooldowns = new Map();
+
+const oauthLoginCooldowns = new Map();
+const oauthUsedCodes = new Map();
+let discordOAuthQueue = Promise.resolve();
+let lastDiscordOAuthExchangeAt = 0;
+const DISCORD_OAUTH_LOGIN_COOLDOWN_MS = Math.max(
+  3000,
+  Number(process.env.DISCORD_OAUTH_LOGIN_COOLDOWN_MS || 8000),
+);
+const DISCORD_OAUTH_CODE_TTL_MS = Math.max(
+  60000,
+  Number(process.env.DISCORD_OAUTH_CODE_TTL_MS || 10 * 60 * 1000),
+);
+const DISCORD_OAUTH_MIN_DELAY_MS = Math.max(
+  0,
+  Number(process.env.DISCORD_OAUTH_MIN_DELAY_MS || 1500),
+);
+const DISCORD_FETCH_TIMEOUT_MS = Math.max(
+  5000,
+  Number(process.env.DISCORD_FETCH_TIMEOUT_MS || 12000),
+);
+
+function getRequestIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.ip || "unknown")
+    .split(",")[0]
+    .trim();
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function clearOAuthStateCookie() {
+  return "tunershub_oauth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+}
+
+function sendDiscordAuthError(res, title, message, statusCode = 503, detail = "") {
+  return res.status(statusCode).send(`<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion Discord</title>
+  <style>
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#f4f4f5;font-family:Arial,sans-serif;}
+    .box{width:min(560px,calc(100% - 32px));border:1px solid #2a2d34;background:#171a21;padding:24px;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,.35);}
+    h1{margin:0 0 12px;font-size:22px;}p{line-height:1.5;color:#d6d6d6;}small{display:block;margin-top:14px;color:#8b8f9a;white-space:pre-wrap;}
+    a{display:inline-block;margin-top:16px;color:#fff;text-decoration:none;border:1px solid #3a3f4b;padding:10px 14px;border-radius:4px;}
+  </style>
+</head>
+<body>
+  <main class="box">
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(message)}</p>
+    ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+    <a href="/">Retour au panel</a>
+  </main>
+</body>
+</html>`);
+}
+
+function rememberOAuthCode(code) {
+  oauthUsedCodes.set(code, Date.now());
+  const now = Date.now();
+  for (const [savedCode, savedAt] of oauthUsedCodes.entries()) {
+    if (now - savedAt > DISCORD_OAUTH_CODE_TTL_MS) {
+      oauthUsedCodes.delete(savedCode);
+    }
+  }
+}
+
+async function fetchDiscordWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DISCORD_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function runDiscordOAuthExchange(task) {
+  const queuedTask = discordOAuthQueue.then(async () => {
+    const waitMs = Math.max(
+      0,
+      DISCORD_OAUTH_MIN_DELAY_MS - (Date.now() - lastDiscordOAuthExchangeAt),
+    );
+    if (waitMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+    lastDiscordOAuthExchangeAt = Date.now();
+    return task();
+  });
+
+  discordOAuthQueue = queuedTask.catch(() => {});
+  return queuedTask;
+}
+
+async function readDiscordError(response) {
+  const text = await response.text().catch(() => "");
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (_) {}
+
+  return {
+    status: response.status,
+    raw: text,
+    message:
+      parsed?.error_description || parsed?.message || parsed?.error || text || "Erreur Discord inconnue.",
+  };
+}
+
+function buildDiscordAuthError(errorInfo, step = "OAuth") {
+  const raw = String(errorInfo.raw || errorInfo.message || "");
+  const lower = raw.toLowerCase();
+
+  if (errorInfo.status === 429 || lower.includes("1015") || lower.includes("rate limit")) {
+    return {
+      status: 429,
+      title: "Discord bloque temporairement la connexion.",
+      message:
+        "Le bot n'est pas forcement mort. C'est l'auth web Discord qui se fait rate limit cote Render/Discord. Attends 10 a 30 minutes sans spam login, puis reessaie.",
+    };
+  }
+
+  if (lower.includes("invalid_client") || lower.includes("client secret")) {
+    return {
+      status: 500,
+      title: "Secret OAuth Discord invalide.",
+      message:
+        "Verifie DISCORD_CLIENT_ID et DISCORD_CLIENT_SECRET dans Render. Ce n'est pas le DISCORD_BOT_TOKEN.",
+    };
+  }
+
+  if (lower.includes("redirect") || lower.includes("invalid_grant")) {
+    return {
+      status: 500,
+      title: "Callback Discord invalide.",
+      message:
+        "Verifie que DISCORD_REDIRECT_URI dans Render est identique au Redirect URI dans Discord Developer Portal, sans slash de trop.",
+    };
+  }
+
+  return {
+    status: 500,
+    title: `Erreur connexion Discord (${step}).`,
+    message:
+      "Discord a refuse la connexion. Regarde les logs Render, le statut HTTP et le detail court affiche ici.",
+  };
+}
 
 async function logSystemEvent(
   title,
@@ -2179,51 +2337,121 @@ function buildPayslipPdf(res, payload) {
 }
 
 app.get("/auth/discord/login", (req, res) => {
+  const ip = getRequestIp(req);
+  const lastLoginAt = oauthLoginCooldowns.get(ip) || 0;
+  const waitMs = DISCORD_OAUTH_LOGIN_COOLDOWN_MS - (Date.now() - lastLoginAt);
+
+  if (waitMs > 0) {
+    return sendDiscordAuthError(
+      res,
+      "Connexion Discord trop rapide.",
+      `Attends ${Math.ceil(waitMs / 1000)} seconde(s), puis reclique une seule fois sur le bouton Discord.`,
+      429,
+    );
+  }
+
+  oauthLoginCooldowns.set(ip, Date.now());
+
+  const state = crypto.randomBytes(24).toString("hex");
   const url = new URL("https://discord.com/api/oauth2/authorize");
   url.searchParams.set("client_id", required("DISCORD_CLIENT_ID"));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", required("DISCORD_REDIRECT_URI"));
   url.searchParams.set("scope", "identify");
-  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("state", state);
+  // Ne pas forcer prompt=consent ici: ca re-demande l'autorisation trop souvent
+  // et ca augmente les chances de rate limit Cloudflare/Discord.
+
+  res.setHeader("Set-Cookie", buildCookie("tunershub_oauth_state", state, 10 * 60));
   res.redirect(url.toString());
 });
 
 app.get("/auth/discord/callback", async (req, res) => {
   try {
-    const code = req.query.code;
+    const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+    const cookies = parseCookies(req.headers.cookie || "");
+
     if (!code) {
-      return res.status(400).send("Code Discord manquant.");
+      return sendDiscordAuthError(res, "Code Discord manquant.", "Recommence la connexion Discord depuis le panel.", 400);
     }
 
-    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: required("DISCORD_CLIENT_ID"),
-        client_secret: required("DISCORD_CLIENT_SECRET"),
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: required("DISCORD_REDIRECT_URI"),
+    if (!state || !cookies.tunershub_oauth_state || state !== cookies.tunershub_oauth_state) {
+      res.setHeader("Set-Cookie", clearOAuthStateCookie());
+      return sendDiscordAuthError(
+        res,
+        "Session OAuth expiree.",
+        "Recommence la connexion Discord. Si tu as refresh la page callback, evite de la recharger.",
+        400,
+      );
+    }
+
+    if (oauthUsedCodes.has(code)) {
+      res.setHeader("Set-Cookie", clearOAuthStateCookie());
+      return res.redirect("/");
+    }
+
+    rememberOAuthCode(code);
+
+    const tokenResponse = await runDiscordOAuthExchange(() =>
+      fetchDiscordWithTimeout("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: required("DISCORD_CLIENT_ID"),
+          client_secret: required("DISCORD_CLIENT_SECRET"),
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: required("DISCORD_REDIRECT_URI"),
+        }),
       }),
-    });
+    );
 
     if (!tokenResponse.ok) {
-      return res
-        .status(500)
-        .send(`Echec echange token Discord: ${await tokenResponse.text()}`);
+      const errorInfo = await readDiscordError(tokenResponse);
+      const niceError = buildDiscordAuthError(errorInfo, "echange token");
+      console.error(
+        "Echec echange token Discord:",
+        errorInfo.status,
+        String(errorInfo.raw || errorInfo.message).slice(0, 500),
+      );
+      logSystemEvent(
+        "🟠 Auth Discord refusée",
+        `Etape: echange token\nStatus: ${errorInfo.status}\nMessage: ${String(errorInfo.message).slice(0, 900)}`,
+        0xf4a249,
+        true,
+      );
+      res.setHeader("Set-Cookie", clearOAuthStateCookie());
+      return sendDiscordAuthError(
+        res,
+        niceError.title,
+        niceError.message,
+        niceError.status,
+        `Status Discord: ${errorInfo.status}\nDetail: ${String(errorInfo.message).slice(0, 350)}`,
+      );
     }
 
     const tokenData = await tokenResponse.json();
-    const profileResponse = await fetch("https://discord.com/api/users/@me", {
+    const profileResponse = await fetchDiscordWithTimeout("https://discord.com/api/users/@me", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
 
     if (!profileResponse.ok) {
-      return res
-        .status(500)
-        .send(
-          `Echec recuperation profil Discord: ${await profileResponse.text()}`,
-        );
+      const errorInfo = await readDiscordError(profileResponse);
+      const niceError = buildDiscordAuthError(errorInfo, "profil");
+      console.error(
+        "Echec recuperation profil Discord:",
+        errorInfo.status,
+        String(errorInfo.raw || errorInfo.message).slice(0, 500),
+      );
+      res.setHeader("Set-Cookie", clearOAuthStateCookie());
+      return sendDiscordAuthError(
+        res,
+        niceError.title,
+        niceError.message,
+        niceError.status,
+        `Status Discord: ${errorInfo.status}\nDetail: ${String(errorInfo.message).slice(0, 350)}`,
+      );
     }
 
     const profile = await profileResponse.json();
@@ -2234,7 +2462,7 @@ app.get("/auth/discord/callback", async (req, res) => {
     let canManage = true;
 
     if (process.env.DISCORD_BOT_TOKEN && process.env.DISCORD_GUILD_ID) {
-      const memberResponse = await fetch(
+      const memberResponse = await fetchDiscordWithTimeout(
         `https://discord.com/api/v10/guilds/${process.env.DISCORD_GUILD_ID}/members/${profile.id}`,
         {
           headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` },
@@ -2285,16 +2513,26 @@ app.get("/auth/discord/callback", async (req, res) => {
       readOnly: isAdmin && canManage === false,
     };
 
-    res.setHeader(
-      "Set-Cookie",
+    res.setHeader("Set-Cookie", [
       buildCookie(
         "tunershub_session",
         encodeSession(session, required("SESSION_SECRET")),
       ),
-    );
+      clearOAuthStateCookie(),
+    ]);
     res.redirect("/");
   } catch (error) {
-    res.status(500).send(error.message);
+    const isTimeout = error?.name === "AbortError";
+    console.error("Erreur auth Discord:", error.message);
+    return sendDiscordAuthError(
+      res,
+      isTimeout ? "Discord ne repond pas assez vite." : "Erreur auth Discord.",
+      isTimeout
+        ? "Discord ou Render a timeout pendant la connexion. Attends une minute, puis reessaie une seule fois."
+        : "Une erreur interne a bloque la connexion Discord. Regarde les logs Render pour le detail.",
+      isTimeout ? 504 : 500,
+      error.message,
+    );
   }
 });
 

@@ -30,6 +30,7 @@ const {
   decodeSession,
   parseCookies,
   buildCookie,
+  useSecureCookies,
 } = require("./netlify/functions/lib/session");
 const { getSupabase } = require("./netlify/functions/lib/supabase");
 
@@ -54,6 +55,18 @@ const DISCORD_ACTIVITY_CHANNEL_ID =
   process.env.DISCORD_ACTIVITY_CHANNEL_ID || "1487846337931120762";
 const DISCORD_STARTUP_CHANNEL_ID =
   process.env.DISCORD_STARTUP_CHANNEL_ID || DISCORD_ACTIVITY_CHANNEL_ID;
+const DISCORD_ANNOUNCE_ALLOWED_ROLE_IDS = (
+  process.env.DISCORD_ANNOUNCE_ALLOWED_ROLE_IDS ||
+  "1487868408228741171,1487666934412611594,1516200272899084328,1487852908077781168"
+)
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
+const DISCORD_TEAM_MENTION_ROLE_ID = (
+  process.env.DISCORD_TEAM_MENTION_ROLE_ID ||
+  process.env.DISCORD_ANNONCE_MENTION_ROLE_ID ||
+  "1516200272899084328"
+).trim();
 const DISCORD_BOT_TOKEN = (process.env.DISCORD_BOT_TOKEN || "").trim();
 const DISCORD_TOKEN_PREVIEW = DISCORD_BOT_TOKEN
   ? `${DISCORD_BOT_TOKEN.slice(0, 6)}...${DISCORD_BOT_TOKEN.slice(-4)}`
@@ -243,8 +256,17 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
+function clearCookie(name) {
+  const secure = useSecureCookies() ? "; Secure" : "";
+  return `${name}=; Path=/; HttpOnly${secure}; SameSite=Lax; Max-Age=0`;
+}
+
 function clearOAuthStateCookie() {
-  return "tunershub_oauth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
+  return clearCookie("tunershub_oauth_state");
+}
+
+function clearSessionCookie() {
+  return clearCookie("tunershub_session");
 }
 
 function sendDiscordAuthError(res, title, message, statusCode = 503, detail = "") {
@@ -595,6 +617,138 @@ function canManageFromDiscordRole(roleName) {
   return DISCORD_MANAGEMENT_ROLES.includes(roleName);
 }
 
+function getPanelBaseUrl() {
+  const configuredBase = (
+    process.env.PUBLIC_PANEL_URL ||
+    process.env.PANEL_URL ||
+    process.env.DISCORD_PUBLIC_BASE_URL ||
+    ""
+  ).trim();
+
+  if (configuredBase) return configuredBase.replace(/\/+$/, "");
+
+  const redirectUri = (process.env.DISCORD_REDIRECT_URI || "").trim();
+  const match = redirectUri.match(/^(.*)\/auth\/discord\/callback\/?$/);
+  if (match?.[1]) return match[1].replace(/\/+$/, "");
+
+  return "https://tunerclock.onrender.com";
+}
+
+function getPanelUrl(anchor = "") {
+  return `${getPanelBaseUrl()}/${anchor ? anchor.replace(/^#?/, "#") : ""}`;
+}
+
+function hasAnyDiscordRole(member, roleIds = []) {
+  if (!member || !roleIds.length) return false;
+
+  const roles = member.roles;
+  if (!roles) return false;
+
+  if (Array.isArray(roles)) {
+    return roleIds.some((roleId) => roles.includes(roleId));
+  }
+
+  if (roles.cache?.has) {
+    return roleIds.some((roleId) => roles.cache.has(roleId));
+  }
+
+  if (roles.has) {
+    return roleIds.some((roleId) => roles.has(roleId));
+  }
+
+  return false;
+}
+
+function canUseDiscordStaffCommand(member, discordId) {
+  if (hasAnyDiscordRole(member, DISCORD_ANNOUNCE_ALLOWED_ROLE_IDS)) return true;
+  const fallbackRole = getAdminFallbackRole(discordId);
+  return Boolean(fallbackRole && canManageFromDiscordRole(fallbackRole.name));
+}
+
+function getDiscordDisplayNameFromUser(user, member = null) {
+  return (
+    member?.displayName ||
+    user?.globalName ||
+    user?.username ||
+    `Discord ${user?.id || "inconnu"}`
+  );
+}
+
+async function findEmployeeByDiscordUser(supabase, user) {
+  if (!user?.id) return null;
+  const { data, error } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("discord_id", user.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function getActiveShiftForEmployee(supabase, employeeId) {
+  if (!employeeId) return null;
+  const { data, error } = await supabase
+    .from("shifts")
+    .select("*")
+    .eq("employee_id", employeeId)
+    .eq("status", "active")
+    .order("punched_in_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+function getPendingPrimeForEmployee(settings, employeeId) {
+  const pendingPrimes = settings?.pending_primes || {};
+  const entry = pendingPrimes[String(employeeId)] || {};
+  return Number(entry.amount || 0) || 0;
+}
+
+async function addPendingPrime(supabase, employee, amount, reason, actorDiscordId, actorName) {
+  const settings = await getSettingsMap(supabase);
+  const pendingPrimes = { ...(settings.pending_primes || {}) };
+  const key = String(employee.id);
+  const current = pendingPrimes[key] || { amount: 0, entries: [] };
+  const entry = {
+    id: crypto.randomUUID(),
+    amount: Number(amount),
+    reason,
+    createdByDiscordId: actorDiscordId,
+    createdByName: actorName,
+    createdAt: new Date().toISOString(),
+  };
+
+  pendingPrimes[key] = {
+    amount: Number(current.amount || 0) + Number(amount),
+    entries: [...(current.entries || []), entry].slice(-50),
+  };
+
+  await upsertSetting(supabase, "pending_primes", pendingPrimes);
+  return pendingPrimes[key];
+}
+
+async function addEmployeeAbsence(supabase, employee, targetUser, reason, actorDiscordId, actorName) {
+  const settings = await getSettingsMap(supabase);
+  const absences = Array.isArray(settings.absences_list)
+    ? settings.absences_list
+    : [];
+
+  const absence = {
+    id: crypto.randomUUID(),
+    employeeId: employee?.id || null,
+    discordId: targetUser.id,
+    name: employee?.discord_name || targetUser.globalName || targetUser.username,
+    reason,
+    createdByDiscordId: actorDiscordId,
+    createdByName: actorName,
+    createdAt: new Date().toISOString(),
+  };
+
+  await upsertSetting(supabase, "absences_list", [absence, ...absences].slice(0, 200));
+  return absence;
+}
+
 async function writeDiscordAuditLog(
   supabase,
   actorDiscordId,
@@ -699,6 +853,114 @@ async function syncDiscordCommands() {
         },
       ],
     },
+    {
+      name: "annonce",
+      description: "Publier une annonce generale",
+      options: [
+        {
+          name: "message",
+          description: "Texte de l'annonce",
+          type: 3,
+          required: true,
+        },
+        {
+          name: "titre",
+          description: "Titre de l'annonce",
+          type: 3,
+          required: false,
+        },
+        {
+          name: "tag_equipe",
+          description: "Taguer le role equipe dans l'annonce",
+          type: 5,
+          required: false,
+        },
+      ],
+    },
+    {
+      name: "prime",
+      description: "Ajouter une prime a un employe (Direction)",
+      options: [
+        {
+          name: "membre",
+          description: "Employe qui recoit la prime",
+          type: 6,
+          required: true,
+        },
+        {
+          name: "montant",
+          description: "Montant de la prime",
+          type: 10,
+          required: true,
+        },
+        {
+          name: "raison",
+          description: "Raison de la prime",
+          type: 3,
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "employe",
+      description: "Afficher la fiche d'un employe (Direction)",
+      options: [
+        {
+          name: "membre",
+          description: "Employe a verifier",
+          type: 6,
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "reunion",
+      description: "Annoncer une reunion avec tag equipe",
+      options: [
+        {
+          name: "date",
+          description: "Date de la reunion, exemple 2026-07-03",
+          type: 3,
+          required: true,
+        },
+        {
+          name: "heure",
+          description: "Heure de la reunion, exemple 20h30",
+          type: 3,
+          required: true,
+        },
+        {
+          name: "message",
+          description: "Message principal de la reunion",
+          type: 3,
+          required: true,
+        },
+        {
+          name: "raison",
+          description: "Raison de la reunion",
+          type: 3,
+          required: true,
+        },
+      ],
+    },
+    {
+      name: "absence",
+      description: "Enregistrer une absence d'employe (Direction)",
+      options: [
+        {
+          name: "membre",
+          description: "Employe absent",
+          type: 6,
+          required: true,
+        },
+        {
+          name: "raison",
+          description: "Raison de l'absence",
+          type: 3,
+          required: true,
+        },
+      ],
+    },
   ];
 
   try {
@@ -707,7 +969,7 @@ async function syncDiscordCommands() {
       process.env.DISCORD_GUILD_ID || undefined,
     );
     console.log(
-      "Commandes Discord synchronisees: /in /out /paye /finance /salaire /embauche",
+      "Commandes Discord synchronisees: /in /out /paye /finance /salaire /embauche /annonce /prime /employe /reunion /absence",
     );
   } catch (error) {
     console.error(
@@ -752,8 +1014,7 @@ function buildEmployeeGuideEmbed() {
       },
       {
         name: "Panel web",
-        value:
-          "Pour consulter le [PANEL WEB](https://tunerclock.onrender.com/#presence).",
+        value: `Pour consulter le [PANEL WEB](${getPanelUrl("presence")}).`,
       },
       {
         name: "Rappel automatique",
@@ -1018,34 +1279,9 @@ function scheduleDiscordReconnect(reason) {
 }
 
 async function sendStartupMessage() {
-  if (!discordClient?.isReady?.() || !DISCORD_STARTUP_CHANNEL_ID) return;
-
-  try {
-    const channel = await discordClient.channels
-      .fetch(DISCORD_STARTUP_CHANNEL_ID)
-      .catch(() => null);
-
-    if (!channel?.isTextBased?.()) return;
-
-    const messageLines = [
-      "J’ai planté, j’ai réfléchi, j’suis revenu plus fort. Merci de toucher à rien pentoute pendant 4 secondes.",
-    ];
-
-    const topEmployee = await getTopGarageEmployee().catch((error) => {
-      console.error("Employe le plus actif introuvable:", error.message);
-      return null;
-    });
-
-    if (topEmployee) {
-      messageLines.push(
-        `Btw <@${topEmployee.discordId}>, t'es un bon mongole , tu passes-tu ta vie au garage ? ${topEmployee.totalHours.toFixed(2)}h au compteur, va toucher du gazon un peu.`,
-      );
-    }
-
-    await channel.send(messageLines.join("\n\n")).catch(() => {});
-  } catch (error) {
-    console.error("Message de demarrage Discord impossible:", error.message);
-  }
+  // Désactivé volontairement: on ne veut plus envoyer de message dans Discord
+  // à chaque reboot / reconnect du bot.
+  return;
 }
 
 function startDiscordBot() {
@@ -1118,16 +1354,15 @@ function startDiscordBot() {
       syncDiscordCommands();
       publishEmployeeGuideEmbed();
       publishRecruitmentEmbed();
-      await sendStartupMessage();
+      // Message automatique au démarrage désactivé pour éviter le spam à chaque reboot.
     } catch (error) {
       discordBotRuntime.error = error.message;
       console.error("Presence Discord impossible:", error.message);
     }
   };
 
-  // Compatibilite: certaines versions/ecosystemes utilisent ready, d'autres clientReady.
+  // discord.js v14+ : utilise clientReady pour éviter le warning de dépréciation de l'event ready.
   discordClient.once("clientReady", handleDiscordReady);
-  discordClient.once("ready", handleDiscordReady);
 
   discordClient.on("shardReady", (shardId) => {
     console.log(`[DISCORD BOOT] Shard ${shardId} ready.`);
@@ -1175,6 +1410,874 @@ function startDiscordBot() {
       0xd94b4b,
       true,
     );
+  });
+
+  discordClient.on("interactionCreate", async (interaction) => {
+    try {
+      // --- GESTION DU CHOIX DE DATE D'ENTREVUE PAR LE CANDIDAT ---
+      if (
+        interaction.isStringSelectMenu() &&
+        interaction.customId.startsWith("tc_interview_select:")
+      ) {
+        const recruitmentId = interaction.customId.split(":")[1];
+        const selectedDate = interaction.values[0];
+        const supabase = getSupabase();
+        const settings = await getSettingsMap(supabase);
+        let recruitments = settings.recruitments_list || [];
+        const recIndex = recruitments.findIndex((r) => r.id === recruitmentId);
+        if (recIndex !== -1) {
+          recruitments[recIndex].status = "interview_selected";
+          recruitments[recIndex].interviewSelected = selectedDate;
+          await upsertSetting(supabase, "recruitments_list", recruitments);
+          await interaction.update({
+            content: `✅ Tu as choisi la date suivante : **${selectedDate}**.\nLa direction a été notifiée et va te confirmer ce rendez-vous sous peu !`,
+            components: [],
+            embeds: [],
+          });
+        }
+        return;
+      }
+
+      if (interaction.isChatInputCommand()) {
+        const roleDefinition = resolveRoleFromDiscordMember(
+          interaction.member,
+          interaction.user.id,
+        );
+        const displayName =
+          interaction.member?.displayName ||
+          interaction.user.globalName ||
+          interaction.user.username;
+
+        if (interaction.commandName === "in") {
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          const result = await punchInDiscordUser(
+            interaction.user.id,
+            displayName,
+            roleDefinition.name,
+          );
+          await interaction.editReply(
+            result.alreadyActive
+              ? "Tu etais deja en service."
+              : `Tu es maintenant en service comme ${roleDefinition.name}.`,
+          );
+          return;
+        }
+
+        if (interaction.commandName === "out") {
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          const result = await punchOutDiscordUser(interaction.user.id);
+          await interaction.editReply(
+            `Sortie enregistree. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`,
+          );
+          return;
+        }
+
+        if (interaction.commandName === "paye") {
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          const summary = await getPaySummaryForDiscordUser(
+            interaction.user.id,
+          );
+          await interaction.editReply(
+            [
+              `Argent gagne: ${formatRpMoney(summary.amount)}`,
+              `Heures actuelles: ${Number(summary.totalHours || 0).toFixed(2)} h`,
+              `Taux horaire: ${formatRpMoney(summary.hourlyRate)}/h`,
+              summary.liveHours > 0
+                ? `Inclut ton service en cours: ${Number(summary.liveHours).toFixed(2)} h`
+                : "Aucun service actif en ce moment.",
+            ].join("\n"),
+          );
+          return;
+        }
+
+        if (interaction.commandName === "finance") {
+          const action = interaction.options.getString("action");
+          const montant = interaction.options.getNumber("montant");
+          const notes =
+            interaction.options.getString("notes") || "Ajustement via Discord";
+
+          const allowedRoles = ["Patron", "Copatron"];
+          if (!allowedRoles.includes(roleDefinition.name)) {
+            await interaction.reply({
+              content: "Commande réservée à la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const settings = await getSettingsMap(supabase);
+            const finance = settings.finance_inputs || { weeklyProfit: 0 };
+
+            const change = action === "ajouter" ? montant : -montant;
+            finance.weeklyProfit = Number(finance.weeklyProfit || 0) + change;
+
+            await upsertSetting(supabase, "finance_inputs", finance);
+            await supabase.from("weekly_profit_entries").insert({
+              label: notes,
+              amount: change,
+              created_by_discord_id: interaction.user.id,
+            });
+
+            await interaction.editReply(
+              `Transaction enregistrée : **${change > 0 ? "+" : ""}${change}$** dans la trésorerie.\n*Notes : ${notes}*`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Erreur lors de l'opération : ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "salaire") {
+          if (!canManageFromDiscordRole(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant uniquement.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const targetRoleName = interaction.options.getString("role", true);
+          const nextRate = Number(interaction.options.getNumber("salaire", true));
+          if (!Number.isFinite(nextRate) || nextRate < 0) {
+            await interaction.reply({
+              content: "Salaire invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const roleRates = await getRoleRates(supabase);
+            const merged = { ...roleRates, [targetRoleName]: nextRate };
+            await upsertSetting(supabase, "role_rates", merged);
+
+            await supabase
+              .from("employees")
+              .update({ hourly_rate: nextRate })
+              .eq("role", targetRoleName);
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "role_rates_updated",
+              {
+                details: {
+                  roleRates: merged,
+                  source: "discord_command",
+                },
+              },
+            );
+
+            await interaction.editReply(
+              `Salaire mis a jour: **${targetRoleName}** est maintenant a **${Math.round(nextRate)}$/h**.`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Impossible de mettre a jour le salaire: ${err.message}`,
+            );
+          }
+          return;
+        }
+
+        if (interaction.commandName === "annonce") {
+          if (!canUseDiscordStaffCommand(interaction.member, interaction.user.id)) {
+            await interaction.reply({
+              content: "Commande reservee a la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const announcementText = interaction.options.getString("message", true).trim();
+          const announcementTitle = (
+            interaction.options.getString("titre") || "Annonce generale"
+          ).trim();
+          const shouldTagEquipe = Boolean(
+            interaction.options.getBoolean("tag_equipe") || false,
+          );
+
+          if (!announcementText) {
+            await interaction.reply({
+              content: "Ton annonce est vide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          if (!interaction.channel?.isTextBased?.()) {
+            await interaction.reply({
+              content: "Impossible d'envoyer l'annonce dans ce salon.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+
+          const embed = new EmbedBuilder()
+            .setColor(0xffd000)
+            .setTitle(announcementTitle.slice(0, 256))
+            .setDescription(announcementText.slice(0, 4096))
+            .setFooter({ text: `Annonce par ${displayName}` })
+            .setTimestamp();
+
+          const payload = {
+            content: shouldTagEquipe && DISCORD_TEAM_MENTION_ROLE_ID
+              ? `<@&${DISCORD_TEAM_MENTION_ROLE_ID}>`
+              : "",
+            embeds: [embed],
+            allowedMentions: {
+              roles: shouldTagEquipe && DISCORD_TEAM_MENTION_ROLE_ID
+                ? [DISCORD_TEAM_MENTION_ROLE_ID]
+                : [],
+            },
+          };
+
+          await interaction.channel.send(payload);
+          await interaction.editReply(
+            shouldTagEquipe
+              ? "Annonce envoyee avec le tag equipe."
+              : "Annonce envoyee sans tag.",
+          );
+          return;
+        }
+
+        if (interaction.commandName === "prime") {
+          if (!canUseDiscordStaffCommand(interaction.member, interaction.user.id)) {
+            await interaction.reply({
+              content: "Commande reservee a la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const targetUser = interaction.options.getUser("membre", true);
+          const amount = Number(interaction.options.getNumber("montant", true));
+          const reason = interaction.options.getString("raison", true).trim();
+
+          if (!Number.isFinite(amount) || amount <= 0) {
+            await interaction.reply({
+              content: "Montant de prime invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const employee = await findEmployeeByDiscordUser(supabase, targetUser);
+            if (!employee) {
+              await interaction.editReply(
+                "Employe introuvable dans TunersHub. Il doit faire /in au moins une fois ou etre embauche avant de recevoir une prime.",
+              );
+              return;
+            }
+
+            const pendingPrime = await addPendingPrime(
+              supabase,
+              employee,
+              amount,
+              reason,
+              interaction.user.id,
+              displayName,
+            );
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "discord_prime_added",
+              {
+                targetEmployeeId: employee.id,
+                targetDiscordId: targetUser.id,
+                targetName: employee.discord_name || targetUser.username,
+                details: { amount, reason, pendingTotal: pendingPrime.amount },
+              },
+            );
+
+            const embed = new EmbedBuilder()
+              .setColor(0xffd000)
+              .setTitle("Prime ajoutee")
+              .setDescription(`Une prime a ete ajoutee a <@${targetUser.id}>.`)
+              .addFields(
+                { name: "Montant", value: formatRpMoney(amount), inline: true },
+                {
+                  name: "Prime en attente",
+                  value: formatRpMoney(pendingPrime.amount),
+                  inline: true,
+                },
+                { name: "Raison", value: reason.slice(0, 1024) },
+              )
+              .setFooter({ text: `Ajoutee par ${displayName}` })
+              .setTimestamp();
+
+            if (interaction.channel?.isTextBased?.()) {
+              await interaction.channel.send({
+                embeds: [embed],
+                allowedMentions: { users: [targetUser.id], roles: [] },
+              });
+            }
+
+            await interaction.editReply(
+              `Prime de ${formatRpMoney(amount)} ajoutee a ${targetUser.username}. Total en attente: ${formatRpMoney(pendingPrime.amount)}.`,
+            );
+          } catch (err) {
+            await interaction.editReply(`Impossible d'ajouter la prime: ${err.message}`);
+          }
+          return;
+        }
+
+        if (interaction.commandName === "employe") {
+          if (!canUseDiscordStaffCommand(interaction.member, interaction.user.id)) {
+            await interaction.reply({
+              content: "Commande reservee a la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const targetUser = interaction.options.getUser("membre", true);
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const employee = await findEmployeeByDiscordUser(supabase, targetUser);
+            if (!employee) {
+              await interaction.editReply("Employe introuvable dans TunersHub.");
+              return;
+            }
+
+            const settings = await getSettingsMap(supabase);
+            const activeShift = await getActiveShiftForEmployee(supabase, employee.id);
+            const liveHours = activeShift
+              ? Math.max(
+                  0,
+                  (Date.now() - new Date(activeShift.punched_in_at).getTime()) / 3600000,
+                )
+              : 0;
+            const totalHours = Number(employee.total_hours || 0) + liveHours;
+            const hourlyRate = numberOrDefault(employee.hourly_rate, DEFAULT_HOURLY_RATE);
+            const pendingPrime = getPendingPrimeForEmployee(settings, employee.id);
+
+            const embed = new EmbedBuilder()
+              .setColor(employee.is_active || activeShift ? 0x30c4a3 : 0x8a8f98)
+              .setTitle(`Fiche employe | ${employee.discord_name || targetUser.username}`)
+              .setDescription(`<@${targetUser.id}>`)
+              .addFields(
+                { name: "Role", value: employee.role || "Non defini", inline: true },
+                {
+                  name: "Statut",
+                  value: employee.is_active || activeShift ? "En service" : "Hors service",
+                  inline: true,
+                },
+                {
+                  name: "Heures totales",
+                  value: `${Number(totalHours || 0).toFixed(2)} h`,
+                  inline: true,
+                },
+                {
+                  name: "Taux horaire",
+                  value: `${formatRpMoney(hourlyRate)}/h`,
+                  inline: true,
+                },
+                {
+                  name: "Montant estime",
+                  value: formatRpMoney(totalHours * hourlyRate + pendingPrime),
+                  inline: true,
+                },
+                {
+                  name: "Prime en attente",
+                  value: formatRpMoney(pendingPrime),
+                  inline: true,
+                },
+              )
+              .setFooter({ text: `Demande par ${displayName}` })
+              .setTimestamp();
+
+            if (activeShift?.punched_in_at) {
+              embed.addFields({
+                name: "Punch in actuel",
+                value: new Date(activeShift.punched_in_at).toLocaleString("fr-CA"),
+                inline: false,
+              });
+            }
+
+            await interaction.editReply({ embeds: [embed] });
+          } catch (err) {
+            await interaction.editReply(`Impossible de charger l'employe: ${err.message}`);
+          }
+          return;
+        }
+
+        if (interaction.commandName === "reunion") {
+          if (!canUseDiscordStaffCommand(interaction.member, interaction.user.id)) {
+            await interaction.reply({
+              content: "Commande reservee a la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const meetingDate = interaction.options.getString("date", true).trim();
+          const meetingTime = interaction.options.getString("heure", true).trim();
+          const meetingMessage = interaction.options.getString("message", true).trim();
+          const meetingReason = interaction.options.getString("raison", true).trim();
+
+          if (!interaction.channel?.isTextBased?.()) {
+            await interaction.reply({
+              content: "Impossible d'envoyer la reunion dans ce salon.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          const embed = new EmbedBuilder()
+            .setColor(0xffd000)
+            .setTitle("Reunion d'equipe")
+            .setDescription(meetingMessage.slice(0, 4096))
+            .addFields(
+              { name: "Date", value: meetingDate.slice(0, 1024), inline: true },
+              { name: "Heure", value: meetingTime.slice(0, 1024), inline: true },
+              { name: "Raison", value: meetingReason.slice(0, 1024) },
+            )
+            .setFooter({ text: `Annoncee par ${displayName}` })
+            .setTimestamp();
+
+          await interaction.channel.send({
+            content: DISCORD_TEAM_MENTION_ROLE_ID
+              ? `<@&${DISCORD_TEAM_MENTION_ROLE_ID}>`
+              : "",
+            embeds: [embed],
+            allowedMentions: {
+              roles: DISCORD_TEAM_MENTION_ROLE_ID ? [DISCORD_TEAM_MENTION_ROLE_ID] : [],
+            },
+          });
+          await interaction.editReply("Reunion envoyee avec le tag equipe.");
+          return;
+        }
+
+        if (interaction.commandName === "absence") {
+          if (!canUseDiscordStaffCommand(interaction.member, interaction.user.id)) {
+            await interaction.reply({
+              content: "Commande reservee a la direction.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const targetUser = interaction.options.getUser("membre", true);
+          const reason = interaction.options.getString("raison", true).trim();
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const supabase = getSupabase();
+            const employee = await findEmployeeByDiscordUser(supabase, targetUser);
+            const absence = await addEmployeeAbsence(
+              supabase,
+              employee,
+              targetUser,
+              reason,
+              interaction.user.id,
+              displayName,
+            );
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "discord_absence_added",
+              {
+                targetEmployeeId: employee?.id || null,
+                targetDiscordId: targetUser.id,
+                targetName: absence.name,
+                details: { reason, absenceId: absence.id },
+              },
+            );
+
+            const embed = new EmbedBuilder()
+              .setColor(0xf4a249)
+              .setTitle("Absence enregistree")
+              .setDescription(`<@${targetUser.id}> a ete note absent.`)
+              .addFields({ name: "Raison", value: reason.slice(0, 1024) })
+              .setFooter({ text: `Enregistre par ${displayName}` })
+              .setTimestamp();
+
+            if (interaction.channel?.isTextBased?.()) {
+              await interaction.channel.send({
+                embeds: [embed],
+                allowedMentions: { users: [targetUser.id], roles: [] },
+              });
+            }
+
+            await interaction.editReply(`Absence enregistree pour ${targetUser.username}.`);
+          } catch (err) {
+            await interaction.editReply(`Impossible d'enregistrer l'absence: ${err.message}`);
+          }
+          return;
+        }
+
+        if (interaction.commandName === "embauche") {
+          if (!canManageFromDiscordRole(roleDefinition.name)) {
+            await interaction.reply({
+              content:
+                "Commande reservee a Patron, Copatron et Gerant uniquement.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          const user = interaction.options.getUser("user", true);
+          const assignedRoleName = interaction.options.getString("role", true);
+          const assignedRole = ROLE_DEFINITIONS.find(
+            (role) => role.name === assignedRoleName,
+          );
+          if (!assignedRole?.id) {
+            await interaction.reply({
+              content: "Role invalide.",
+              flags: [MessageFlags.Ephemeral],
+            });
+            return;
+          }
+
+          await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+          try {
+            const guild = discordClient.guilds.cache.get(
+              process.env.DISCORD_GUILD_ID,
+            );
+            if (!guild) {
+              await interaction.editReply("Serveur Discord introuvable.");
+              return;
+            }
+            const member = await guild.members.fetch(user.id).catch(() => null);
+            if (!member) {
+              await interaction.editReply("Utilisateur introuvable sur le serveur.");
+              return;
+            }
+
+            const roleIdsToClean = ROLE_DEFINITIONS.filter(
+              (role) => role.name !== "Gouvernement",
+            ).map((role) => role.id);
+            await member.roles.remove(roleIdsToClean).catch(() => null);
+            await member.roles.add(assignedRole.id).catch(() => null);
+
+            const supabase = getSupabase();
+            const roleRates = await getRoleRates(supabase);
+            const roleRate = numberOrDefault(
+              roleRates[assignedRole.name],
+              assignedRole.hourlyRate,
+            );
+            await supabase.from("employees").upsert(
+              {
+                discord_id: user.id,
+                discord_name: user.globalName || user.username,
+                role: assignedRole.name,
+                hourly_rate: roleRate,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "discord_id" },
+            );
+
+            await writeDiscordAuditLog(
+              supabase,
+              interaction.user.id,
+              displayName,
+              "employee_hired_discord",
+              {
+                targetDiscordId: user.id,
+                targetName: user.globalName || user.username,
+                details: {
+                  roleName: assignedRole.name,
+                  source: "discord_command",
+                },
+              },
+            );
+
+            await interaction.editReply(
+              `Embauche confirmee: <@${user.id}> est maintenant **${assignedRole.name}**.`,
+            );
+          } catch (err) {
+            await interaction.editReply(
+              `Impossible d'embaucher cet utilisateur: ${err.message}`,
+            );
+          }
+          return;
+        }
+      }
+
+      if (interaction.isButton()) {
+        if (interaction.customId === "tc_apply") {
+          const modal = new ModalBuilder()
+            .setCustomId("tc_apply_modal")
+            .setTitle("Candidature - Santos Tuners");
+
+          const q1 = new TextInputBuilder()
+            .setCustomId("q1")
+            .setLabel("Identite (Nom RP, Age IRL, Tel)")
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder("- Nom RP :\n- Age IRL :\n- Numero :")
+            .setRequired(true);
+          const q2 = new TextInputBuilder()
+            .setCustomId("q2")
+            .setLabel("Expériences et Compétences")
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder(
+              "Ancien garage, mécanique générale, travail d'équipe... (Même débutant c'est correct)",
+            )
+            .setRequired(true);
+          const q3 = new TextInputBuilder()
+            .setCustomId("q3")
+            .setLabel("Disponibilités (Jours/Heures)")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          const q4 = new TextInputBuilder()
+            .setCustomId("q4")
+            .setLabel("Motivation (Pourquoi nous ?)")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
+          const q5 = new TextInputBuilder()
+            .setCustomId("q5")
+            .setLabel("Boîte à lunch pour la plage ?")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Tu mets quoi dedans ?")
+            .setRequired(true);
+
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(q1),
+            new ActionRowBuilder().addComponents(q2),
+            new ActionRowBuilder().addComponents(q3),
+            new ActionRowBuilder().addComponents(q4),
+            new ActionRowBuilder().addComponents(q5),
+          );
+
+          await interaction.showModal(modal);
+          return;
+        }
+
+        const [action, employeeId] = String(interaction.customId || "").split(
+          ":",
+        );
+        if (
+          ![
+            "tc_reminder_out",
+            "tc_reminder_active",
+            "tc_boss_out",
+            "tc_boss_active",
+          ].includes(action)
+        )
+          return;
+
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        const supabase = getSupabase();
+        const { data: employee, error: employeeError } = await supabase
+          .from("employees")
+          .select("*")
+          .eq("id", employeeId)
+          .single();
+
+        if (employeeError || !employee) {
+          await interaction.editReply("Employe introuvable dans TunersHub.");
+          return;
+        }
+
+        if (action === "tc_boss_out" || action === "tc_boss_active") {
+          const bosses = ["893278269170933810", "417605116070461442"];
+          if (!bosses.includes(interaction.user.id)) {
+            await interaction.editReply(
+              "Seul le patron peut utiliser ce bouton.",
+            );
+            return;
+          }
+          if (action === "tc_boss_active") {
+            const { data: activeShift } = await supabase
+              .from("shifts")
+              .select("id")
+              .eq("employee_id", employee.id)
+              .eq("status", "active")
+              .order("punched_in_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            await updateReminderState(supabase, activeShift?.id, {
+              response: "boss_confirmed",
+              responseLabel: "Patron a confirme l'activite",
+              respondedAt: new Date().toISOString(),
+            });
+            await interaction.editReply(
+              `Tu as confirme que ${employee.discord_name} est toujours en service.`,
+            );
+            return;
+          } else {
+            const result = await closeActiveShiftForEmployee(
+              supabase,
+              employee,
+              "Patron (Alerte)",
+            );
+            await updateReminderState(supabase, result.shiftId, {
+              response: "boss_punched_out",
+              responseLabel: "Patron a force la sortie",
+              respondedAt: new Date().toISOString(),
+            });
+            await interaction.editReply(
+              `Sortie forcee pour ${employee.discord_name}. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`,
+            );
+            await sendFunnyForceOutMessage(employee.discord_id);
+            return;
+          }
+        }
+
+        if (employee.discord_id !== interaction.user.id) {
+          await interaction.editReply("Ce rappel ne t'est pas destine.");
+          return;
+        }
+
+        if (action === "tc_reminder_active") {
+          const { data: activeShift } = await supabase
+            .from("shifts")
+            .select("id")
+            .eq("employee_id", employee.id)
+            .eq("status", "active")
+            .order("punched_in_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          await updateReminderState(supabase, activeShift?.id, {
+            response: "still_active",
+            responseLabel: "Employe confirme actif",
+            respondedAt: new Date().toISOString(),
+            employeeId: employee.id,
+            discordId: employee.discord_id,
+          });
+          await interaction.editReply(
+            "Parfait, tu restes en service. Merci d'avoir confirme.",
+          );
+          return;
+        }
+
+        const result = await closeActiveShiftForEmployee(
+          supabase,
+          employee,
+          "Rappel Discord",
+        );
+        await updateReminderState(supabase, result.shiftId, {
+          response: "punched_out",
+          responseLabel: "Employe a demande punch out",
+          respondedAt: new Date().toISOString(),
+          employeeId: employee.id,
+          discordId: employee.discord_id,
+        });
+        await interaction.editReply(
+          `Punch out effectue. Duree ajoutee: ${Number(result.durationHours || 0).toFixed(2)} h.`,
+        );
+      }
+
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId === "tc_apply_modal"
+      ) {
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+        const q1 = interaction.fields.getTextInputValue("q1");
+        const q2 = interaction.fields.getTextInputValue("q2");
+        const q3 = interaction.fields.getTextInputValue("q3");
+        const q4 = interaction.fields.getTextInputValue("q4");
+        const q5 = interaction.fields.getTextInputValue("q5");
+
+        const supabase = getSupabase();
+        const settings = await getSettingsMap(supabase);
+        const recruitments = settings.recruitments_list || [];
+        recruitments.push({
+          id: Date.now().toString(),
+          discordId: interaction.user.id,
+          discordName: interaction.user.username,
+          q1,
+          q2,
+          q3,
+          q4,
+          q5,
+          date: new Date().toISOString(),
+        });
+        await upsertSetting(supabase, "recruitments_list", recruitments);
+
+        // --- Création du salon Discord pour la candidature ---
+        try {
+          const guild = discordClient.guilds.cache.get(
+            process.env.DISCORD_GUILD_ID,
+          );
+          if (guild) {
+            const pseudo =
+              interaction.member?.displayName ||
+              interaction.user.globalName ||
+              interaction.user.username;
+            const channelName = `cv-${pseudo}`
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, "");
+            const newChannel = await guild.channels.create({
+              name: channelName,
+              type: ChannelType.GuildText,
+              parent: "1487876458239103096",
+              topic: `Candidature de ${pseudo} (${interaction.user.id})`,
+            });
+
+            const embed = new EmbedBuilder()
+              .setColor(0xe63946)
+              .setTitle("📄 Nouvelle Candidature")
+              .addFields(
+                {
+                  name: "Candidat",
+                  value: `<@${interaction.user.id}>`,
+                  inline: false,
+                },
+                { name: "Informations Personnelles", value: q1 || "-" },
+                { name: "Expériences et Compétences", value: q2 || "-" },
+                { name: "Disponibilités", value: q3 || "-" },
+                { name: "Motivation", value: q4 || "-" },
+                { name: "Boîte à lunch", value: q5 || "-" },
+              )
+              .setTimestamp();
+
+            await newChannel.send({
+              content: `Notification de recrutement pour <@${interaction.user.id}> :`,
+              embeds: [embed],
+            });
+          }
+        } catch (err) {
+          console.error("Impossible de creer le salon de recrutement:", err);
+        }
+
+        await interaction.editReply(
+          "✅ Ta candidature a bien ete envoyee a la direction ! Nous allons l'etudier et te recontacter prochainement.",
+        );
+      }
+    } catch (error) {
+      // Ignore silencieusement les erreurs de double interaction
+      if (
+        error.code === 40060 ||
+        error.code === 10062 ||
+        error.message.includes("acknowledged")
+      ) {
+        return;
+      }
+      console.error("Interaction Discord impossible:", error.message);
+      if (interaction.deferred || interaction.replied) {
+        await interaction
+          .editReply(`Erreur TunersHub: ${error.message}`)
+          .catch(() => {});
+      } else {
+        await interaction
+          .reply({
+            content: `Erreur TunersHub: ${error.message}`,
+            flags: [MessageFlags.Ephemeral],
+          })
+          .catch(() => {});
+      }
+    }
   });
 
   (async () => {
@@ -1989,6 +3092,14 @@ function buildPayslipPdf(res, payload) {
   doc.end();
 }
 
+app.get("/auth/discord/reset", (req, res) => {
+  // Reset automatique des vieux cookies/sessions OAuth.
+  // Utile apres un changement d'hebergeur ou de domaine pour eviter
+  // de demander a tous les employes de supprimer leurs cookies manuellement.
+  res.setHeader("Set-Cookie", [clearSessionCookie(), clearOAuthStateCookie()]);
+  res.redirect("/auth/discord/login");
+});
+
 app.get("/auth/discord/login", (req, res) => {
   const ip = getRequestIp(req);
   const lastLoginAt = oauthLoginCooldowns.get(ip) || 0;
@@ -2194,10 +3305,7 @@ app.get("/auth/me", (req, res) => {
 });
 
 app.get("/auth/logout", (req, res) => {
-  res.setHeader(
-    "Set-Cookie",
-    "tunershub_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0",
-  );
+  res.setHeader("Set-Cookie", [clearSessionCookie(), clearOAuthStateCookie()]);
   res.redirect("/");
 });
 
@@ -3328,7 +4436,12 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
       return res.status(500).send(employeeError.message);
     }
 
-    const prime = Number(req.body?.prime || 0) || 0;
+    const settings = await getSettingsMap(supabase);
+    const pendingPrimes = { ...(settings.pending_primes || {}) };
+    const pendingPrimeEntry = pendingPrimes[String(employee.id)] || {};
+    const pendingPrime = Number(pendingPrimeEntry.amount || 0) || 0;
+    const manualPrime = Number(req.body?.prime || 0) || 0;
+    const prime = Number((manualPrime + pendingPrime).toFixed(2));
     const hourlyRate = numberOrDefault(
       employee.hourly_rate,
       DEFAULT_HOURLY_RATE,
@@ -3366,6 +4479,11 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
       return res.status(500).send(resetError.message);
     }
 
+    if (pendingPrime > 0) {
+      delete pendingPrimes[String(employee.id)];
+      await upsertSetting(supabase, "pending_primes", pendingPrimes);
+    }
+
     await writeAuditLog(supabase, req, "employee_paid", {
       targetEmployeeId: employee.id,
       targetDiscordId: employee.discord_id,
@@ -3375,6 +4493,8 @@ app.post("/api/admin-pay-employee", requireAdmin, async (req, res) => {
         hoursPaid,
         hourlyRate,
         prime,
+        manualPrime,
+        pendingPrime,
         amountPaid,
       },
     });
